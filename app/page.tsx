@@ -21,7 +21,7 @@ export default function Home() {
 
       <div className="flex flex-col sm:flex-row gap-4">
         <a
-          href="mailto:contact@robertleggett.com.au"
+          href="mailto:hello@robertleggett.com.au"
           className="px-6 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-colors text-sm font-medium"
         >
           Contact Me
@@ -33,6 +33,14 @@ export default function Home() {
           className="px-6 py-3 border border-gray-300 dark:border-gray-700 rounded-full text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         >
           Connect on LinkedIn
+        </a>
+        <a
+          href="https://robertleggett.blog"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-6 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors text-sm font-medium"
+        >
+          Visit My Blog
         </a>
       </div>
 
