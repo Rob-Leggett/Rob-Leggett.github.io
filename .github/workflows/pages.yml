@@ -31,9 +31,7 @@ jobs:
         run: npm ci
 
       - name: Build & export static site
-        run: npm run build:static
-        # package.json must have:
-        # "build:static": "next build && next export"
+        run: npm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
