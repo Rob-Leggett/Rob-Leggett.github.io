@@ -1,0 +1,126 @@
+---
+title: "Jersey RESTful WebService JAX-RS with JPA and Derby In Memory Database"
+date: "2014-01-29"
+slug: "jersey-restful-webservice-jax-rs-with-jpa-and-derby-in-memory-database"
+feature_image: "/images/blog/jersey-restful-webservice-jax-rs-with-jpa-and-derby-in-memory-database-feature-image.png"
+---
+
+RESTful is a key term that is popular in the market.
+
+Previous services use to be created implementing JAX-WS with the communication protocol being SOAP, various implementation were and are still used but from my own experience they all have fallen short especially in the area of code generation, these technologies included Axis 1 & 2, Apache CXF as well as the java generation tools.
+
+Since RESTful implements JAX-RS with the communication protocol being HTTP, it has allowed for rapid development with the ability to send data in different formats, typically it is JSON however it can also be send as XML or even plain text.
+
+Both technologies do have their advantages and disadvantages however my preference of choice for many reasons is RESTful.
+
+## Before you start
+
+About this post:
+
+*   2 – 7 min average reading time
+*   Suitable for beginner’s through to advanced
+
+What you will gain reading this post:
+
+*   A starter project ready for use
+*   An overview of the technology choices for the starter project
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let’s get started.
+
+## **Jersey**
+
+### Why chose this technology
+
+For this example I wanted to have a lightweight RESTful service that could perform functions/operations and return the appropriate response to the calling client.
+
+Jersey is one of the many technologies that implement JAX-RS.  It is a lightweight framework that allows for simple and rapid development of RESTful web services, and can easily be integrated with many other technologies to add additional bells and whistles.
+
+### What is currently used
+
+*   Servlets.
+*   RESTful interface.
+*   HTTP protocol communication.
+*   Custom Application Configuration.
+*   Dependency Injection.
+*   Annotations.
+*   Testing Framework.
+
+### What can you add
+
+*   HTTP methods that are not being used but make sense to enhance existing functionality these include DELETE, PUT etc.
+*   Validation of Data received in the RESTful interface.
+
+## **Genson**
+
+### Why chose this technology
+
+For this example I was required to use data binding e.g. JSON Java.
+
+The advantage this has over other technologies such as Jackson JAXB is that you simply need to include the library into your class path and it will just work, you do not need to perform any POJO mapping or Annotate the POJO as you would if you were using Jackson with Jersey.
+
+### What is currently used
+
+*   Data Binding.
+
+## **Eclipselink**
+
+### Why chose this technology
+
+For the example I found it important to have the data stored like you would in the industry.
+
+I am a big fan of Object Relational Mapping and wanted to utilize JPA 2.
+
+This is an implementation of the JPA 2, it has full support for JPA 2 and allows for easy configuration of the java persistence layer.  While you can use many other technologies I found this one was still active, lightweight and had the support required.
+
+### What is currently used
+
+*   JPA 2 support.
+*   Annotations are used and encouraged to configure your Entities.
+*   Persistence configuration.
+*   Data Binding Tables POJOs.
+*   Transaction Management.
+
+### What can you add
+
+*   Unit tests for the Dao layer and entities.
+
+## **Derby**
+
+### Why chose this technology
+
+For the example I wanted to have a simple in memory database that did not require additional configuration once this below demo is checked out.
+
+Derby has great support for an in memory relational database and is simple to configure.
+
+### What is currently used
+
+*   In Memory database.
+*   Automatic table creation.
+
+### What can you add
+
+*   Unit tests with pre-populated data for detailed dao tests.
+
+## Example
+
+You can check out the project from the following location below:
+
+**Project URL**: [https://github.com/Rob-Leggett/jersey\_restful\_webservice](https://github.com/Rob-Leggett/jersey_restful_webservice)  
+What you can learn:
+
+*   RESTful webservices (JAX-RS)
+*   Data Binding
+*   JPA 2
+*   In Memory databases
+*   Unit testing
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.blog/)

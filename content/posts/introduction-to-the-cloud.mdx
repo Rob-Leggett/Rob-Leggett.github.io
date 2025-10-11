@@ -1,0 +1,183 @@
+---
+title: "Embracing the Cloud - Understanding the Fundamentals of Cloud Technology"
+date: "2021-01-27"
+slug: "introduction-to-the-cloud"
+feature_image: "/images/blog/introduction-to-the-cloud-feature-image.png"
+---
+
+Working in the IT industry, many of my friends and family approach me when it comes to anything "computer" related, due to them having very little knowledge about IT in general with one of the most mysterious topics for them being the **Cloud**.
+
+They often hear terms like, "**it is in the cloud**", or they own devices like an iPhones and find themselves receiving messages that their "**cloud storage is almost full**".
+
+In reality this can be confusing when they don't really know what that means or what they should do.
+
+This post is to help people understand the Cloud, clarifying certain terminology and hopefully take away the mystery that surrounds the Cloud.
+
+## Before you start
+
+About this post:
+
+*   2 – 7 min average reading time
+*   Suitable for beginner to intermediate
+
+What you will gain reading this post:
+
+*   Provide an understanding of what is the **Cloud**
+*   Provide an understanding of frequently asked questions about the **Cloud**
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let’s begin.
+
+## Let's explore some terminology
+
+### What is a Server?
+
+> A **server** is a computer or system that provides resources, data, services, or programs to other computers, known as clients, over a network.
+> 
+> https://www.paessler.com/it-explained/server
+
+### What is a Network?
+
+> A **network** is two or more computers (or other electronic devices) that are connected together, usually by cables or Wi-Fi. Some computer networks will have a server.
+> 
+> https://www.bbc.co.uk/bitesize/guides/zc6rcdm/revision/1
+
+### What is a Data Center?
+
+> A **data centre** is a dedicated facility where computer systems, data storage and associated telecommunications equipment are located.
+> 
+> https://capital.uk.com/data-centre/data-centre-basics-for-dummies
+
+### What is an API?
+
+> An **API** is simply something that sends information back and forth between a website or app and a user.
+> 
+> https://apimetrics.io/api-knowledge-base/apis-for-dummies
+
+### What is a Service?
+
+A **service** is an offering or capability that is provided by an individual or business that may or may not incur a cost to use.
+
+### What is a Web Interface?
+
+> A **Web** **Interface** allows the user to interact with content or software running on a remote server via a web browser. The content or web page is downloaded from the web server and the user can interact with this content in a web browser, which acts as a client.
+> 
+> https://www.sciencedirect.com/topics/computer-science/web-user-interface
+
+## Now, what is the Cloud?
+
+In its most basic form the **Cloud** is nothing more than "someone else's" server or a network of "someone else's" computers that you access over the internet, they are most commonly accessed via a Web Interface or set of API's.
+
+![Cloud - Simplified Representation](https://robertleggett.blog/wp-content/uploads/2021/01/Cloud-1-1024x741.png)
+
+Cloud - Simplified Representation
+
+As you can see the cloud itself is not that mysterious as you may have once thought, and understanding the terminology surrounding it, makes it much more clearer.
+
+## Okay, thanks for that, but I have a few questions
+
+### Why not just host your own servers or network of computers?
+
+There are a few factors that come into play here.
+
+*   These network of computers are hosted in what we refer to as a **data center**.
+
+Data centers are **expensive** to administer and run.
+
+*   They are usually maintained by a dedicated team.
+*   Apart from the standard operations costs, you have costs such as electricity, cooling etc
+*   There is a risk of over provisioning or underprivising the hardware which inflates the cost or leads to poor performance, or leads to paying for underutilized servers.
+
+On top of the running and administering of the network of computers (the physical side), there is also (the software side) to consider.
+
+*   This is usually maintained by a system administrator.
+*   The system administrator typically produces a "hardened" image, this is a trusted artefact that runs on the server, it is typically an operating system and pre installed applications, this process goes through a series of audits, with a strong security lens applied and requires a team of technical experts.
+
+### How do I know where all my data is?
+
+Unless you have compliance requirements or don't want your data stored in specific geographical locations, then in general it should not be much of a concern, and unless the Organisation discloses this information it can be hard to tell.
+
+Your attention would be better focused on privacy and how your data is used, which I touch on in the next question "**Is my data secure?**".
+
+Another aspect is the underlying cloud provider (AWS, GCP, Azure, ...) that is chosen and the technologies and patterns the Organisation has chosen to utilise that can influence the location of your data.
+
+> **The** short answer: You can't know precisely, though most of **your** actual file **data is** on Google or Amazon servers. **The** long answer follows. **Apple** disclosed in **its** iOS Security Guide in January 2018 that it stored iCloud file **data** in both Amazon and Google's commercial cloud storage systems (Amazon S3 and Google Cloud).
+> 
+> example from MacWorld on Apple - https://www.macworld.com/article/3274584/where-does-apple-stores-your-icloud-data.html
+
+Once we know the above, we then need to delve a little deeper, and this is where you will need to have an understand of the technology.
+
+In this particular example, we see in the diagram below:
+
+*   Amazon S3 (the source - where your data is living - long term storage) has the data is stored in the US.
+*   CloudFront (a CDN - cache - short term storage)
+*   Edge Locations (locations around the globe - in major cities)
+
+When your data is accessed from a geographical location. It can be cached in that major city for a quicker response of the data you are accessing.
+
+So in this example, your data would live in US - Ohio, but also temporarily in an Edge Location of Sydney and London.
+
+![Data in Multiple Geo Locations - Simplified Representation](https://robertleggett.blog/wp-content/uploads/2021/01/Data-Storage-S3-Edge-1024x693.png)
+
+Data in Multiple Geo Locations - Simplified Representation
+
+The diagram above is a really simplified representation, this particular example above talks about AWS and if you want to find out more technical details regarding AWS services, then I suggest you look at [CloudFront](https://aws.amazon.com/cloudfront/), [S3](https://aws.amazon.com/s3/) and [Edge Locations](https://aws.amazon.com/cloudfront/features/#Global_Edge_Network).
+
+### Is my data secure?
+
+Short answer: It depends, not because of being in the Cloud, the cloud providers (AWS, GCP, Azure, ...) offer a range of services and security practises to ensure your data is protected, but it purely depends on the organisation and what process they make use of to ensure your data is secure.
+
+Long answer: This question can become a bit complex and here is why.
+
+There are a couple of aspects to consider:
+
+*   The hosting aspect of your data that can sometimes be difficult to determine
+*   Then the privacy and policies in regards to how your data is used
+
+I won't go deep into the privacy of your data, but you should always be aware of the services you use and what the company's policy is with your data. Always refer to the terms and conditions of the service you are using.
+
+#### **Hosting of your data**
+
+Let's take a look at Apple as an example again.
+
+From the above question "**How do I know where all my data is?**".
+
+We can see that Apple makes use of AWS and GCP, so we can feel good about the cloud hosting services, but what about the security policies?
+
+> **Data security**. iCloud secures your information by encrypting it when it's in transit, storing it in iCloud in an encrypted format, and using **secure** tokens for authentication. For certain sensitive information, **Apple** uses end-to-end encryption.Apr 9, 2020
+> 
+> https://support.apple.com/en-us/HT202303
+
+A few best practises to look for are:
+
+*   Is you data encrypted?
+    *   Both in-transit (https) and at rest
+    *   If the organisation has a data breach, what information can be exposed
+*   Is the account protected with Multi Factor Authentication?
+*   Is there monitoring and alerting, to inform you or incidents or potential suspicious behaviour?
+
+A few additional things to consider:
+
+*   Have they had data breaches and what have they done to prevent another incident
+
+Here is an example of where these best practises never happened and were introduced after an incident.
+
+*   https://www.bbc.com/news/technology-29237469
+
+#### **Privacy**
+
+Without delving much into privacy, it is important to be aware that social media products are notorious for collecting and selling your data or using your data in a way you may not wish it to be used.
+
+So always check privacy settings, and if you don't agree with how your data is used, then avoid those products.
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.blog/)
+
+If you have additional questions you would like answered, post them in the comments and i'll update this post to answer them.

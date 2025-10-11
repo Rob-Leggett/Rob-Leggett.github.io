@@ -1,0 +1,707 @@
+---
+title: "Storage Simplified - SAN, NAS, and DAS Explained"
+date: "2023-05-22"
+slug: "san-nas-and-das-explained"
+feature_image: "/images/blog/san-nas-and-das-explained-feature-image.png"
+---
+
+Welcome to the "Storage Deep Dive" series! In this comprehensive exploration, we will delve into the world of SAN, NAS, and DAS, providing clear and in-depth explanations to demystify these storage technologies. Whether you're a tech enthusiast or someone new to the subject, our aim is to make these concepts accessible and understandable to all. So, let's embark on this enlightening journey and gain a deeper understanding of SAN, NAS, and DAS together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20 min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of DAS, SAN & NAS
+*   An understand of the underlying technologies of DAS, SAN & NAS
+*   An understanding of how DAS, SAN & NAS is relevant in the Cloud
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let’s get started.
+
+## What is Storage?
+
+**Storage** is the **retention** of **data** that can be **retrieved** at a future point in time.
+
+The storage we will be covering involves data being located on a electronic device.
+
+This seems like a simple enough concept, but where the complexity comes into play is in the way in which the data is stored and retrieved, and this can have an impact of the performance and cost.
+
+## 10,000 Foot View
+
+At a 10,000 foot view we can see that each of these storage types DAS, SAN and NAS have the same overall flow.
+
+![](https://i1.wp.com/robertleggett.blog/wp-content/uploads/2020/01/DAS-SAN-NAS-1.png?fit=730%2C689&ssl=1)  
+
+Where they differ though is the various ways that we interact, discover and extend these devices as well as the costs and if they are shared or dedicated.
+
+As we explore these deeper we will see the underlying technology will also have differences when used to connect and control the storage such as such as SAS, Fibre and iSCS.
+
+And finally we will see how this is relevant in the cloud based solutions we use.
+
+Now, let's start with some terminology that will help us understand this easier.
+
+## Okay, what terminology do I need to understand before progressing?
+
+### What is a WAN?
+
+A wide area network (_WAN_) is a telecommunications network that extends over a large geographical area for the primary purpose of computer networking.
+
+If WAN connections didn’t exist, organizations would be isolated to restricted areas or specific geographic regions. LANs would allow organizations to work within their building, but growth to outside areas — either different cities or even different countries — would not be possible because the associated infrastructure would be cost prohibitive for most organizations.
+
+WANs also provide an essential service to the public. Students at universities might rely on WANs to access library databases or university research. And every day, people rely on WANs to communicate, bank, shop and more.
+
+### What is a LAN?
+
+A local area network (_LAN_) is a group of computers and peripheral devices that share a common communications line or wireless link to a server within a distinct geographic area.
+
+LANs are typically confined within a small area—usually one building, but that’s not a firm requirement. That area might be your home or small business, and it could contain just a few devices. It might also be a much larger area, like an entire office building that contains hundreds or thousands of devices.
+
+But regardless of size, the single defining characteristic of a LAN is that it connects devices that are in a single, limited area.
+
+### What is SCSI?
+
+SCSI is a family of storage protocols that all share a common core but have more or less subtle differences (apart from the obvious, physical ones). Examples are Fibre Channel, SAS, iSCSI, obsolete ones haven't been mentioned in the examples.
+
+### What is Fibre?
+
+Fibre Channel (FC) is a high-speed disk attachment technology primarily used for storage networking. 
+
+It is designed to connect a large number of storage devices to a number of host servers across a Storage Area Network (SAN). 
+
+Fibre Channel is a transport Protocol (FCP) which transfers SCSI commands and data over Fibre Channel networks.
+
+FC supports a much higher number of devices and much longer cable lengths than SCSI. It has become the preferred disk attachment technology in midrange and large scale data center solutions.
+
+### What is SAS?
+
+Serial-Attached SCSI (SAS) is a computer bus used to move data to and from computer storage devices such as hard drives and tape drives. 
+
+SAS depends on a point-to-point serial protocol that replaces the parallel SCSI bus technology, and uses the standard SCSI command set.
+
+Typical SAS throughput is 6 Gbps full duplex. SAS has the capability to reach 24 Gbps if the host can drive it at that speed. When the first 6 Gbps connection is full, the next 6 Gbps connection is used, and so on, up to four connections.
+
+### What is iSCS?
+
+Internet SCSI (iSCSI) stands for **Internet Small Computer System Interface**, an Internet Protocol (IP)-based storage networking standard for linking data storage facilities. 
+
+By carrying SCSI commands over IP networks, iSCSI is used to facilitate data transfers over intranets and to manage storage over long distances. 
+
+iSCSI can be used to transmit data over local area networks (LANs), wide area networks (WANs), or the Internet, and can enable location-independent data storage and retrieval.
+
+IP SANs are a cheaper alternative to FC SANs. However, the lower cost of iSCSI also implies lower performance and scalability
+
+A typical Ethernet network operates at 1 Gbps, whereas an FC SAN can run up to 8 Gbps. However you can improve the performance by using high bandwidth Ethernet Card. Migrating to 10 GbE can significantly increase the performance of an iSCSI infrastructure.
+
+## Okay, now let's explore them individually
+
+### What is SAN?
+
+Storage Area Networks
+
+Storage Area Network SAN-based storage solution has the ability to share the storage arrays to multiple servers.  This allows you to configure the storage capacity as needed, usually by a dedicated SAN administrator.  Higher levels of performance throughput are typical in a SAN environment, and data is highly available through redundant disk controllers and drives.  However there is a much higher startup cost for SANs, and they are inherently much more complex to manage. 
+
+The following diagram illustrates a typical SAN environment.
+
+### What does this look like in greater detail?
+
+SAN, or Storage Area Network, is a type of network that provides access to consolidated, block-level data storage. It enables multiple servers to access and share the same storage devices such as disks or flash arrays, as if they were local to each server. The servers in a SAN environment are called hosts, and the storage devices are called storage arrays.
+
+SANs use Fibre Channel (FC) or iSCSI protocols to transfer data between hosts and storage arrays. Fibre Channel is a high-speed networking technology that enables the transfer of large amounts of data at high speeds, with low latency and high reliability. iSCSI, on the other hand, uses standard Ethernet networks to transfer data, making it a more cost-effective solution for smaller organizations.
+
+A SAN typically consists of the following components:
+
+1.  Host Bus Adapters (HBAs): These are hardware adapters installed in the servers that enable communication with the SAN fabric.
+2.  Switches: SAN switches are used to connect the servers and storage arrays. They enable data transfer between different devices in the SAN.
+3.  Storage Arrays: These are devices that provide block-level storage to the hosts in the SAN. They can be made up of hard disk drives or solid-state drives.
+4.  Storage Area Network Software: This is the software that manages the SAN environment, including storage provisioning, data protection, and performance monitoring.
+
+SANs are commonly used in enterprise environments for applications that require high-performance and reliability, such as databases, virtualization, and data analytics. They offer a number of benefits, including centralized storage management, high availability, and scalability.
+
+However, SANs can be complex and expensive to set up and maintain, making them less suitable for small to medium-sized businesses or organizations with limited IT resources.
+
+### Why would you use SAN?
+
+Benefits of using SAN
+
+Description
+
+High performance
+
+SANs are designed to provide high performance and low latency storage access. SANs can deliver multiple gigabytes per second of data transfer rates, making them ideal for applications that require high throughput and low latency.
+
+Centralized storage management
+
+With a SAN, all storage resources are managed centrally, making it easier for administrators to provision, allocate and manage storage across multiple servers or applications.
+
+Scalability
+
+SANs can be easily scaled by adding more storage devices or switches to the network. This makes it possible to grow storage capacity as needed without having to replace existing storage devices or servers.
+
+Improved data availability
+
+SANs are designed to provide high levels of data availability and reliability through the use of redundant components, such as storage controllers, power supplies, and network paths. This helps ensure that data is always available and that applications can continue to function in the event of hardware failures or other issues.
+
+Flexibility
+
+SANs are highly flexible, allowing administrators to create different types of storage environments depending on their specific requirements. For example, administrators can create SANs that are optimized for block-level or file-level access, or that provide specialized features such as data deduplication or replication.
+
+### What is NAS?
+
+Network Attached Storage (NAS) is a type of storage solution exists that is a hybrid option.  This solution uses a dedicated server or “appliance” to serve the storage array.  The storage can be commonly shared to multiple clients at the same time across the existing Ethernet network.  NAS servers utilize file level transfers.
+
+### What does this look like in greater detail?
+
+Network-attached storage (NAS) is a file-level storage technology that enables multiple users and devices to access shared storage resources over a computer network. In a NAS system, a storage device, typically a dedicated network-attached storage appliance, is directly attached to the network and configured with its own IP address.
+
+NAS devices usually have their own operating systems and are specifically designed for file serving. They can provide access to shared storage resources using a variety of protocols, such as NFS, SMB/CIFS, AFP, and FTP. These protocols allow clients to read and write files over the network as if they were accessing files on a local hard drive.
+
+NAS devices typically provide features such as RAID, snapshots, and backup, making them ideal for storing and sharing large amounts of data. They are often used in small to medium-sized businesses, as well as in homes for personal storage and media streaming.
+
+NAS systems can be scaled by adding additional storage devices, and multiple NAS systems can be clustered to provide higher levels of performance and redundancy. In addition, some NAS systems can integrate with cloud storage services to provide additional off-site backup and disaster recovery capabilities.
+
+Overall, NAS provides a flexible and cost-effective solution for storing and sharing files in a networked environment, making it a popular choice for businesses and individuals alike.
+
+### Why would you use NAS?
+
+Reason for using NAS
+
+Explanation
+
+Centralized storage
+
+NAS provides a centralized storage location for multiple devices to access data from, which can improve collaboration and reduce the need for multiple copies of the same data.
+
+Scalability
+
+NAS systems can be easily expanded as storage needs grow, by adding additional drives or connecting to additional NAS devices.
+
+Flexibility
+
+NAS can support a wide range of file types and can be used with different operating systems, making it a versatile option for different use cases.
+
+Data protection
+
+NAS systems often have built-in features for data protection, such as RAID configurations and backup options, to help ensure data is safe and recoverable.
+
+Accessibility
+
+NAS can provide access to data from anywhere with an internet connection, making it easy to work remotely or share data with others.
+
+Cost-effectiveness
+
+Compared to other storage options, such as SAN, NAS can be a more affordable option for small to medium-sized businesses or home users.
+
+### What is DAS?
+
+Direct Attached Storage (DAS) is included when you purchase a computer in the form of the hard drive. If you would like to add more direct attached storage, you can attach a plug-and-play external hard drive.
+
+But the RAID controller is typically installed in the server, there is a potential single point of failure for the DAS solution.
+
+### What does this look like in greater detail?
+
+Direct-attached storage (DAS) is a storage technology where the storage devices are connected directly to a server or a workstation without any intermediary network infrastructure. DAS is often used as a cost-effective storage solution for small-scale environments or for specialized use cases that require high-performance storage with low latency.
+
+DAS devices can be internal or external to the server or workstation, and they can use various types of storage media such as hard disk drives (HDD), solid-state drives (SSD), or even tape drives.
+
+### Why would you use DAS?
+
+Reason for using NAS
+
+Explanation
+
+Centralized storage
+
+DAS does not offer centralized storage. It requires physical connection to a specific device or server.
+
+Easy scalability
+
+DAS is limited in terms of scalability since each storage device is directly attached to a single host.
+
+Shared access
+
+DAS does not provide shared access to data. Each storage device is typically accessible by a single host.
+
+Network connectivity
+
+DAS does not require network connectivity since it directly connects to a host via interfaces like USB.
+
+Data protection
+
+DAS lacks built-in data protection features like redundancy and replication, which are common in NAS.
+
+Remote accessibility
+
+DAS is not designed for remote accessibility. Data stored on DAS is typically only accessible locally.
+
+Data backup
+
+DAS requires manual effort for data backup, as it does not offer automated backup solutions like NAS does.
+
+Cost-effective
+
+DAS can be more cost-effective for small-scale storage needs, as it doesn't involve additional network infrastructure.
+
+## Advantages and Disadvantages
+
+ 
+
+****Advantages****
+
+Dis****advantages****
+
+SAN
+
+High-performance storage with dedicated network
+
+Higher cost due to specialized hardware and network infrastructure
+
+Scalability and flexibility for large-scale environments
+
+Complexity of implementation and management
+
+Centralized storage and data consolidation
+
+Dependency on network infrastructure and potential network bottlenecks
+
+Enhanced data protection and redundancy options
+
+Requires specialized knowledge and expertise for setup and maintenance
+
+Shared access and support for multiple hosts
+
+Higher initial investment and ongoing maintenance costs
+
+NAS
+
+Centralized storage with easy accessibility
+
+Network performance limitations, especially with high user access or large data transfers
+
+Simple setup and management
+
+Higher initial cost compared to DAS solutions
+
+Scalability for growing storage needs
+
+Limited expandability beyond the capacity of the NAS device
+
+File sharing and collaboration capabilities
+
+Dependence on network availability and potential impact of network congestion on data access
+
+Remote accessibility and data sharing
+
+Limited control over data security and privacy
+
+DAS
+
+High performance and low latency
+
+Limited scalability beyond a single server or workstation
+
+Lower cost compared to SAN and NAS
+
+Limited accessibility and sharing capabilities
+
+Simple setup and configuration
+
+Limited data protection and disaster recovery options
+
+Greater control over data and security
+
+Limited flexibility in terms of deployment and management
+
+No network dependencies or bottlenecks
+
+Limited support for multiple users and applications
+
+Suitable for small to medium-sized businesses
+
+Limited expandability beyond the capacity of the connected server or workstation
+
+## How is DAS, SAN and NAS relevant in the Cloud?
+
+You don't need to know the underlying specifics when selecting a cloud storage type but rather the use case in which you required, based on certain aspects though and fine tuning your solution for performance may help in selecting the services.
+
+That being said here are a few cloud providers and what their underlying implementation is or likely to be, this though is not under your control, and can change without your knowledge and therefore not a good idea to select the service based on the underlying specifics.
+
+Service Type
+
+  
+On-Premise
+
+Cloud-Native
+
+DAS
+
+Typically used for smaller, localized storage needs
+
+Can be used in cloud environments but may be more difficult to scale and manage
+
+SAN
+
+Used for mission-critical applications and large-scale storage needs
+
+Often used in cloud environments for high-performance applications, but requires specialized hardware and setup
+
+NAS
+
+Generally used for centralized storage and file sharing
+
+Often used in cloud environments for collaboration and file sharing, but can require additional configuration for security and performance
+
+Overall, the choice of storage architecture depends on the specific needs and requirements of the application or workload. In cloud-native environments, there may be more emphasis on scalability, flexibility, and automation, which may favor the use of SAN or NAS. On-premise environments may have more specific performance or security requirements that favor the use of DAS or SAN. Ultimately, it's important to consider the tradeoffs and benefits of each architecture in the context of the specific use case.
+
+Service/Use Case
+
+On-Premise
+
+Cloud-Native
+
+Databases
+
+DAS/SAN
+
+Cloud Storage
+
+Virtual Machines
+
+DAS
+
+SAN
+
+Media/File Server
+
+DAS/NAS
+
+NAS
+
+Backup/Disaster Recovery
+
+DAS/SAN
+
+Cloud Storage
+
+Video Streaming
+
+DAS/NAS/SAN
+
+Cloud Storage
+
+High Performance Computing
+
+DAS/SAN
+
+Block Storage
+
+Content Delivery Network
+
+DAS/NAS/SAN
+
+Cloud Storage
+
+It's important to note that the table is not exhaustive and that services can use a combination of storage technologies. For example, a cloud-native media/file server may use both cloud storage and a cloud-native NAS solution for different types of content.
+
+Service Type
+
+DAS
+
+NAS
+
+SAN
+
+Block Storage
+
+Cloud Storage
+
+On-Premise
+
+Commonly used for small businesses or individual workstations
+
+Used for file sharing and collaboration among multiple devices
+
+Used for high-performance computing and large data centers
+
+Used for applications that require direct access to block-level data
+
+Used for scalable storage and data backup
+
+Cloud Native
+
+Not commonly used as cloud services typically require distributed storage
+
+Used for cloud-based file sharing and collaboration
+
+Used for cloud-based high-performance computing and large data centers
+
+Used for cloud-based applications that require direct access to block-level data
+
+Used for scalable cloud-based storage and data backup
+
+Note that while DAS may not be commonly used in cloud native environments, it is still used in some cases where local storage is needed for specific workloads. Additionally, cloud storage services often provide block storage options, as well as other storage solutions such as object storage.
+
+**Cloud Native**
+
+Service Name
+
+Storage Type
+
+Amazon Elastic Block Store (EBS)
+
+Block Storage (DAS)
+
+Amazon Elastic File System (EFS)
+
+Network-Attached Storage (NAS)
+
+Amazon FSx for Lustre
+
+Network-Attached Storage (NAS)
+
+Amazon FSx for Windows File Server
+
+Network-Attached Storage (NAS)
+
+Amazon Simple Storage Service (S3)
+
+Object Storage (Cloud Storage)
+
+Amazon Glacier
+
+Object Storage (Cloud Storage)
+
+Amazon Snowball Edge
+
+Block Storage (DAS)
+
+Amazon Storage Gateway
+
+Network-Attached Storage (NAS), Block Storage (DAS) and Storage Area Network (SAN)
+
+It's worth noting that some AWS services, such as Amazon S3 and Glacier, provide object storage which is distinct from DAS, NAS, or SAN. Additionally, while some AWS services utilize NAS, SAN, or DAS technologies, they may abstract away the underlying storage details from the user.
+
+Service
+
+Description
+
+Storage Type
+
+Compute Engine
+
+Infrastructure as a Service (IaaS) virtual machines
+
+Block Storage (DAS)
+
+Persistent Disk
+
+Block storage for Compute Engine
+
+Block Storage (DAS)
+
+Cloud SQL
+
+Managed MySQL and PostgreSQL databases
+
+Block Storage (DAS)
+
+Cloud Filestore
+
+Fully managed file storage for applications
+
+Network Attached Storage (NAS)
+
+Cloud Storage
+
+Object storage for unstructured data
+
+Object Storage (no DAS, SAN, or NAS)
+
+Filestore for Kubernetes
+
+Persistent file storage for Kubernetes
+
+Network Attached Storage (NAS)
+
+Transfer Service
+
+Secure and managed data transfers
+
+Object Storage (no DAS, SAN, or NAS)
+
+Transfer Appliance
+
+High-capacity data transfer device
+
+Block Storage (DAS)
+
+Data Transfer Service
+
+Online data transfers from third-party sources
+
+Object Storage (no DAS, SAN, or NAS)
+
+Bigtable
+
+NoSQL wide-column database service
+
+Distributed Block Storage (SAN)
+
+Persistent Disk Snapshot
+
+Data backup and recovery for Compute Engine
+
+Block Storage (DAS)
+
+Cloud Storage Transfer Service
+
+Transfer data to Google Cloud Storage from on-premises or other clouds
+
+Object Storage (no DAS, SAN, or NAS)
+
+Cloud Storage for Firebase
+
+Object storage for Firebase mobile and web applications
+
+Object Storage (no DAS, SAN, or NAS)
+
+Note that some services do not explicitly state the type of storage used, but based on their functionality and documentation, they can be classified into one of the three types (DAS, SAN, or NAS).
+
+Service Name
+
+Description
+
+Storage Type
+
+Azure NetApp Files
+
+Enterprise-grade file storage service powered by NetApp
+
+NAS
+
+Azure Blob Storage
+
+Massively scalable object storage for unstructured data
+
+DAS
+
+Azure Files
+
+Fully managed file shares in the cloud
+
+NAS
+
+Azure Disk Storage
+
+Persistent, high-performance block storage for Azure Virtual Machines
+
+SAN/DAS
+
+Azure Backup
+
+Backup and recovery for on-premises, hybrid, and cloud resources
+
+DAS
+
+Azure Site Recovery
+
+Disaster recovery and business continuity for on-premises and cloud environments
+
+DAS
+
+Azure Stack HCI
+
+Hyperconverged infrastructure with built-in hybrid capabilities
+
+DAS
+
+Azure Data Box
+
+Secure, ruggedized, and tamper-resistant devices for offline data transfer to Azure
+
+DAS
+
+Azure Data Box Edge
+
+Cloud-managed appliance for edge computing and data transfer
+
+DAS
+
+Azure Data Box Gateway
+
+Cloud-managed appliance for local data transfer to Azure
+
+DAS
+
+Azure VMware Solution
+
+Azure service that runs VMware natively on Azure hardware
+
+SAN
+
+Note: Some services like Azure Disk Storage support both SAN and DAS storage types.
+
+**On Premise**
+
+Storage Solution
+
+Description
+
+Dell EMC Unity
+
+A hybrid storage platform that can be used with both traditional and modern workloads. The system uses a combination of SAN, NAS, and DAS to provide high-performance storage for various applications.
+
+HPE 3PAR StoreServ
+
+A storage platform designed for both traditional and modern workloads. The system uses a combination of SAN, NAS, and DAS to provide high-performance storage for various applications.
+
+NetApp FAS Series
+
+A unified storage platform that can be used with both SAN and NAS. The system uses a combination of disk and flash storage to provide high-performance storage for various applications.
+
+IBM FlashSystem
+
+A storage platform that uses a combination of SAN, NAS, and DAS to provide high-performance storage for various applications. The system is designed for both traditional and modern workloads.
+
+Hitachi Vantara VSP
+
+A storage platform that uses a combination of SAN, NAS, and DAS to provide high-performance storage for various applications. The system is designed for both traditional and modern workloads.
+
+Pure Storage FlashArray
+
+A storage platform that uses a combination of SAN and NAS to provide high-performance storage for various applications. The system is designed for both traditional and modern workloads.
+
+Lenovo ThinkSystem DM Series
+
+A storage platform that uses a combination of SAN, NAS, and DAS to provide high-performance storage for various applications. The system is designed for both traditional and modern workloads.
+
+Oracle ZFS Storage Appliance
+
+A unified storage platform that can be used with both SAN and NAS. The system uses a combination of disk and flash storage to provide high-performance storage for various applications.
+
+Fujitsu ETERNUS
+
+A storage platform that uses a combination of SAN, NAS, and DAS to provide high-performance storage for various applications. The system is designed for both traditional and modern workloads.
+
+Western Digital ActiveScale
+
+A storage platform that uses a combination of SAN, NAS, and DAS to provide high-performance storage for various applications. The system is designed for both traditional and modern workloads.
+
+Note that this is not an exhaustive list and there are many more on-premise storage solutions available that utilize DAS, SAN, or NAS technology.
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don’t worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings

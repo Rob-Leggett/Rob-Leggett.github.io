@@ -1,0 +1,156 @@
+---
+title: "Choosing Choreography or Orchestration for your Microservices Architecture"
+date: "2019-03-17"
+slug: "when-should-you-choose-choreography-vs-orchestration-for-your-microservices-architecture"
+feature_image: "/images/blog/when-should-you-choose-choreography-vs-orchestration-for-your-microservices-architecture-feature-image.png"
+---
+
+Both Choreography or Orchestration are fascinating patterns, they are fantastic ways to manage the interactions, communication, and behavior between your Microservices and often there is not a one size fits all approach you should take.
+
+Just because you have taken one of these approaches in a previous solution does not mean that it the right approach for your next, hopefully, this post will be able to give you a high-level overview of what you should consider and help you to manage your Architecture decision.
+
+## Before you start
+
+About this post:
+
+*   5 - 10 min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   An overview of the choreography and orchestration
+*   An understanding of the challenges that they each present
+*   A guide on choosing the best pattern to support your solution
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+## Choreography
+
+### What is the choreography of Microservices?
+
+*   Choreography is simply the distribution and decentralization of decisions, logic, and interactions between services
+*   Choreographies most common pattern relies on broadcasting data known as events in which any service that is interested in that data can consume it and perform the action that they are tasked to do
+*   The service/s should not require instructions on how to behave and should be self-aware on what they need to do, they, in turn, have a brain of their own rather than being controlled by a centralized brain
+
+### Benefits
+
+*   It provides low coupling of services in which you can add/remove services into your solution without impacting other services in your overall solution
+*   Moves away from a Monolithic approach, working better with Agile delivery teams
+*   CRUD and SAGA patterns are supported
+
+### Challenges
+
+*   The business process will be spread across multiple services making it difficult to maintain, manage and see the overall business process
+*   Transactions will become more granular making management of the transaction specifically around error handling and rolling back much more difficult
+*   It requires a change in mindset
+
+![Choreography service flow Diagram](https://robertleggett.blog/wp-content/uploads/2019/03/microservice-architecture-choreography-3.png?w=1024)   ![Choreography component Diagram](https://robertleggett.blog/wp-content/uploads/2019/03/choreography-component-diagram-1.png?w=1024)  
+
+### What are good use cases for a choreography approach?
+
+*   Having Systems don't require upfront validation.
+*   Systems that don't require synchronous requests and responses.
+*   When your systems don't require client blocking behavior.
+
+While these can be solved with various other techniques using choreography e.g. CRUD, multiple calls, reactive as well as others it does require a mindset change and a different way of interacting.
+
+## Orchestration
+
+### What is the orchestration of Microservices?
+
+*   Orchestration relies on having a centralized service referred to as the orchestrator or process flow engine, the so-called brains for calling services to perform specific actions and expecting the response back to the centralized service for it to make decisions on the next course of action
+
+### Benefits
+
+*   Easy to manage and maintain the business process as all the logic is located in a single central location
+*   Services that are called don't require decision logic, they will be able to perform an action and return the response
+*   Managing and maintaining the state, processes, and monitoring is easier
+*   Processes requiring Human interactions can be easily supported.
+*   ACID, SAGA, and CQRS patterns are supported
+
+### Challenges
+
+*   Services are highly coupled to the orchestrating service with the orchestrating service requiring connection information about the services built into the requesting tasks
+*   Ultimately the centralized service is a single point of failure
+*   Difficult to separate work across multiple Agile delivery teams
+*   Typically the centralized service is referred to a monolithic
+
+![Orchestration flow Diagram](https://robertleggett.blog/wp-content/uploads/2019/03/microservice-architecture-orchestration-2.png?w=1024)   ![Orchestration component Diagram](https://robertleggett.blog/wp-content/uploads/2019/03/orchestration-component-diagram-1.png?w=1024)  
+
+### What are good use cases for an orchestration approach?
+
+*   Having Systems that require upfront validation
+*   Systems that require synchronous requests and responses
+*   When your Systems require client blocking behavior
+
+## Hybrid
+
+### What do you mean by Hybrid?
+
+*   Hybrid is a combination of a centralized service that makes the decisions and manages the business process (orchestration approach) however the communication to other services is performed through events (simplified choreography approach).
+
+### Benefits
+
+*   Easy to manage and maintain the business process as all the logic is located in a single central location
+*   Services that are called don't require decision logic, they will be able to perform an action and return the response
+*   Managing and maintaining the state, processes, and monitoring is easier
+*   Processes requiring Human interactions can be easily supported.
+*   ACID, SAGA, and CRUD are supported
+
+### Challenges
+
+*   It is a more complex solution to implement, incurring the usual costs of implementing a complex solution
+*   Ultimately the centralized service is a single point of failure
+*   Typically the centralized service is referred to a monolithic
+*   It requires a change in mindset
+
+![Hybrid component Diagram](https://robertleggett.blog/wp-content/uploads/2019/03/hybrid-component-diagram-2.png?w=942)  
+
+### What are good use cases for a Hybrid approach?
+
+*   Any of the systems mentioned above under the Choreography and Orchestration sections
+
+## Conclusion
+
+![Microservice interactions decision Diagram](https://robertleggett.blog/wp-content/uploads/2019/03/microservice-interactions-decision-diagram-2.png?w=1024)  
+
+### Consideration 1 - Centralised Business Process Model
+
+The most important consideration is where you want to capture the business processes, if you are keen to have that managed in a centralized location then orchestration or a hybrid solution is the best approach to take, however, if you are happy for a distributed business process then choreography will be the best approach.
+
+### Consideration 2 - Service Coupling
+
+Is it important that you have services that are self-managing and are not dependant on who is calling them, if your main requirement is to have a loosely coupled solution then choreography will be a good approach, if that is not a key consideration in your solution then orchestration or hybrid would be a good approach.
+
+### Consideration 3 - Transaction Management
+
+How do you want to manage the transaction? and I think the most important question is how do you want to handle transaction errors? do you have state to rollback? do you have data to rollback? If that is the case then SAGA may be an important consideration, all solutions easier support SAGA, however, my experience is that orchestration is easier to manage the SAGA pattern rather than choreography.
+
+### Consideration 4 - Client Blocking
+
+Do you want to fail fast? How about validating your data on receiving the request and inform the sender of any errors that have occurred upfront? Does the client need to wait for a response or can you fire and forget?
+
+Typically this is controlled via Asynchronous vs Synchronous requests/events, if you require Synchronous requests it would be better to use orchestration or hybrid, if you are however only dealing with Asynchronous requests/events then choreography would be a good solution.
+
+### Result
+
+My experience is that you can achieve the results and solutions you are looking for via either choreography or orchestration.
+
+However based on requirements you can make the solution less complex, easier to deliver, and easier to support, with the suggested above I am hoping you will be able to pick the best option based on the requirements you are supporting.
+
+## Resources
+
+Saga - https://microservices.io/patterns/data/saga.html
+
+CQRS - https://microservices.io/patterns/data/cqrs.html
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.blog/)

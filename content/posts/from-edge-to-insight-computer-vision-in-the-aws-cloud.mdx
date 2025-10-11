@@ -1,0 +1,176 @@
+---
+title: "From Edge to Insight - Computer Vision in the AWS Cloud"
+date: "2025-07-28"
+slug: "from-edge-to-insight-computer-vision-in-the-aws-cloud"
+feature_image: "/images/blog/from-edge-to-insight-computer-vision-in-the-aws-cloud-feature-image.png"
+---
+
+In an era dominated by visual data, unlocking intelligence from video streams is reshaping industries—from smart cities and retail to manufacturing and compliance. This guide presents a **generic, AWS‑based reference architecture**, enabling companies to process video at the edge and deliver insights in the cloud securely and at scale.
+
+## Before you start
+
+About this post:
+
+*   5 - 10 min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   How to structure a computer vision platform with edge-to-cloud components
+*   Best practices for secure, observable, multi-account AWS design
+*   Options for on-prem inference and cloud-side processing
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+## **Architecture Overview**
+
+This architecture is designed for:
+
+*   Real-time video ingestion from 100+ cameras
+*   On-premise ML inference
+*   Event-driven cloud processing
+*   Multi-tenant visualisation and reporting
+
+It includes six key areas:
+
+1.  **On-Premise Inference Layer**
+2.  **Secure Network & VPN Connectivity**
+3.  **Cloud Edge Streaming Platform**
+4.  **Identity & Access Management**
+5.  **User Portal & Visualisation**
+6.  **Centralised Logging & Cost Control**
+
+![](https://robertleggett.blog/wp-content/uploads/2025/07/image-1024x501.png)
+
+Computer Vision - AWS Architecture
+
+## **1\. On-Premise: Smart Edge Inference**
+
+Video feeds from 100+ IP cameras are managed by a local **Video Management System (VMS)**, using NAS or SAN storage. An **AI Agent**—installed on a customer‑owned server or VM—handles lightweight inference and metadata publishing:
+
+*   Options include:
+    *   **NVIDIA Jetson + DeepStream with AWS Greengrass**
+    *   **Containerised inference agents** running on virtual platforms (AWS, Azure, GCP)
+*   Capabilities:
+    *   Object detection (e.g. vehicles, PPE compliance)
+    *   Video redaction or filtering
+    *   Event publication (via MQTT, Kafka, or HTTPS)
+
+This layer ensures real‑time processing close to the data source, reducing centralised processing load.
+
+## **2\. Networking: Hybrid Connectivity**
+
+Connectivity is facilitated via a dedicated **Networking Account**, which provides:
+
+*   **AWS Site‑to‑Site VPN** or **Direct Connect**
+*   **Transit Gateway** for central routing across multiple accounts
+*   Secure DNS via **Route 53**, and NAT Gateway configurations
+
+Security includes:
+
+*   **AWS WAF** to protect edge‑exposed services
+*   TLS encryption end‑to‑end
+*   Proper IAM segregation across environments
+
+### **3\. Edge Streaming Platform (AWS Account)**
+
+This account ingests, routes and enriches video metadata streams in real time.
+
+*   **Ingestion**: AWS IoT Core, Amazon MSK (Kafka), Kinesis
+*   **Processing**: AWS Lambda, Step Functions
+*   **Storage**: S3 for model binaries, metadata and inference payloads
+*   **Model Deployment**: Lambda-triggered updates for edge devices
+
+This account serves as the operational backbone of the vision pipeline.
+
+💡 New ML models can be deployed dynamically to AI Agents from this account.
+
+## **4\. Identity & Authentication**
+
+Authentication and identity management are centralised using:
+
+*   **Amazon Cognito**: Federated login, hosted UI, SSO support
+*   **WAF + ALB**: Public protection with per-tenant routing
+*   **Secrets Manager**: Secure handling of credentials and API tokens
+*   **Lambda@Edge**: Redirection and tenant detection based on domain or claims
+
+This approach enables true **multi-tenant SSO** with separation of identity responsibilities.
+
+## **5\. Portal (Dev, Test, Prod)**
+
+Users access web apps via **Fargate-hosted portals** in isolated environments:
+
+*   Built using React/Next.js or similar
+*   Backed by API Gateway + Lambda for scalable interactions
+*   Protected by Cognito and WAF
+*   Served through CloudFront for low latency
+
+Portal access is dynamically routed based on domain (e.g., `portal.cloud.computervision.ai`).
+
+## **6\. Logging, Observability & Cost Control**
+
+A dedicated **Logging Account** aggregates telemetry from all environments:
+
+*   **CloudTrail**, **CloudWatch Logs**, and **X-Ray**
+*   **OpenSearch** or third-party integrations for search and dashboarding
+*   Cross-account S3 logging with access auditing
+
+Additionally, a **Management Account** oversees:
+
+*   AWS Organisations and SCPs
+*   IAM identity centre and access control
+*   AWS Cost Explorer and budget alerts
+
+## **Key Design Patterns**
+
+Here are some essential architectural patterns this design implements:
+
+Pattern
+
+Value
+
+Edge-to-Cloud Inference
+
+Keep latency low by processing at the edge, escalate if needed
+
+Multi-Account Isolation
+
+Minimise blast radius, enable fine-grained governance
+
+Tenant-Aware Auth
+
+Each partner logs in with their own IdP, securely isolated
+
+CI/CD-Ready Portal
+
+Dev/staging/prod allow safe deployment of model and UI updates
+
+Centralised Observability
+
+All logs, metrics, and costs flow into one plane
+
+## **Security & Compliance Best Practices**
+
+*   Encrypted MQTT + TLS connections at the edge
+*   IAM role scoping for tenants, regions, and environments
+*   Federated SSO with fine-grained attribute-based access
+*   VPC flow logs and CloudTrail centralised for forensics
+
+## **Final Thoughts**
+
+This architecture provides a secure, scalable foundation for companies looking to integrate vision AI into their environments—whether that's one factory or hundreds of sites globally.
+
+By adopting a layered, multi-account model, you're ensuring the system is ready for enterprise-scale governance, identity, and analytics.
+
+Have questions or want to dig into one area deeper? Let me know.
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.blog/)

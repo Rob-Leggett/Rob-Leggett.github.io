@@ -1,51 +1,58 @@
-import Image from "next/image";
+import BlogFeed from "@/components/portfolio/blog/blog-feed";
+import GitHubProjects from "@/components/portfolio/github/github-projects";
+import Header from "@/app/header";
 
 export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-neutral-900 text-center px-6">
-      <Image
-        src="/next.svg"
-        alt="Next.js logo"
-        width={160}
-        height={35}
-        className="dark:invert mb-8"
-        priority
-      />
+    <div className="min-h-screen bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100">
+      {/* Hero / Header */}
+      <Header />
 
-      <h1 className="text-4xl sm:text-5xl font-bold text-gray-800 dark:text-gray-100 mb-4 tracking-tight">
-        Coming Soon
-      </h1>
-      <p className="text-gray-600 dark:text-gray-400 text-lg max-w-xl mb-10">
-        Something exciting is on the way. Stay tuned for the launch of my new site.
-      </p>
+      <main className="flex flex-col gap-16 sm:gap-20">
+        {/* Blog Section */}
+        <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+            <h2 className="text-2xl font-semibold">Latest Posts</h2>
+            <a
+              href="/blog"
+              className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mt-2 sm:mt-0"
+            >
+              View all →
+            </a>
+          </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
-        <a
-          href="mailto:hello@robertleggett.com.au"
-          className="px-6 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-colors text-sm font-medium"
-        >
-          Contact Me
-        </a>
-        <a
-          href="https://www.linkedin.com/in/rob-leggett/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-6 py-3 border border-gray-300 dark:border-gray-700 rounded-full text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        >
-          Connect on LinkedIn
-        </a>
-        <a
-          href="https://robertleggett.blog"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-6 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors text-sm font-medium"
-        >
-          Visit My Blog
-        </a>
-      </div>
+          {/* Grid Preview (auto wraps on mobile) */}
+          <div className="max-h-[550px] overflow-y-auto pb-2">
+            <BlogFeed />
+          </div>
+        </section>
 
-      <footer className="absolute bottom-6 text-sm text-gray-500 dark:text-gray-400">
-        © {new Date().getFullYear()} Rob Leggett. All rights reserved.
+        {/* Divider */}
+        <div className="h-px bg-gray-200 dark:bg-neutral-800 mx-auto w-11/12" />
+
+        {/* Projects Section */}
+        <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+            <h2 className="text-2xl font-semibold">Projects</h2>
+            <a
+              href="https://github.com/Rob-Leggett?tab=repositories"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline mt-2 sm:mt-0"
+            >
+              View all →
+            </a>
+          </div>
+
+          <div className="max-h-[550px] overflow-y-auto pb-2">
+            <GitHubProjects username="Rob-Leggett" />
+          </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="py-8 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-neutral-800">
+        © {new Date().getFullYear()} Rob Leggett
       </footer>
     </div>
   );
