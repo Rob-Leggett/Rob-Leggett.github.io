@@ -17,8 +17,10 @@ export async function generateStaticParams() {
 }
 
 // Render each post
-export default async function PostPage({ params }: { params: { slug: string } }) {
-  const filePath = path.join(POSTS_DIR, `${params.slug}.mdx`);
+export default async function PostPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+
+  const filePath = path.join(POSTS_DIR, `${slug}.mdx`);
   const src = fs.readFileSync(filePath, "utf8");
   const { data, content } = matter(src);
 
