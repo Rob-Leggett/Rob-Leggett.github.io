@@ -117,12 +117,12 @@ export default function Header() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.25 }}
+            transition={{ delay: 1, duration: 0.25 }}
             className="mt-3 font-mono text-[12px] sm:text-[13px] text-gray-500 dark:text-gray-400"
           >
             <span className="text-green-500">rob@dev</span>:~$
             <span className="ml-2 text-blue-500">building-next-gen-cloud</span>
-            <span className="ml-1 inline-block animate-[blink_1.1s_steps(2,start)_infinite]">
+            <span className="ml-1 inline-block animate-[blink_1.2s_steps(2,start)_infinite]">
               ▌
             </span>
           </motion.div>
