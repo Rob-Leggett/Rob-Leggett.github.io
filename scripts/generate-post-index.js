@@ -2,8 +2,8 @@ import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
 
-const POSTS_DIR = path.join(process.cwd(), "content/posts");
-const OUT_FILE = path.join(process.cwd(), "public/blog/posts.json");
+const PUBLISH_DIR = path.join(process.cwd(), "content/publish");
+const OUT_FILE = path.join(process.cwd(), "public/metadata/blog-posts.json");
 
 function extractExcerpt(content) {
   // take the first non-empty lines (up to ~3)
@@ -25,10 +25,10 @@ function extractFeatureImage(content, frontmatterImage) {
 }
 
 const posts = fs
-  .readdirSync(POSTS_DIR)
+  .readdirSync(PUBLISH_DIR)
   .filter((f) => f.endsWith(".mdx") || f.endsWith(".md"))
   .map((file) => {
-    const raw = fs.readFileSync(path.join(POSTS_DIR, file), "utf8");
+    const raw = fs.readFileSync(path.join(PUBLISH_DIR, file), "utf8");
     const { data, content } = matter(raw);
 
     const excerpt = extractExcerpt(content);

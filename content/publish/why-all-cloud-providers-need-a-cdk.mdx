@@ -1,0 +1,135 @@
+---
+title: "Unleashing the Power of Cloud Development Kit (CDK) - Empowering Cloud Providers and Infrastructure Engineers"
+date: "2020-06-09"
+slug: "why-all-cloud-providers-need-a-cdk"
+status: "publish"
+feature_image: "/images/blog/why-all-cloud-providers-need-a-cdk/feature-image.png"
+---
+
+Before we embark on the compelling journey of why every cloud provider needs a Cloud Development Kit (CDK), let's take a moment to recognize the vast array of services, tooling, and frameworks available to support the provisioning of cloud infrastructure. As professionals in the realm of Cloud Infrastructure, you're likely familiar with this diverse ecosystem. Now, let's dive deeper into the unparalleled benefits that the Cloud Development Kit (CDK) brings to the table. In this article, we will shed light on the transformative advantages of adopting the CDK approach. Furthermore, we will explore why it is not only advantageous but essential for all cloud providers to embrace and support this approach by providing relevant services, tooling, and frameworks. Join us as we unravel the power of the CDK and its profound impact on cloud providers and infrastructure engineers alike. Let's embark on this enlightening journey together and harness the true potential of the Cloud Development Kit.
+
+## Before you start
+
+About this post:
+
+*   5 – 10 min average reading time
+*   Suitable for beginner through to advanced
+
+What you will gain reading this post:
+
+*   An understanding of the benefits of a cloud development kit.
+*   An understanding of which cloud providers have a cloud development kit.
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Let's begin.
+
+## What is a CDK?
+
+A Cloud Development Kit (**CDK**) is:
+
+*   A software development framework for defining your cloud infrastructure as code and supports provisioning of your infrastructure.
+
+When executing the **CDK** it will:
+
+*   Generate cloud provider specific templating that can be run in your cloud provider account, provisioning your infrastructure.
+
+This process of provisioning your infrastructure is known as Infrastructure as Code (**IaC**).
+
+## Why is a CDK necessary?
+
+If i'm to be perfectly honest with you, until recently I was with a mixed mindset of the best technology approach for provisioning infrastructure.
+
+However I now am fully supporting the adoption of a **CDK**.
+
+From a customers perspective, cloud provider services such as CloudFormation, Cloud Deployment Manager & Azure Resource Manager are the lowest level for us to design & define the provisioning of infrastructure in each cloud provider through templating.
+
+Therefore I refer to this as the traditional approach. Any layer on top of that like the CDK is what I am referring to as the abstraction approach.
+
+Traditional Approach
+
+Abstraction Approach
+
+Need to learn cloud provider specific custom templating
+
+Allows the developers to write the infrastructure in a language they already know
+
+Large amounts of configuration
+
+Allows for a simpler and easier to understand code review
+
+Large investment for teams to adopt and understand the configuration
+
+Small amount of code and easy to adopt
+
+Traditional Approach vs Abstraction Approach
+
+## Who benefits from a CDK?
+
+*   The Teams and Developers through development and delivery.
+*   Organisations from an adoption and strategy.
+*   I would also argue that the cloud providers themselves would benefit as they would gain a larger customer base using infrastructure as code allowing them to easily adopt their platform.
+
+## What gaps still remain?
+
+If you currently want to provision infrastructure as code in a multi-cloud / hybrid-cloud setup then there are frameworks available.
+
+*   [TerraForm](https://www.terraform.io/) is highly popular and has helped resolve limitations that would otherwise involve the development of different cloud provider specific templates such as [CloudFormation](https://aws.amazon.com/cloudformation/), [Cloud Deployment Manager](https://cloud.google.com/deployment-manager/docs) & [Azure Resource Manager](https://docs.microsoft.com/en-au/azure/azure-resource-manager/management/overview).
+
+This still though requires the team to learn a new domain specific language (**DSL**) in the case of TerraForm it is [HCL](https://github.com/hashicorp/hcl).
+
+*   [Pulumi](https://www.pulumi.com/) is another that is quite popular and has helped resolve issues similar to TerraForm with the added benefit of being able to develop in widely known languages rather than having to learn a new DSL.
+
+Now let's look at single-cloud setups, the cloud provider supported services available are...
+
+*   [CloudFormation](https://cloud.google.com/deployment-manager/docs/configuration/syntax-reference), [Cloud Deployment Manager](https://cloud.google.com/deployment-manager/docs/configuration/syntax-reference) and [Azure Resource Manager](https://docs.microsoft.com/en-us/azure/azure-resource-manager/templates/overview) that all use cloud provider specific templates.
+
+So, along with having to invest in learning a new DSL depending on the framework you decide to adopt, then there is the writing of Yaml & JSON presenting its own challenges especially when you are dealing with large and complex solutions.
+
+**Meaning** **IaC** with code rather than with templating is a better approach.
+
+However there are currently some limitations with the large cloud providers AWS, GCP and Azure.
+
+*   As of now only [AWS](https://docs.aws.amazon.com/cdk/latest/guide/home.html) (insert clapping here) has a CDK to support this approach but if you would like to take this approach within GCP or Azure then you are limited to used the Multi-Cloud / Hybrid cloud framework **Pulumi** which does come with a monetary cost.
+
+On top of that, there are also the additional risks that come with development and third-party frameworks.
+
+*   As with many API's, the interface will be change and breaking changes occur, potentially leading to additional development effort to uplift the framework version you are integrated with.
+*   Additionally, given it is an abstraction on the templating framework and services, unless they are developed together there can be times where not all services are supported and/or differences for a short term between the templating capability and the coding capability.
+
+## Why is this important?
+
+It is important because the need to have dedicated dev-ops is not as strong as it was a few years ago.
+
+*   Adopting a model where you have a dedicated dev-ops member in each team is a costly model
+*   Also having a centralised dev-ops team presents it own set of issues, which I may cover off in a future posting.
+
+Team are strongly supporting the dev-ops and no-ops models and therefore the team members that are supporting this are the developers so...
+
+*   They need a process that the team can incorporate into the CI/CD pipeline
+*   As well as having familiarity and a knowledge of a language without having to learn multiple specialities will provide a more productive and supportable result
+*   As well as be able to Automate, Automation is crucial to be able to execute
+
+You can then expand this further and if you have an organisation.
+
+*   With having an aligned approach in the way you provision infrastructure as code
+*   As well as having a stronger support network of employees that have the knowledge to make the changes, which results in less of an issue when employee pursuits other opportunities
+
+## Conclusion
+
+In the end these services, tooling and frameworks are provided to make your life easier in adopting cloud providers and the solutions they have on offer.
+
+What would be great to see is a **CDK** in each of the large cloud providers .
+
+*   This will in turn allow the team to easily provision infrastructure no matter the cloud provider .
+*   They would be able to use a language they are already know rather than needing to learn cloud provider specifics.
+*   It will allow the teams to have a simple code review process and easily integrate into the their CI/CD platform.
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.blog/)

@@ -2,8 +2,7 @@ import Link from "next/link";
 import { getAllPosts } from "@/lib/posts";
 
 export default function BlogIndex() {
-  const posts = getAllPosts();
-
+  const posts = getAllPosts(); // reads content/publish
   return (
     <div className="container mx-auto px-6 py-10">
       <h1 className="text-3xl font-bold mb-6">Blog</h1>

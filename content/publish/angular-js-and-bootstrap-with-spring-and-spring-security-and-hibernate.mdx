@@ -1,0 +1,156 @@
+---
+title: "Angular JS and Bootstrap with Spring, Spring Security and Hibernate"
+date: "2013-12-20"
+slug: "angular-js-and-bootstrap-with-spring-and-spring-security-and-hibernate"
+status: "publish"
+feature_image: "/images/blog/angular-js-and-bootstrap-with-spring-and-spring-security-and-hibernate/feature-image.png"
+---
+
+Folks have been asking me if I knew of any good examples of a J2EE web application that utilizes the following technologies: Angular JS, Bootstrap, Spring 4, Spring Security 4 and Hibernate 5.2.4, and after searching around
+
+I decided that it would be best to create an example project that would demonstrate the integration of all these technologies as well as describe some of the specifics.
+
+## Before you start
+
+About this post:
+
+*   2 - 7 min average reading time
+*   Suitable for beginner's through to advanced
+
+What you will gain reading this post:
+
+*   A starter project ready for use
+*   An overview of the technology choices for the starter project
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+## Angular JS
+
+### Why choose this technology
+
+For the example I wanted to create the client rich J2EE web application that uses a technology.
+
+To utilize MVC on the client side allowing for a more responsive application and less server interactions.
+
+To use a technology that is sort after on the market.
+
+### Technology focus areas
+
+*   Angular JS
+    *   Directives
+    *   Routes
+    *   Template - Single Page Application (SPA)
+    *   Partials
+    *   Data binding
+    *   Filters & sorters
+    *   Controllers
+    *   Services
+    *   Http response interceptors are used to catch all 401 requests returned from the server and action them
+    *   Event broadcasting and on listeners.
+    *   Third-party library calls
+*   Injection
+*   Base64 encoding
+*   Promises
+*   Basic Authentication
+
+## Bootstrap
+
+### Why choose this technology
+
+For the example I wanted to create the J2EE web application that looks professional and is quick to style.
+
+Bootstrap is a responsive web library allowing for ideal UI displaying across different devices and resolutions.
+
+### Technology focus areas
+
+*   Bootstrap
+    *   NavBar
+    *   Header
+    *   Dropdown
+    *   Panel
+*   Responsive Web  Layouts
+
+## Spring 4.2.5
+
+### Why choose this technology
+
+For the example I wanted to create the functionality scenarios to best emulate the industry best practices and for the reader to be able to walk away understanding how they can utilize the growing demand for a client rich front end while still  rely on the server side technologies that are currently strong in the market.
+
+I decided to use Spring 4 MVC to create a RESTful API in which the client could GET, POST, PUT, DELETE data as it was required.
+
+### Technology focus areas
+
+*   The initial Spring 4 configuration is done through XML, however this is purely to define certain features such as package scanning and to enable annotations.
+*   Annotations are used and encouraged to configure your spring controllers, services, transactions, components etc.
+*   RESTful entry points are defined through controllers and in turn they produce JSON responses.
+*   CRUD operations.
+*   Unit Test Support.
+
+## Spring Security 4.1.0
+
+### Why choose this technology
+
+For the example I wanted to have the RESTful API endpoints protected as sensitive information can be accessed and sensitive operations performed.
+
+Spring Security allows to have the endpoints annotated with @PreAuthorize, @Secured or @PostAuthorize depending on you configuration and when you want to have the security check performed.
+
+### Technology focus areas
+
+*   Stateless
+*   Annotations are encouraged to protect your RESTful endpoints, @PreAuthorize and @PostAuthorize annotations have been enabled @Secured has not
+*   Basic Authentication
+*   Token Authentication
+*   An entry point that always returns http 401
+*   Unit Test Support.
+
+## Hibernate 5.2.4
+
+### Why choose this technology
+
+For the example I wanted to demonstrate a complete end to end solution where transaction operations could be executed that would show industry based standards.
+
+Hibernate allows for JPA implementation utilizing the Entity Manager and creating simple transactions.
+
+### Technology focus areas
+
+*   Connectivity Configuration via persistence.xml
+*   JPA implementation via Spring Configuration.
+*   HSQL In Memory Database for simplicity and no configuration requirements.
+*   Unit Test Support.
+
+## Example
+
+You can check out the project from the following location below:
+
+**Project URL**: [https://github.com/Rob-Leggett/angular\_bootstrap\_spring](https://github.com/Rob-Leggett/angular_bootstrap_spring)  
+Here is what you can learn:
+
+*   Maven Modules
+*   Gulp JS
+*   Basic directives
+*   Multiple views
+*   Security
+*   Filtering and sorting lists
+*   Data Binding
+*   Data retrieval via AJAX
+*   Integration of client side MVC with server side MVC
+*   Stateless API
+*   RESTful entry points
+*   Basic Authentication
+*   Token Authentication
+*   Data operations using JPA
+*   In Memory Databases
+*   Unit Tests
+*   Integration Tests
+*   Jasmine Tests
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.blog/)

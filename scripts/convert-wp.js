@@ -4,6 +4,7 @@ import { XMLParser } from "fast-xml-parser";
 import TurndownService from "turndown";
 import { compile } from "@mdx-js/mdx";
 import https from "https";
+import sharp from "sharp";
 
 const turndown = new TurndownService({
   headingStyle: "atx",
@@ -25,8 +26,33 @@ function decodeEntities(str = "") {
     .replace(/&#8230;/g, "…");
 }
 
+function stripWpComments(html) {
+  return html.replace(/<!--\s*\/?wp:[^>]*-->\s*/gi, "");
+}
+
+function normalizeFences(s) {
+  let out = stripWpComments(s);
+
+  // Insert newline after opening fences like ```textimport -> ```text\nimport
+  out = out.replace(/```text(?=\S)/g, "```text\n");
+
+  // Add newline after language if missing, e.g. ```javapublic -> ```java\npublic
+  out = out.replace(/```([a-z0-9_+-]+)(?=\S)/gi, "```$1\n");
+
+  // Add newline after plain ``` if directly followed by text
+  out = out.replace(/```(?=\S)/g, "```\n");
+
+  // Ensure closing fences are on their own line
+  out = out.replace(/([^\n])```/g, "$1\n```");
+
+  // Balance unmatched fences
+  const ticks = (out.match(/```/g) || []).length;
+  if (ticks % 2 !== 0) out += "\n```";
+
+  return out;
+}
+
 function fenceAllCode(content) {
-  // Force wrap known code keywords into fences if missing
   const pattern =
     /(^|\n)(\s*)(import\s+.+;|export\s+.+;|package\s+.+;|class\s+.+{|public\s+.+{|private\s+.+{|protected\s+.+{|static\s+.+;|void\s+.+\(|def\s+.+\(|function\s+.+\(|const\s+.+=|let\s+.+=|var\s+.+=)/g;
   return content.replace(pattern, (_, pre, indent, code) => {
@@ -35,7 +61,6 @@ function fenceAllCode(content) {
 }
 
 function escapeAllDangerousSyntax(str) {
-  // Escape braces and backticks globally
   return str
     .replace(/`/g, "\\`")
     .replace(/{/g, "&#123;")
@@ -45,6 +70,22 @@ function escapeAllDangerousSyntax(str) {
 }
 
 // --- download helper ---
+
+// fetch image as Buffer
+async function fetchImageBuffer(url) {
+  return new Promise((resolve) => {
+    https
+      .get(url, (response) => {
+        if (response.statusCode !== 200) return resolve(null);
+        const chunks = [];
+        response.on("data", (c) => chunks.push(c));
+        response.on("end", () => resolve(Buffer.concat(chunks)));
+      })
+      .on("error", () => resolve(null));
+  });
+}
+
+// download image
 async function downloadImage(url, destPath) {
   if (!url) return false;
   return new Promise((resolve) => {
@@ -71,15 +112,14 @@ async function downloadImage(url, destPath) {
 
 async function main() {
   const xmlPath = path.join(process.cwd(), "scripts", "techinthecloud.WordPress.2025-10-11.xml");
-  const outDir = path.join(process.cwd(), "content/posts");
-  const skipDir = path.join(process.cwd(), "content/skipped");
-  const logDir = path.join(process.cwd(), "content/logs");
-  const imgDir = path.join(process.cwd(), "public/images/blog");
 
-  fs.mkdirSync(outDir, { recursive: true });
+  const baseContent = path.join(process.cwd(), "content");
+  const skipDir = path.join(baseContent, "skipped");
+  const logDir = path.join(baseContent, "logs");
+
+  fs.mkdirSync(baseContent, { recursive: true });
   fs.mkdirSync(skipDir, { recursive: true });
   fs.mkdirSync(logDir, { recursive: true });
-  fs.mkdirSync(imgDir, { recursive: true });
 
   const xml = fs.readFileSync(xmlPath, "utf8");
   const parser = new XMLParser({ ignoreAttributes: false });
@@ -97,11 +137,15 @@ async function main() {
     }
   }
 
-  let exported = 0;
-  let skipped = 0;
+  let counts = {};
 
   for (const item of items) {
     if (item["wp:post_type"] !== "post") continue;
+
+    const status = (item["wp:status"] || "unknown").toLowerCase();
+    const targetDir = path.join(baseContent, status);
+    fs.mkdirSync(targetDir, { recursive: true });
+    counts[status] = (counts[status] || 0) + 1;
 
     const postId = item["wp:post_id"];
     const rawTitle = (item.title || "Untitled").replace(/\r?\n/g, " ").trim();
@@ -115,7 +159,7 @@ async function main() {
 
     let content = decodeEntities(item["content:encoded"] || "");
 
-    // Remove common WP wrappers
+    // Clean WP wrappers
     content = content
       .replace(/<[/]?[a-z0-9-]*--[a-z0-9-]*[^>]*>/gi, "")
       .replace(/<\/?wp-[^>]+>/gi, "")
@@ -128,46 +172,49 @@ async function main() {
       return `\n\`\`\`text\n${safe.trim()}\n\`\`\`\n`;
     });
 
-    // Fix malformed fences
-    content = content
-      .replace(/(```+)\s*(\w+)?\s*(```+)?/g, "```text")
-      .replace(/```(\w+)?\s*```/g, "```text");
-
-    // Force fence all codey lines
-    content = fenceAllCode(content);
+    // Normalize and fence code
+    content = normalizeFences(content);
+    if (!/```/.test(content)) content = fenceAllCode(content);
 
     // Escape inline code braces
     content = content.replace(/`([^`]+)`/g, (_, inner) => "`" + escapeAllDangerousSyntax(inner) + "`");
 
-    // Ensure all ``` blocks close
-    if ((content.match(/```/g) || []).length % 2 !== 0) content += "\n```";
-
-    // --- Find featured image ---
-    let feature_image_url = null;
+    // --- Featured image handling ---
+    let feature_image_local = "";
     const parentAttachments = attachments[postId];
     if (parentAttachments?.length) {
-      feature_image_url = parentAttachments.sort().reverse()[0];
+      const feature_image_url = parentAttachments.sort().reverse()[0];
+
+      // only download images for published posts
+      if (status === "publish") {
+        // create img dir
+        const imgDir = path.join(process.cwd(), `public/images/blog/${slug}`);
+        fs.mkdirSync(imgDir, { recursive: true });
+
+        const buf = await fetchImageBuffer(feature_image_url);
+        if (buf) {
+          const png = await sharp(buf).png({ quality: 90 }).toBuffer(); // convert to PNG
+          const localFile = "feature-image.png";
+          const localPath = path.join(imgDir, localFile);
+          fs.writeFileSync(localPath, png);
+          feature_image_local = `/images/blog/${slug}/${localFile}`;
+        } else {
+          console.warn(`⚠️  Failed to download image for published post: ${slug}`);
+        }
+      } else {
+        // Non-published: keep reference to remote URL (optional)
+        console.log(`ℹ️  Skipping image download for non-published post: ${slug}`);
+      }
     }
 
-    // --- Download local feature image ---
-    let feature_image_local = "";
-    if (feature_image_url) {
-      const extMatch = feature_image_url.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-      const ext = extMatch ? extMatch[1].toLowerCase() : "jpg";
-      const localFile = `${slug}-feature-image.${ext}`;
-      const localPath = path.join(imgDir, localFile);
-      const publicPath = `/images/blog/${localFile}`;
-      const success = await downloadImage(feature_image_url, localPath);
-      if (success) feature_image_local = publicPath;
-    }
-
-    // Convert HTML to Markdown
+    // Convert to Markdown
     const markdown = turndown.turndown(content);
 
     const full = `---
 title: "${safeTitle}"
 date: "${date}"
 slug: "${slug}"
+status: "${status}"
 ${feature_image_local ? `feature_image: "${feature_image_local}"` : ""}
 ---
 
@@ -176,18 +223,18 @@ ${markdown}
 
     try {
       await compile(full, { jsx: false });
-      fs.writeFileSync(path.join(outDir, `${slug}.mdx`), full);
-      exported++;
+      fs.writeFileSync(path.join(targetDir, `${slug}.mdx`), full);
     } catch (err) {
       fs.writeFileSync(path.join(skipDir, `${slug}.mdx`), full);
       fs.writeFileSync(path.join(logDir, `${slug}.log`), err.stack || err.message);
       console.warn(`⚠️  Skipped invalid MDX for: ${slug} (${err.message})`);
-      skipped++;
     }
   }
 
-  console.log(`✅ Exported ${exported} posts to ${outDir}`);
-  console.log(`⚠️  Skipped ${skipped} invalid posts (logs in ${logDir})`);
+  console.log("✅ Export complete:");
+  Object.entries(counts).forEach(([status, count]) => {
+    console.log(`  - ${status}: ${count} posts → content/${status}/`);
+  });
 }
 
 await main();

@@ -16,9 +16,25 @@ export default function BlogFeed() {
   const [posts, setPosts] = useState<LocalPost[]>([]);
 
   useEffect(() => {
-    fetch("/blog/posts.json")
-      .then((r) => r.json())
-      .then((data) => setPosts(data));
+    const loadPosts = async () => {
+      try {
+        const res = await fetch("/metadata/blog-posts.json", { cache: "no-store" });
+        const data: LocalPost[] = await res.json();
+
+        // ensure consistent date parsing
+        const sorted = [...data].sort((a, b) => {
+          const da = Date.parse(a.date);
+          const db = Date.parse(b.date);
+          return db - da; // newest first
+        });
+
+        setPosts(sorted);
+      } catch (err) {
+        console.error("Failed to load or sort posts:", err);
+      }
+    };
+
+    loadPosts();
   }, []);
 
   return (
@@ -49,7 +65,11 @@ export default function BlogFeed() {
             <div className="mt-4 flex items-center justify-between">
               <Badge variant="secondary">MDX</Badge>
               <time className="text-xs text-gray-500">
-                {new Date(p.date).toLocaleDateString()}
+                {new Date(p.date).toLocaleDateString(undefined, {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })}
               </time>
             </div>
           </CardContent>
