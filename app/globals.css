@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+@keyframes blink {
+  0%, 50%, 100% {
+    opacity: 1;
+  }
+  25%, 75% {
+    opacity: 0;
+  }
+}
+
+.blink {
+  animation: blink 1.2s infinite steps(1);
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

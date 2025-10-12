@@ -4,167 +4,167 @@
     "title": "Securing Your Online Presence - Unraveling the Relationship Between DNS and Certificate Management",
     "date": "2023-03-24",
     "excerpt": "In the digital landscape, maintaining a secure and reliable online presence is paramount. Two key components that play a vital role in achieving this are DNS (Domain Name System) and certificate management. Understanding how these elements work is crucial for safeguarding the saf…",
-    "feature_image": "/images/blog/aws-dns-and-certificate-management/feature-image.png"
+    "feature_image": "/blog/aws-dns-and-certificate-management/feature-image.png"
   },
   {
     "slug": "great-people-grow-with-good-leadership",
     "title": "Unleashing Potential - How Good Leadership Fosters Growth in Exceptional Individuals",
     "date": "2021-10-25",
     "excerpt": "Leadership comes in many styles. Some **good**, and some well, let's just say **not** so good. I would like to focus on this topic, by exploring leadership in an open format, and hopefully along the way, help inspire and influence those already in a position of leadership, as wel…",
-    "feature_image": "/images/blog/great-people-grow-with-good-leadership/feature-image.png"
+    "feature_image": "/blog/great-people-grow-with-good-leadership/feature-image.png"
   },
   {
     "slug": "aws-to-gcp-to-azure-services-mapping",
     "title": "Navigating the Multicloud Maze - Simplifying Service Names Across Cloud Providers",
     "date": "2021-07-05",
     "excerpt": "Working with multiple cloud providers can be a complex endeavor, and one of the unexpected challenges is keeping track of service names and their equivalents across different platforms. However, fret not, for we have a solution that can simplify your multicloud journey. In this a…",
-    "feature_image": "/images/blog/aws-to-gcp-to-azure-services-mapping/feature-image.png"
+    "feature_image": "/blog/aws-to-gcp-to-azure-services-mapping/feature-image.png"
   },
   {
     "slug": "how-i-passed-my-togaf-9-2-exam",
     "title": "How I passed my TOGAF 9.2 Exam",
     "date": "2021-05-05",
     "excerpt": "The Open Group Architecture Framework (_TOGAF_) is an enterprise architecture methodology that offers a high-level framework for enterprise software development. The **TOGAF certification** is helpful for developing a broad knowledge in the area of Enterprise Architecture, as the…",
-    "feature_image": "/images/blog/how-i-passed-my-togaf-9-2-exam/feature-image.png"
+    "feature_image": "/blog/how-i-passed-my-togaf-9-2-exam/feature-image.png"
   },
   {
     "slug": "cloud-certification-journey",
     "title": "Embarking on the Cloud Certification Journey - Uniquely Personal and Profound",
     "date": "2021-03-10",
     "excerpt": "For those who know me, it's no secret that cloud certification is a passion close to my heart. As I've witnessed numerous individuals undertaking their own certification journeys, I've come to realize that each story is deeply personal and incredibly diverse. Motivations differ,…",
-    "feature_image": "/images/blog/cloud-certification-journey/feature-image.png"
+    "feature_image": "/blog/cloud-certification-journey/feature-image.png"
   },
   {
     "slug": "introduction-to-the-cloud",
     "title": "Embracing the Cloud - Understanding the Fundamentals of Cloud Technology",
     "date": "2021-01-27",
     "excerpt": "Working in the IT industry, many of my friends and family approach me when it comes to anything \"computer\" related, due to them having very little knowledge about IT in general with one of the most mysterious topics for them being the **Cloud**. They often hear terms like, \"**it…",
-    "feature_image": "/images/blog/introduction-to-the-cloud/feature-image.png"
+    "feature_image": "/blog/introduction-to-the-cloud/feature-image.png"
   },
   {
     "slug": "how-i-passed-my-aws-certified-security-speciality-exam",
     "title": "How I passed my AWS Certified Security (Speciality) Exam",
     "date": "2020-11-03",
     "excerpt": "Today we operate in a environment where cyber security attacks, damages, ransom and other scary activities occur often and can absolutely cripple a business of all sizes from start-up to enterprise. No matter your background into cloud computing, I think this certification is a M…",
-    "feature_image": "/images/blog/how-i-passed-my-aws-certified-security-speciality-exam/feature-image.png"
+    "feature_image": "/blog/how-i-passed-my-aws-certified-security-speciality-exam/feature-image.png"
   },
   {
     "slug": "best-cloud-training-providers-for-2020",
     "title": "Best Cloud Training Providers for 2020",
     "date": "2020-08-27",
     "excerpt": "2020 has been a challenging year for many people and many reasons. However, if we focus in on the cloud and cloud training, it has been a noteworthy year. Many cloud training providers have provided free content to help those that have been impacted due to COVID-19. While others…",
-    "feature_image": "/images/blog/best-cloud-training-providers-for-2020/feature-image.png"
+    "feature_image": "/blog/best-cloud-training-providers-for-2020/feature-image.png"
   },
   {
     "slug": "aws-gcp-azure-certification-study-material",
     "title": "AWS, GCP & Azure Certification Study Material",
     "date": "2020-06-25",
     "excerpt": "In my journey of acquiring certifications, I have been introduced too many different and fantastic study materials. These study materials have not only helped me in acquiring my certifications, but they have also helped me to cement the knowledge that I have acquired and to be ab…",
-    "feature_image": "/images/blog/aws-gcp-azure-certification-study-material/feature-image.png"
+    "feature_image": "/blog/aws-gcp-azure-certification-study-material/feature-image.png"
   },
   {
     "slug": "how-i-passed-my-azure-fundamentals-az-900-exam",
     "title": "How I passed the Azure Fundamentals AZ-900 Exam",
     "date": "2020-06-17",
     "excerpt": "Microsoft's Cloud Azure is one of the large cloud providers that has now been around for quite a few years, and with good reason, Microsoft has always been a big player when it comes to computing and software and it is only natural that they also participate and play an important…",
-    "feature_image": "/images/blog/how-i-passed-my-azure-fundamentals-az-900-exam/feature-image.png"
+    "feature_image": "/blog/how-i-passed-my-azure-fundamentals-az-900-exam/feature-image.png"
   },
   {
     "slug": "why-all-cloud-providers-need-a-cdk",
     "title": "Unleashing the Power of Cloud Development Kit (CDK) - Empowering Cloud Providers and Infrastructure Engineers",
     "date": "2020-06-09",
     "excerpt": "Before we embark on the compelling journey of why every cloud provider needs a Cloud Development Kit (CDK), let's take a moment to recognize the vast array of services, tooling, and frameworks available to support the provisioning of cloud infrastructure. As professionals in the…",
-    "feature_image": "/images/blog/why-all-cloud-providers-need-a-cdk/feature-image.png"
+    "feature_image": "/blog/why-all-cloud-providers-need-a-cdk/feature-image.png"
   },
   {
     "slug": "choosing-event-streaming-or-messaging-for-your-architecture",
     "title": "Choosing Event Streaming or Messaging for your Architecture",
     "date": "2020-03-02",
     "excerpt": "Want to understand what to consider when choosing Event Streaming and Messaging for your Architecture? They both are heavily used when it comes to Architecture, they are fantastic ways to manage the interactions, communication and behaviour between your services or systems and of…",
-    "feature_image": "/images/blog/choosing-event-streaming-or-messaging-for-your-architecture/feature-image.png"
+    "feature_image": "/blog/choosing-event-streaming-or-messaging-for-your-architecture/feature-image.png"
   },
   {
     "slug": "proven-ways-to-reduce-your-cloud-costs",
     "title": "Unleashing Cloud Cost Optimization - Unlocking Savings with Minimal Effort",
     "date": "2019-12-18",
     "excerpt": "In the realm of cloud computing, one aspect that excites us all is the potential for cost savings. The allure of achieving remarkable benefits with minimal effort is undeniable. With the abundance of cloud providers available, hosting solutions in the cloud not only offers unpara…",
-    "feature_image": "/images/blog/proven-ways-to-reduce-your-cloud-costs/feature-image.png"
+    "feature_image": "/blog/proven-ways-to-reduce-your-cloud-costs/feature-image.png"
   },
   {
     "slug": "top-5-cloud-training-providers-for-2019",
     "title": "Best Cloud Training Providers for 2019",
     "date": "2019-12-11",
     "excerpt": "Organizations are utilising cloud solutions at a rapid growth rate. Cloud Providers like Amazon (AWS), Google (Google Cloud), and Microsoft (Azure) have been taking advantage by providing some of the leading cloud platforms in the industry. There are other available platforms suc…",
-    "feature_image": "/images/blog/top-5-cloud-training-providers-for-2019/feature-image.png"
+    "feature_image": "/blog/top-5-cloud-training-providers-for-2019/feature-image.png"
   },
   {
     "slug": "deep-dive-dns",
     "title": "DNS Explained - The Backbone of the Internet",
     "date": "2019-11-25",
     "excerpt": "Welcome to the \"DNS Deep Dive\" series! In this comprehensive exploration, we will immerse ourselves in the intricacies of DNS (Domain Name System), unraveling its inner workings to shed light on this fundamental aspect of the internet. Whether you're a tech-savvy individual or so…",
-    "feature_image": "/images/blog/deep-dive-dns/feature-image.png"
+    "feature_image": "/blog/deep-dive-dns/feature-image.png"
   },
   {
     "slug": "how-i-passed-the-gcp-professional-cloud-architect-exam",
     "title": "How I passed the GCP Professional Cloud Architect Exam",
     "date": "2019-09-21",
     "excerpt": "The Google Cloud Platform (GCP) has been growing in popularity over the last few years, and with good reason, the GCP has a strong competitive advantage over other cloud providers when it comes to certain aspects such as Kubernetes, Big Data, Data Pipelines, and Analytics. This c…",
-    "feature_image": "/images/blog/how-i-passed-the-gcp-professional-cloud-architect-exam/feature-image.png"
+    "feature_image": "/blog/how-i-passed-the-gcp-professional-cloud-architect-exam/feature-image.png"
   },
   {
     "slug": "when-should-you-choose-choreography-vs-orchestration-for-your-microservices-architecture",
     "title": "Choosing Choreography or Orchestration for your Microservices Architecture",
     "date": "2019-03-17",
     "excerpt": "Both Choreography or Orchestration are fascinating patterns, they are fantastic ways to manage the interactions, communication, and behavior between your Microservices and often there is not a one size fits all approach you should take. Just because you have taken one of these ap…",
-    "feature_image": "/images/blog/when-should-you-choose-choreography-vs-orchestration-for-your-microservices-architecture/feature-image.png"
+    "feature_image": "/blog/when-should-you-choose-choreography-vs-orchestration-for-your-microservices-architecture/feature-image.png"
   },
   {
     "slug": "how-i-passed-the-aws-certified-solution-architect-associate-exam",
     "title": "How I passed the AWS Certified Solution Architect (Associate) Exam",
     "date": "2018-12-02",
     "excerpt": "No matter your background into cloud computing, I think this certification is a great entry point into the AWS certifications, while it is one of the easiest of the AWS certifications, it will give you a good foundation and overall understanding of the services AWS has to offer a…",
-    "feature_image": "/images/blog/how-i-passed-the-aws-certified-solution-architect-associate-exam/feature-image.png"
+    "feature_image": "/blog/how-i-passed-the-aws-certified-solution-architect-associate-exam/feature-image.png"
   },
   {
     "slug": "react-component-library",
     "title": "Unlocking the Power of Component Libraries - A Comprehensive Exploration",
     "date": "2018-04-24",
     "excerpt": "Within the vast realm of software development, numerous companies and individuals have contributed remarkable component libraries, generously shared and readily available on GitHub. These repositories stand as testament to the collaborative nature of our industry and the collecti…",
-    "feature_image": "/images/blog/react-component-library/feature-image.png"
+    "feature_image": "/blog/react-component-library/feature-image.png"
   },
   {
     "slug": "nodejs-with-github-pages-and-travis-ci",
     "title": "Publishing a static site with Github Pages and Travis CI",
     "date": "2018-04-06",
     "excerpt": "When trying to find instructions on how to publish into Github Pages, I found that is was not very clear when trying to publish a static site. I thought it would be good to write a guide on publishing a static site into Github Pages and hopefully eliminate any confusion in trying…",
-    "feature_image": "/images/blog/nodejs-with-github-pages-and-travis-ci/feature-image.png"
+    "feature_image": "/blog/nodejs-with-github-pages-and-travis-ci/feature-image.png"
   },
   {
     "slug": "agile-high-performing-team",
     "title": "Achieving Excellence - Understanding High Performance in Agile Teams",
     "date": "2016-12-20",
     "excerpt": "**Do you enjoy your work culture?** Who doesn't want to show up to work and be in an environment with like minded and talented team members (ability, passion, desire not skill-set). **Do you enjoy your work environment?**…",
-    "feature_image": "/images/blog/agile-high-performing-team/feature-image.png"
+    "feature_image": "/blog/agile-high-performing-team/feature-image.png"
   },
   {
     "slug": "jersey-restful-webservice-jax-rs-with-jpa-and-derby-in-memory-database",
     "title": "Jersey RESTful WebService JAX-RS with JPA and Derby In Memory Database",
     "date": "2014-01-29",
     "excerpt": "RESTful is a key term that is popular in the market. Previous services use to be created implementing JAX-WS with the communication protocol being SOAP, various implementation were and are still used but from my own experience they all have fallen short especially in the area of…",
-    "feature_image": "/images/blog/jersey-restful-webservice-jax-rs-with-jpa-and-derby-in-memory-database/feature-image.png"
+    "feature_image": "/blog/jersey-restful-webservice-jax-rs-with-jpa-and-derby-in-memory-database/feature-image.png"
   },
   {
     "slug": "agile-in-the-industry",
     "title": "Agile Empowerment - Realizing the Benefits of Agile in Information Technology",
     "date": "2014-01-20",
     "excerpt": "In today's post, we will explore the remarkable success of Agile methodology in the realm of Information Technology and Business. Since its introduction, Agile has revolutionized the way projects are executed, delivering tremendous benefits to all parties involved. From stakehold…",
-    "feature_image": "/images/blog/agile-in-the-industry/feature-image.png"
+    "feature_image": "/blog/agile-in-the-industry/feature-image.png"
   },
   {
     "slug": "angular-js-and-bootstrap-with-spring-and-spring-security-and-hibernate",
     "title": "Angular JS and Bootstrap with Spring, Spring Security and Hibernate",
     "date": "2013-12-20",
     "excerpt": "Folks have been asking me if I knew of any good examples of a J2EE web application that utilizes the following technologies: Angular JS, Bootstrap, Spring 4, Spring Security 4 and Hibernate 5.2.4, and after searching around I decided that it would be best to create an example pro…",
-    "feature_image": "/images/blog/angular-js-and-bootstrap-with-spring-and-spring-security-and-hibernate/feature-image.png"
+    "feature_image": "/blog/angular-js-and-bootstrap-with-spring-and-spring-security-and-hibernate/feature-image.png"
   }
 ]

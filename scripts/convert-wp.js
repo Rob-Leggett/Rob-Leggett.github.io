@@ -179,32 +179,49 @@ async function main() {
     // Escape inline code braces
     content = content.replace(/`([^`]+)`/g, (_, inner) => "`" + escapeAllDangerousSyntax(inner) + "`");
 
-    // --- Featured image handling ---
+    // --- Image handling (feature + inline attachments) ---
     let feature_image_local = "";
     const parentAttachments = attachments[postId];
-    if (parentAttachments?.length) {
-      const feature_image_url = parentAttachments.sort().reverse()[0];
 
-      // only download images for published posts
-      if (status === "publish") {
-        // create img dir
-        const imgDir = path.join(process.cwd(), `public/images/blog/${slug}`);
-        fs.mkdirSync(imgDir, { recursive: true });
+    if (parentAttachments?.length && status === "publish") {
+      // Create the local image directory
+      const imgDir = path.join(process.cwd(), `public/blog/${slug}`);
+      fs.mkdirSync(imgDir, { recursive: true });
 
-        const buf = await fetchImageBuffer(feature_image_url);
-        if (buf) {
-          const png = await sharp(buf).png({ quality: 90 }).toBuffer(); // convert to PNG
-          const localFile = "feature-image.png";
-          const localPath = path.join(imgDir, localFile);
+      // Sort so the last (usually largest / featured) image is feature
+      const sortedUrls = [...parentAttachments].sort().reverse();
+
+      for (let i = 0; i < sortedUrls.length; i++) {
+        const imageUrl = sortedUrls[i];
+        const isFeature = i === 0;
+        const fileName = isFeature ? "feature-image.png" : `image-${i}.png`;
+        const localPath = path.join(imgDir, fileName);
+        const publicPath = `/blog/${slug}/${fileName}`;
+
+        try {
+          // Skip download if already exists (cache)
+          if (fs.existsSync(localPath)) {
+            if (isFeature) feature_image_local = publicPath;
+            continue;
+          }
+
+          const buf = await fetchImageBuffer(imageUrl);
+          if (!buf) {
+            console.warn(`⚠️  Failed to fetch image: ${imageUrl}`);
+            continue;
+          }
+
+          // Convert and save as PNG
+          const png = await sharp(buf).png({ quality: 90 }).toBuffer();
           fs.writeFileSync(localPath, png);
-          feature_image_local = `/images/blog/${slug}/${localFile}`;
-        } else {
-          console.warn(`⚠️  Failed to download image for published post: ${slug}`);
+
+          if (isFeature) feature_image_local = publicPath;
+        } catch (err) {
+          console.warn(`⚠️  Error downloading ${imageUrl}: ${err.message} from ${slug}`);
         }
-      } else {
-        // Non-published: keep reference to remote URL (optional)
-        console.log(`ℹ️  Skipping image download for non-published post: ${slug}`);
       }
+    } else if (status !== "publish") {
+      console.log(`ℹ️  Skipping image download for non-published post: ${slug}`);
     }
 
     // Convert to Markdown
