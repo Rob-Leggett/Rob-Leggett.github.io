@@ -52,7 +52,7 @@ Computer Vision - AWS Architecture
 
 ## **1. On-Premise: Smart Edge Inference**
 
-Video feeds from 100+ IP cameras are managed by a local **Video Management System (VMS)**, using NAS or SAN storage. An **AI Agent**—installed on a customer‑owned server or VM—handles lightweight inference and metadata publishing:
+Video feeds from 100+ IP cameras are managed by a local **Video Management System (VMS)**, using NAS or SAN storage. An **AI Agent**—installed on a customer‑owned server or VM—handles lightweight inference and metadata publishing:
 
 *   Options include:
     *   **NVIDIA Jetson + DeepStream with AWS Greengrass**
@@ -66,7 +66,7 @@ This layer ensures real‑time processing close to the data source, reducing cen
 
 ## **2. Networking: Hybrid Connectivity**
 
-Connectivity is facilitated via a dedicated **Networking Account**, which provides:
+Connectivity is facilitated via a dedicated **Networking Account**, which provides:
 
 *   **AWS Site‑to‑Site VPN** or **Direct Connect**
 *   **Transit Gateway** for central routing across multiple accounts
@@ -100,28 +100,28 @@ Authentication and identity management are centralised using:
 *   **Secrets Manager**: Secure handling of credentials and API tokens
 *   **Lambda@Edge**: Redirection and tenant detection based on domain or claims
 
-This approach enables true **multi-tenant SSO** with separation of identity responsibilities.
+This approach enables true **multi-tenant SSO** with separation of identity responsibilities.
 
 ## **5. Portal (Dev, Test, Prod)**
 
-Users access web apps via **Fargate-hosted portals** in isolated environments:
+Users access web apps via **Fargate-hosted portals** in isolated environments:
 
 *   Built using React/Next.js or similar
 *   Backed by API Gateway + Lambda for scalable interactions
 *   Protected by Cognito and WAF
 *   Served through CloudFront for low latency
 
-Portal access is dynamically routed based on domain (e.g., `portal.cloud.computervision.ai`).
+Portal access is dynamically routed based on domain (e.g., `portal.cloud.computervision.ai`).
 
 ## **6. Logging, Observability & Cost Control**
 
-A dedicated **Logging Account** aggregates telemetry from all environments:
+A dedicated **Logging Account** aggregates telemetry from all environments:
 
 *   **CloudTrail**, **CloudWatch Logs**, and **X-Ray**
 *   **OpenSearch** or third-party integrations for search and dashboarding
 *   Cross-account S3 logging with access auditing
 
-Additionally, a **Management Account** oversees:
+Additionally, a **Management Account** oversees:
 
 *   AWS Organisations and SCPs
 *   IAM identity centre and access control
@@ -173,5 +173,5 @@ Have questions or want to dig into one area deeper? Let me know.
 ## Did this help?
 
 *   **Like, comment and share this article**
-*   **Follow this blog** to receive notifications of new postings
+*   **Follow this blog** to receive notifications of new postings
 *   **View** [previous postings](https://robertleggett.com.au/)

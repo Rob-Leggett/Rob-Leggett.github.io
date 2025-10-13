@@ -27,7 +27,7 @@ What you will gain reading this post:
 What you can do to help support:
 
 *   **Like, comment and share this article**
-*   **Follow this blog** to receive notifications of new postings
+*   **Follow this blog** to receive notifications of new postings
 
 Now, let’s get started.
 
@@ -35,10 +35,10 @@ Now, let’s get started.
 
 ### What is an Event?
 
-*   An **event** encapsulates a **change** in **state** (what has happened)
+*   An **event** encapsulates a **change** in **state** (what has happened)
 *   It should be **lightweight** and carry only enough information required about the **change** in **state**
 *   An **event** is distributed to notify any interested parties
-*   **Events** are distributed through channels such as **streaming** and **messaging**
+*   **Events** are distributed through channels such as **streaming** and **messaging**
 
 An example, when a consumer borrows a DVD, the DVD **state** changes from "for rent" to "rented".
 
@@ -63,17 +63,17 @@ Referring to the [CQRS](https://martinfowler.com/bliki/CQRS.html) pattern, check
 
 ### What is Event Sourcing?
 
-*   **Event sourcing** is a way to atomically update state and publish **events**.
-*   **Event sourcing** is about a business object being persisted by storing a sequence of change in state **events**, that when replayed will show the entire state of the business object, rather than saving only the current state.
+*   **Event sourcing** is a way to atomically update state and publish **events**.
+*   **Event sourcing** is about a business object being persisted by storing a sequence of change in state **events**, that when replayed will show the entire state of the business object, rather than saving only the current state.
 
 An example is a Payment Service.
 
 *   It stores a Payment by persisting its change in state events - Created, Paid, Cancelled.
-*   Each **event** would contain sufficient data to reconstruct the Payment's state.
+*   Each **event** would contain sufficient data to reconstruct the Payment's state.
 
 ### What is a Stream?
 
-*   A **stream** consists of immutable data, only inserting new events, whereas existing events cannot be changed.
+*   A **stream** consists of immutable data, only inserting new events, whereas existing events cannot be changed.
 *   **Streams** are persistent, durable and fault tolerant.
 
 ### What is Streaming?
@@ -260,5 +260,5 @@ Not at all, however **event streaming** is a much more complex setup and therefo
 ## Did this help?
 
 *   **Like, comment and share this article**
-*   **Follow this blog** to receive notifications of new postings
+*   **Follow this blog** to receive notifications of new postings
 *   **View** [previous postings](https://robertleggett.com.au/)

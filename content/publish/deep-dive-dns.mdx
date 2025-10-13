@@ -22,7 +22,7 @@ What you will gain reading this post:
 What you can do to help support:
 
 *   **Like, comment and share this article**
-*   **Follow this blog** to receive notifications of new postings
+*   **Follow this blog** to receive notifications of new postings
 
 Now, let’s get started.
 
@@ -166,7 +166,7 @@ DNS resolving robertleggett.blog
 
 ### What is a DNS cache?
 
-A DNS cache is a temporary database, containing records of all the recent and attempted visits for requested domains names.
+A DNS cache is a temporary database, containing records of all the recent and attempted visits for requested domains names.
 
 ![Local DNS cache Diagram](/blog/deep-dive-dns/inline-5.png)
 
@@ -202,13 +202,19 @@ Briefly touching on DNS hosting but still related to DNS zones.
 
 By running the command: **dig soa robertleggett.blog +trace**, a section of information I get back is:
 
-```text robertleggett.blog. 86400 IN SOA **ns1.wordpress.com.** hostmaster.wordpress.com. 2005071858 14400 7200 604800 300 ```
+```text
+robertleggett.blog.  86400  IN  SOA  ns1.wordpress.com.  hostmaster.wordpress.com.  2005071858  14400  7200  604800  300
+```
 
 The **ns1.wordpress.com.** is the primary. This is not enforced unless through dynamic updates, but the recommended approach is to put the primary name server there. The primary **ns1.wordpress.com.** will notify **ns2.wordpress.com.** and **ns3.wordpress.com.** keeping them all in sync.
 
 By running the command: **dig ns robertleggett.blog +trace**, a section of information I get back is:
 
-```text robertleggett.blog. 86400 IN NS **ns3.wordpress.com.** robertleggett.blog. 86400 IN NS **ns1.wordpress.com.** robertleggett.blog. 86400 IN NS **ns2.wordpress.com.** ```
+```text
+robertleggett.blog.  86400  IN  NS  ns1.wordpress.com.
+robertleggett.blog.  86400  IN  NS  ns2.wordpress.com.
+robertleggett.blog.  86400  IN  NS  ns3.wordpress.com.
+```
 
 These could be primary or secondary DNS zones.
 
@@ -235,7 +241,7 @@ DNS Forwarders & Root hint flow
 
 ### What are the different types of DNS servers?
 
-All DNS servers fall into one of the following four categories. Recursive resolver, Root Nameserver, TLD Nameserver, and Authoritative Nameserver.
+All DNS servers fall into one of the following four categories. Recursive resolver, Root Nameserver, TLD Nameserver, and Authoritative Nameserver.
 
 ### What is the difference between a Recursive Nameserver and an Authoritative Nameserver?
 
@@ -247,7 +253,7 @@ The Authoritative Nameserver responses to the Recursive Nameserver containing in
 
 #### What is a Root Nameserver?
 
-A root name server plays a vital role when it comes to translating domain names into IP addresses. It will answer DNS queries in the DNS root zone.
+A root name server plays a vital role when it comes to translating domain names into IP addresses. It will answer DNS queries in the DNS root zone.
 
 The root name server doesn’t resolve the Domain Name itself and instead informs the requestor about which other DNS Nameservers that needs to be queried in order to obtain the next level of information from to resolve the desired IP address.
 
@@ -257,15 +263,15 @@ For a list of root servers refer to [https://www.iana.org/domains/root/servers](
 
 #### What is a TLD Nameserver?
 
-A TLD Nameserver contains information for the Domain Names that share a common TLD, such as .com, .org, .blog, etc.
+A TLD Nameserver contains information for the Domain Names that share a common TLD, such as .com, .org, .blog, etc.
 
-An example is a .blog TLD Nameserver contains information for every Domain Name that ends in .blog.
+An example is a .blog TLD Nameserver contains information for every Domain Name that ends in .blog.
 
 #### What is a Authoritative Nameserver?
 
-An Authoritative Nameserver holds the actual DNS records, such as A, CNAME, PTR, etc for a particular Domain Name and IP address.
+An Authoritative Nameserver holds the actual DNS records, such as A, CNAME, PTR, etc for a particular Domain Name and IP address.
 
-A DNS Resolver queries an Authoritative Nameserver to resolve a Domain Name with an IP Address.
+A DNS Resolver queries an Authoritative Nameserver to resolve a Domain Name with an IP Address.
 
 ### What is a DNS record?
 
@@ -279,13 +285,13 @@ A DNS record contain a lot of different syntax and commands for how the DNS serv
 
 A Glue record is A record or IP address that are mapped to a Domain Name or a subdomain. Glue records are important when the DNS Nameserver for a Domain Name are the subdomains of the domain name itself.
 
-For example, given the Authoritative Nameservers for robertleggett.blog are ns1.robertleggett.blog and ns2.robertleggett.blog.
+For example, given the Authoritative Nameservers for robertleggett.blog are ns1.robertleggett.blog and ns2.robertleggett.blog.
 
-When ns1.robertleggett.blog is being resolved it would first require the resolution of robertleggett.blog which again returns the Authoritative Nameservers as ns1.robertleggett.blog and ns2.robertleggett.blog.
+When ns1.robertleggett.blog is being resolved it would first require the resolution of robertleggett.blog which again returns the Authoritative Nameservers as ns1.robertleggett.blog and ns2.robertleggett.blog.
 
 This creates a loop or circular dependency.
 
-Glue records help in breaking this circular dependency by providing the IP Address for ns1.robertleggett.blog and ns2.robertleggett.blog.
+Glue records help in breaking this circular dependency by providing the IP Address for ns1.robertleggett.blog and ns2.robertleggett.blog.
 
 These IP addresses records are known as Glue records.
 
@@ -309,9 +315,9 @@ For example, the CNAME record allows “robertleggett.blog” to resolve “www.
 
 #### CAA (Certification Authority Authorization)
 
-A Certification Authority Authorization record is used to specify which certificate authorities (CAs) are allowed to issue certificates for a Domain Name.
+A Certification Authority Authorization record is used to specify which certificate authorities (CAs) are allowed to issue certificates for a Domain Name.
 
-The purpose of the CAA record is to allow Domain Name owners to declare which certificate authorities are allowed to issue a certificate for a Domain Name.
+The purpose of the CAA record is to allow Domain Name owners to declare which certificate authorities are allowed to issue a certificate for a Domain Name.
 
 #### MX Entry (Mail Exchange Record)
 
@@ -319,31 +325,31 @@ A mail exchanger entry directs emails to a different server despite being a subd
 
 #### NAPTR (Name Authority Pointer Record)
 
-A Name Authority Pointer is a type of resource record, they are most commonly used for applications in Internet telephony.
+A Name Authority Pointer is a type of resource record, they are most commonly used for applications in Internet telephony.
 
 #### NS (Name Server Record)
 
-A NS stands for Name Server and this record indicates which DNS server is Authoritative for that Domain Name.
+A NS stands for Name Server and this record indicates which DNS server is Authoritative for that Domain Name.
 
-A Domain Name will often have multiple NS records which can indicate primary and backup name servers for that Domain Name.
+A Domain Name will often have multiple NS records which can indicate primary and backup name servers for that Domain Name.
 
 #### PTR (Pointer Record)
 
-A Pointer is a type of record that resolves an IP address to a Domain Name, unlike an A record which points a Domain Name to an IP address. 
+A Pointer is a type of record that resolves an IP address to a Domain Name, unlike an A record which points a Domain Name to an IP address.
 
-PTR records are used for the reverse DNS lookup.
+PTR records are used for the reverse DNS lookup.
 
 #### SOA (Start of Authority Record)
 
-A Start of Authority record is a type of resource record containing administrative information about the zone, especially regarding zone transfers.
+A Start of Authority record is a type of resource record containing administrative information about the zone, especially regarding zone transfers.
 
 #### SPF (Sender Policy Framework)
 
-A Sender Policy Framework record is used to indicate to mail exchanges which hosts are authorized to send mail for a Domain Name.
+A Sender Policy Framework record is used to indicate to mail exchanges which hosts are authorized to send mail for a Domain Name.
 
 #### SRV (Service Locator)
 
-A Service record is a specification of data defining the location, i.e., the hostname and port number, of servers for specified services.
+A Service record is a specification of data defining the location, i.e., the hostname and port number, of servers for specified services.
 
 #### TXT Record (Text Record)
 
@@ -356,5 +362,5 @@ If you found this to be helpful, have any questions or want to provide feedback,
 Don’t worry if all of this seems overwhelming.
 
 *   **Like, comment and share this article**
-*   **Follow this blog** to receive notifications of new postings
+*   **Follow this blog** to receive notifications of new postings
 *   **View** [previous postings](https://robertleggett.com.au/)

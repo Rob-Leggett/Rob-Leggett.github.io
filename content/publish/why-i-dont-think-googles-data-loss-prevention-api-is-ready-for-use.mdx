@@ -24,7 +24,7 @@ What you will gain reading this post:
 What you can do to help support:
 
 *   **Like, comment and share this article**
-*   **Follow this blog** to receive notifications of new postings
+*   **Follow this blog** to receive notifications of new postings
 
 Now, let’s get started.
 
@@ -186,7 +186,29 @@ Ensure you do the following:
 2.  Ensure you have an image file in a resources package under an image folder - **image/cc1.jpg**
 3.  Change the output location to a path and file you want - **cc1-redacted.jpg**
 
-```text import au.com.gcp.dlp.InspectImageFile; import java.net.URL; public class App &#123; public static void main(String... args) &#123; App app = new App(); app.run(); &#125; private void run() &#123; URL url = this.getClass().getClassLoader().getResource("image/cc1.jpg"); String projectId = "my-gcp-project-id"; String path = (url == null) ? null : url.getPath(); String output = "cc1-redacted.jpg"; System.out.println("Project ID = " + projectId + " Path = " + path + " Output = " + output); InspectImageFile.inspectImageFile(projectId, path); InspectImageFile.redactImageFile(projectId, path, output); &#125; &#125; ```
+```java
+import au.com.gcp.dlp.InspectImageFile;
+import java.net.URL;
+
+public class App {
+    public static void main(String... args) {
+        App app = new App();
+        app.run();
+    }
+
+    private void run() {
+        URL url = this.getClass().getClassLoader().getResource("image/cc1.jpg");
+        String projectId = "my-gcp-project-id";
+        String path = (url == null) ? null : url.getPath();
+        String output = "cc1-redacted.jpg";
+
+        System.out.println("Project ID = " + projectId + " Path = " + path + " Output = " + output);
+
+        InspectImageFile.inspectImageFile(projectId, path);
+        InspectImageFile.redactImageFile(projectId, path, output);
+    }
+}
+```
 
 ### Helper Class
 
@@ -194,7 +216,182 @@ This class simply contains the different methods to be able to **inspect image, 
 
 NOTE: this code can be refined for better performance, such as removing the need to connect to the API client for each method etc, but for the demonstration purposes it is easier to breakdown and explain.
 
-```text package au.com.gcp.dlp; import com.google.cloud.dlp.v2.DlpServiceClient; import com.google.privacy.dlp.v2.\*; import com.google.privacy.dlp.v2.ByteContentItem.BytesType; import com.google.protobuf.ByteString; import java.io.FileInputStream; import java.io.FileOutputStream; import java.util.ArrayList; import java.util.List; public class InspectImageFile &#123; public static void inspectImageFile(String projectId, String filePath) &#123; // Initialize client that will be used to send requests. This client only needs to be created // once, and can be reused for multiple requests. After completing all of your requests, call // the "close" method on the client to safely clean up any remaining background resources. try (DlpServiceClient dlp = DlpServiceClient.create()) &#123; // Specify the project used for request. ProjectName project = ProjectName.of(projectId); // Specify the type and content to be inspected. ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath)); ByteContentItem byteItem = ByteContentItem.newBuilder() .setType(BytesType.IMAGE_JPEG) .setData(fileBytes) .build(); ContentItem item = ContentItem.newBuilder() .setByteItem(byteItem) .build(); // Specify the type of info the inspection will look for. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT_CARD_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; // Construct the configuration for the Inspect request. InspectConfig config = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .setIncludeQuote(true) .build(); // Construct the Inspect request to be sent by the client. InspectContentRequest request = InspectContentRequest.newBuilder() .setParent(project.toString()) .setItem(item) .setInspectConfig(config) .build(); // Use the client to send the API request. InspectContentResponse response = dlp.inspectContent(request); // Parse the response and process results System.out.println("Findings: " + response.getResult().getFindingsCount()); for (Finding f : response.getResult().getFindingsList()) &#123; System.out.println("\\tQuote: " + f.getQuote()); System.out.println("\\tInfo type: " + f.getInfoType().getName()); System.out.println("\\tLikelihood: " + f.getLikelihood()); deIdentifyWithMask(f.getQuote(), '\*', f.getQuote().length(), projectId); &#125; &#125; catch (Exception e) &#123; System.out.println("Error during inspectFile: \\n" + e.toString()); &#125; &#125; private static void deIdentifyWithMask( String value, Character maskingCharacter, int numberToMask, String projectId) &#123; // instantiate a client try (DlpServiceClient dlpServiceClient = DlpServiceClient.create()) &#123; ContentItem contentItem = ContentItem.newBuilder().setValue(value).build(); CharacterMaskConfig characterMaskConfig = CharacterMaskConfig.newBuilder() .setMaskingCharacter(maskingCharacter.toString()) .setNumberToMask(numberToMask) .build(); // Create the deidentification transformation configuration PrimitiveTransformation primitiveTransformation = PrimitiveTransformation.newBuilder().setCharacterMaskConfig(characterMaskConfig).build(); InfoTypeTransformations.InfoTypeTransformation infoTypeTransformationObject = InfoTypeTransformations.InfoTypeTransformation.newBuilder() .setPrimitiveTransformation(primitiveTransformation) .build(); InfoTypeTransformations infoTypeTransformationArray = InfoTypeTransformations.newBuilder() .addTransformations(infoTypeTransformationObject) .build(); // Specify the type of info the inspection will look for. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT_CARD_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; InspectConfig inspectConfig = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .build(); DeidentifyConfig deidentifyConfig = DeidentifyConfig.newBuilder() .setInfoTypeTransformations(infoTypeTransformationArray) .build(); // Create the deidentification request object DeidentifyContentRequest request = DeidentifyContentRequest.newBuilder() .setParent(ProjectName.of(projectId).toString()) .setInspectConfig(inspectConfig) .setDeidentifyConfig(deidentifyConfig) .setItem(contentItem) .build(); // Execute the deidentification request DeidentifyContentResponse response = dlpServiceClient.deidentifyContent(request); // Print the character-masked input value // e.g. "My SSN is 123456789" --> "My SSN is \*\*\*\*\*\*\*\*\*" String result = response.getItem().getValue(); System.out.println("\\tMasked: " +result); &#125; catch (Exception e) &#123; System.out.println("Error in deidentifyWithMask: " + e.getMessage()); &#125; &#125; public static void redactImageFile(String projectId, String filePath, String outputFilePath) &#123; // Initialize client that will be used to send requests. This client only needs to be created // once, and can be reused for multiple requests. After completing all of your requests, call // the "close" method on the client to safely clean up any remaining background resources. try (DlpServiceClient dlp = DlpServiceClient.create()) &#123; // Specify the project used for request. ProjectName project = ProjectName.of(projectId); // Specify the content to be inspected. ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath)); ByteContentItem byteItem = ByteContentItem.newBuilder().setType(BytesType.IMAGE).setData(fileBytes).build(); // Specify the type of info and likelihood necessary to redact. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT_CARD_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; InspectConfig config = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .setMinLikelihood(Likelihood.LIKELY) .build(); // Construct the Redact request to be sent by the client. RedactImageRequest request = RedactImageRequest.newBuilder() .setParent(project.toString()) .setByteItem(byteItem) .setInspectConfig(config) .build(); // Use the client to send the API request. RedactImageResponse response = dlp.redactImage(request); // Parse the response and process results. FileOutputStream redacted = new FileOutputStream(outputFilePath); redacted.write(response.getRedactedImage().toByteArray()); redacted.close(); System.out.println("\\tRedacted image written to: " + outputFilePath); &#125; catch (Exception e) &#123; System.out.println("Error during inspectFile: \\n" + e.toString()); &#125; &#125; &#125; ```
+```java
+package au.com.gcp.dlp;
+
+import com.google.cloud.dlp.v2.DlpServiceClient;
+import com.google.privacy.dlp.v2.*;
+import com.google.privacy.dlp.v2.ByteContentItem.BytesType;
+import com.google.protobuf.ByteString;
+
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.util.ArrayList;
+import java.util.List;
+
+public class InspectImageFile {
+
+    public static void inspectImageFile(String projectId, String filePath) {
+        // Initialize client that will be used to send requests.
+        try (DlpServiceClient dlp = DlpServiceClient.create()) {
+
+            // Specify the project used for request.
+            ProjectName project = ProjectName.of(projectId);
+
+            // Specify the type and content to be inspected.
+            ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath));
+            ByteContentItem byteItem = ByteContentItem.newBuilder()
+                    .setType(BytesType.IMAGE_JPEG)
+                    .setData(fileBytes)
+                    .build();
+            ContentItem item = ContentItem.newBuilder()
+                    .setByteItem(byteItem)
+                    .build();
+
+            // Specify the type of info the inspection will look for.
+            List<InfoType> infoTypes = new ArrayList<>();
+            // See https://cloud.google.com/dlp/docs/infotypes-reference
+            for (String typeName : new String[]{"CREDIT_CARD_NUMBER"}) {
+                infoTypes.add(InfoType.newBuilder().setName(typeName).build());
+            }
+
+            // Construct the configuration for the Inspect request.
+            InspectConfig config = InspectConfig.newBuilder()
+                    .addAllInfoTypes(infoTypes)
+                    .setIncludeQuote(true)
+                    .build();
+
+            // Construct the Inspect request to be sent by the client.
+            InspectContentRequest request = InspectContentRequest.newBuilder()
+                    .setParent(project.toString())
+                    .setItem(item)
+                    .setInspectConfig(config)
+                    .build();
+
+            // Use the client to send the API request.
+            InspectContentResponse response = dlp.inspectContent(request);
+
+            // Parse the response and process results
+            System.out.println("Findings: " + response.getResult().getFindingsCount());
+            for (Finding f : response.getResult().getFindingsList()) {
+                System.out.println("\tQuote: " + f.getQuote());
+                System.out.println("\tInfo type: " + f.getInfoType().getName());
+                System.out.println("\tLikelihood: " + f.getLikelihood());
+                deIdentifyWithMask(f.getQuote(), '*', f.getQuote().length(), projectId);
+            }
+
+        } catch (Exception e) {
+            System.out.println("Error during inspectFile:\n" + e);
+        }
+    }
+
+    private static void deIdentifyWithMask(
+            String value,
+            Character maskingCharacter,
+            int numberToMask,
+            String projectId
+    ) {
+        try (DlpServiceClient dlpServiceClient = DlpServiceClient.create()) {
+
+            ContentItem contentItem = ContentItem.newBuilder().setValue(value).build();
+
+            CharacterMaskConfig characterMaskConfig = CharacterMaskConfig.newBuilder()
+                    .setMaskingCharacter(maskingCharacter.toString())
+                    .setNumberToMask(numberToMask)
+                    .build();
+
+            PrimitiveTransformation primitiveTransformation =
+                    PrimitiveTransformation.newBuilder()
+                            .setCharacterMaskConfig(characterMaskConfig)
+                            .build();
+
+            InfoTypeTransformations.InfoTypeTransformation infoTypeTransformationObject =
+                    InfoTypeTransformations.InfoTypeTransformation.newBuilder()
+                            .setPrimitiveTransformation(primitiveTransformation)
+                            .build();
+
+            InfoTypeTransformations infoTypeTransformationArray =
+                    InfoTypeTransformations.newBuilder()
+                            .addTransformations(infoTypeTransformationObject)
+                            .build();
+
+            List<InfoType> infoTypes = new ArrayList<>();
+            for (String typeName : new String[]{"CREDIT_CARD_NUMBER"}) {
+                infoTypes.add(InfoType.newBuilder().setName(typeName).build());
+            }
+
+            InspectConfig inspectConfig = InspectConfig.newBuilder()
+                    .addAllInfoTypes(infoTypes)
+                    .build();
+
+            DeidentifyConfig deidentifyConfig = DeidentifyConfig.newBuilder()
+                    .setInfoTypeTransformations(infoTypeTransformationArray)
+                    .build();
+
+            DeidentifyContentRequest request = DeidentifyContentRequest.newBuilder()
+                    .setParent(ProjectName.of(projectId).toString())
+                    .setInspectConfig(inspectConfig)
+                    .setDeidentifyConfig(deidentifyConfig)
+                    .setItem(contentItem)
+                    .build();
+
+            DeidentifyContentResponse response = dlpServiceClient.deidentifyContent(request);
+
+            // Print the masked result (e.g. "My SSN is 123456789" → "My SSN is *********")
+            String result = response.getItem().getValue();
+            System.out.println("\tMasked: " + result);
+
+        } catch (Exception e) {
+            System.out.println("Error in deidentifyWithMask: " + e.getMessage());
+        }
+    }
+
+    public static void redactImageFile(String projectId, String filePath, String outputFilePath) {
+        try (DlpServiceClient dlp = DlpServiceClient.create()) {
+
+            ProjectName project = ProjectName.of(projectId);
+
+            // Read file content
+            ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath));
+            ByteContentItem byteItem = ByteContentItem.newBuilder()
+                    .setType(BytesType.IMAGE)
+                    .setData(fileBytes)
+                    .build();
+
+            // Specify info types to redact
+            List<InfoType> infoTypes = new ArrayList<>();
+            for (String typeName : new String[]{"CREDIT_CARD_NUMBER"}) {
+                infoTypes.add(InfoType.newBuilder().setName(typeName).build());
+            }
+
+            InspectConfig config = InspectConfig.newBuilder()
+                    .addAllInfoTypes(infoTypes)
+                    .setMinLikelihood(Likelihood.LIKELY)
+                    .build();
+
+            // Build request
+            RedactImageRequest request = RedactImageRequest.newBuilder()
+                    .setParent(project.toString())
+                    .setByteItem(byteItem)
+                    .setInspectConfig(config)
+                    .build();
+
+            // Execute
+            RedactImageResponse response = dlp.redactImage(request);
+
+            // Save redacted file
+            try (FileOutputStream redacted = new FileOutputStream(outputFilePath)) {
+                redacted.write(response.getRedactedImage().toByteArray());
+            }
+
+            System.out.println("\tRedacted image written to: " + outputFilePath);
+
+        } catch (Exception e) {
+            System.out.println("Error during redactImageFile:\n" + e);
+        }
+    }
+}
+```
 
 Now, let's look at each method separately in greater detail.
 
@@ -212,7 +409,64 @@ What is happening here is quite simple:
 8.  Each finding is printed **Quote, InfoType and Likelihood** as you see in Test Case #2
 9.  A call to then execute the deidentification is performed **deIdentifyWithMask(f.getQuote(), '\*', f.getQuote().length(), projectId)**
 
-```text public static void inspectImageFile(String projectId, String filePath) &#123; // Initialize client that will be used to send requests. This client only needs to be created // once, and can be reused for multiple requests. After completing all of your requests, call // the "close" method on the client to safely clean up any remaining background resources. try (DlpServiceClient dlp = DlpServiceClient.create()) &#123; // Specify the project used for request. ProjectName project = ProjectName.of(projectId); // Specify the type and content to be inspected. ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath)); ByteContentItem byteItem = ByteContentItem.newBuilder() .setType(BytesType.IMAGE_JPEG) .setData(fileBytes) .build(); ContentItem item = ContentItem.newBuilder() .setByteItem(byteItem) .build(); // Specify the type of info the inspection will look for. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT_CARD_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; // Construct the configuration for the Inspect request. InspectConfig config = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .setIncludeQuote(true) .build(); // Construct the Inspect request to be sent by the client. InspectContentRequest request = InspectContentRequest.newBuilder() .setParent(project.toString()) .setItem(item) .setInspectConfig(config) .build(); // Use the client to send the API request. InspectContentResponse response = dlp.inspectContent(request); // Parse the response and process results System.out.println("Findings: " + response.getResult().getFindingsCount()); for (Finding f : response.getResult().getFindingsList()) &#123; System.out.println("\\tQuote: " + f.getQuote()); System.out.println("\\tInfo type: " + f.getInfoType().getName()); System.out.println("\\tLikelihood: " + f.getLikelihood()); deIdentifyWithMask(f.getQuote(), '\*', f.getQuote().length(), projectId); &#125; &#125; catch (Exception e) &#123; System.out.println("Error during inspectFile: \\n" + e.toString()); &#125; &#125; ```
+```java
+public static void inspectImageFile(String projectId, String filePath) {
+    // Initialize client that will be used to send requests.
+    // This client only needs to be created once, and can be reused for multiple requests.
+    // After completing all of your requests, call the "close" method on the client
+    // to safely clean up any remaining background resources.
+    try (DlpServiceClient dlp = DlpServiceClient.create()) {
+
+        // Specify the project used for request.
+        ProjectName project = ProjectName.of(projectId);
+
+        // Specify the type and content to be inspected.
+        ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath));
+        ByteContentItem byteItem = ByteContentItem.newBuilder()
+                .setType(BytesType.IMAGE_JPEG)
+                .setData(fileBytes)
+                .build();
+        ContentItem item = ContentItem.newBuilder()
+                .setByteItem(byteItem)
+                .build();
+
+        // Specify the type of info the inspection will look for.
+        List<InfoType> infoTypes = new ArrayList<>();
+        // See https://cloud.google.com/dlp/docs/infotypes-reference for a complete list of info types.
+        for (String typeName : new String[]{"CREDIT_CARD_NUMBER"}) {
+            infoTypes.add(InfoType.newBuilder().setName(typeName).build());
+        }
+
+        // Construct the configuration for the Inspect request.
+        InspectConfig config = InspectConfig.newBuilder()
+                .addAllInfoTypes(infoTypes)
+                .setIncludeQuote(true)
+                .build();
+
+        // Construct the Inspect request to be sent by the client.
+        InspectContentRequest request = InspectContentRequest.newBuilder()
+                .setParent(project.toString())
+                .setItem(item)
+                .setInspectConfig(config)
+                .build();
+
+        // Use the client to send the API request.
+        InspectContentResponse response = dlp.inspectContent(request);
+
+        // Parse the response and process results.
+        System.out.println("Findings: " + response.getResult().getFindingsCount());
+        for (Finding f : response.getResult().getFindingsList()) {
+            System.out.println("\tQuote: " + f.getQuote());
+            System.out.println("\tInfo type: " + f.getInfoType().getName());
+            System.out.println("\tLikelihood: " + f.getLikelihood());
+            deIdentifyWithMask(f.getQuote(), '*', f.getQuote().length(), projectId);
+        }
+
+    } catch (Exception e) {
+        System.out.println("Error during inspectFile:\n" + e);
+    }
+}
+```
 
 ### Deidentity with Mask
 
@@ -226,7 +480,76 @@ Similar to the inspect image, what is happening here is quite simple as well:
 6.  The request is executed made to the API **dlpServiceClient.deidentifyContent(request)**
 7.  The result returned from the request is printed **response.getItem().getValue()**
 
-```text private static void deIdentifyWithMask( String value, Character maskingCharacter, int numberToMask, String projectId) &#123; // instantiate a client try (DlpServiceClient dlpServiceClient = DlpServiceClient.create()) &#123; ContentItem contentItem = ContentItem.newBuilder().setValue(value).build(); CharacterMaskConfig characterMaskConfig = CharacterMaskConfig.newBuilder() .setMaskingCharacter(maskingCharacter.toString()) .setNumberToMask(numberToMask) .build(); // Create the deidentification transformation configuration PrimitiveTransformation primitiveTransformation = PrimitiveTransformation.newBuilder().setCharacterMaskConfig(characterMaskConfig).build(); InfoTypeTransformations.InfoTypeTransformation infoTypeTransformationObject = InfoTypeTransformations.InfoTypeTransformation.newBuilder() .setPrimitiveTransformation(primitiveTransformation) .build(); InfoTypeTransformations infoTypeTransformationArray = InfoTypeTransformations.newBuilder() .addTransformations(infoTypeTransformationObject) .build(); // Specify the type of info the inspection will look for. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT_CARD_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; InspectConfig inspectConfig = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .build(); DeidentifyConfig deidentifyConfig = DeidentifyConfig.newBuilder() .setInfoTypeTransformations(infoTypeTransformationArray) .build(); // Create the deidentification request object DeidentifyContentRequest request = DeidentifyContentRequest.newBuilder() .setParent(ProjectName.of(projectId).toString()) .setInspectConfig(inspectConfig) .setDeidentifyConfig(deidentifyConfig) .setItem(contentItem) .build(); // Execute the deidentification request DeidentifyContentResponse response = dlpServiceClient.deidentifyContent(request); // Print the character-masked input value // e.g. "My SSN is 123456789" --> "My SSN is \*\*\*\*\*\*\*\*\*" String result = response.getItem().getValue(); System.out.println("\\tMasked: " +result); &#125; catch (Exception e) &#123; System.out.println("Error in deidentifyWithMask: " + e.getMessage()); &#125; &#125; ```
+```java
+private static void deIdentifyWithMask(
+        String value,
+        Character maskingCharacter,
+        int numberToMask,
+        String projectId
+) {
+    // Instantiate a client
+    try (DlpServiceClient dlpServiceClient = DlpServiceClient.create()) {
+
+        ContentItem contentItem = ContentItem.newBuilder()
+                .setValue(value)
+                .build();
+
+        CharacterMaskConfig characterMaskConfig = CharacterMaskConfig.newBuilder()
+                .setMaskingCharacter(maskingCharacter.toString())
+                .setNumberToMask(numberToMask)
+                .build();
+
+        // Create the de-identification transformation configuration
+        PrimitiveTransformation primitiveTransformation = PrimitiveTransformation.newBuilder()
+                .setCharacterMaskConfig(characterMaskConfig)
+                .build();
+
+        InfoTypeTransformations.InfoTypeTransformation infoTypeTransformationObject =
+                InfoTypeTransformations.InfoTypeTransformation.newBuilder()
+                        .setPrimitiveTransformation(primitiveTransformation)
+                        .build();
+
+        InfoTypeTransformations infoTypeTransformationArray =
+                InfoTypeTransformations.newBuilder()
+                        .addTransformations(infoTypeTransformationObject)
+                        .build();
+
+        // Specify the type of info the inspection will look for.
+        List<InfoType> infoTypes = new ArrayList<>();
+        // See https://cloud.google.com/dlp/docs/infotypes-reference for a complete list of info types.
+        for (String typeName : new String[]{"CREDIT_CARD_NUMBER"}) {
+            infoTypes.add(InfoType.newBuilder().setName(typeName).build());
+        }
+
+        InspectConfig inspectConfig = InspectConfig.newBuilder()
+                .addAllInfoTypes(infoTypes)
+                .build();
+
+        DeidentifyConfig deidentifyConfig = DeidentifyConfig.newBuilder()
+                .setInfoTypeTransformations(infoTypeTransformationArray)
+                .build();
+
+        // Create the de-identification request object
+        DeidentifyContentRequest request = DeidentifyContentRequest.newBuilder()
+                .setParent(ProjectName.of(projectId).toString())
+                .setInspectConfig(inspectConfig)
+                .setDeidentifyConfig(deidentifyConfig)
+                .setItem(contentItem)
+                .build();
+
+        // Execute the de-identification request
+        DeidentifyContentResponse response = dlpServiceClient.deidentifyContent(request);
+
+        // Print the character-masked input value
+        // e.g. "My SSN is 123456789" → "My SSN is *********"
+        String result = response.getItem().getValue();
+        System.out.println("\tMasked: " + result);
+
+    } catch (Exception e) {
+        System.out.println("Error in deIdentifyWithMask: " + e.getMessage());
+    }
+}
+```
 
 ### Redact
 
@@ -240,7 +563,58 @@ Similar to the inspect image, what is happening here is quite simple as well:
 6.  The request is executed made to the API **dlp.redactImage(request)**
 7.  The redacted image is written to a stream which is written to the disk **new FileOutputStream(outputFilePath)**
 
-```text public static void redactImageFile(String projectId, String filePath, String outputFilePath) &#123; // Initialize client that will be used to send requests. This client only needs to be created // once, and can be reused for multiple requests. After completing all of your requests, call // the "close" method on the client to safely clean up any remaining background resources. try (DlpServiceClient dlp = DlpServiceClient.create()) &#123; // Specify the project used for request. ProjectName project = ProjectName.of(projectId); // Specify the content to be inspected. ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath)); ByteContentItem byteItem = ByteContentItem.newBuilder().setType(BytesType.IMAGE).setData(fileBytes).build(); // Specify the type of info and likelihood necessary to redact. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT_CARD_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; InspectConfig config = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .setMinLikelihood(Likelihood.LIKELY) .build(); // Construct the Redact request to be sent by the client. RedactImageRequest request = RedactImageRequest.newBuilder() .setParent(project.toString()) .setByteItem(byteItem) .setInspectConfig(config) .build(); // Use the client to send the API request. RedactImageResponse response = dlp.redactImage(request); // Parse the response and process results. FileOutputStream redacted = new FileOutputStream(outputFilePath); redacted.write(response.getRedactedImage().toByteArray()); redacted.close(); System.out.println("\\tRedacted image written to: " + outputFilePath); &#125; catch (Exception e) &#123; System.out.println("Error during inspectFile: \\n" + e.toString()); &#125; &#125; &#125; ```
+```java
+public static void redactImageFile(String projectId, String filePath, String outputFilePath) {
+    // Initialize client that will be used to send requests.
+    // This client only needs to be created once, and can be reused for multiple requests.
+    // After completing all of your requests, call the "close" method on the client
+    // to safely clean up any remaining background resources.
+    try (DlpServiceClient dlp = DlpServiceClient.create()) {
+
+        // Specify the project used for request.
+        ProjectName project = ProjectName.of(projectId);
+
+        // Specify the content to be inspected.
+        ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath));
+        ByteContentItem byteItem = ByteContentItem.newBuilder()
+                .setType(BytesType.IMAGE)
+                .setData(fileBytes)
+                .build();
+
+        // Specify the type of info and likelihood necessary to redact.
+        List<InfoType> infoTypes = new ArrayList<>();
+        // See https://cloud.google.com/dlp/docs/infotypes-reference for a complete list of info types.
+        for (String typeName : new String[]{"CREDIT_CARD_NUMBER"}) {
+            infoTypes.add(InfoType.newBuilder().setName(typeName).build());
+        }
+
+        InspectConfig config = InspectConfig.newBuilder()
+                .addAllInfoTypes(infoTypes)
+                .setMinLikelihood(Likelihood.LIKELY)
+                .build();
+
+        // Construct the Redact request to be sent by the client.
+        RedactImageRequest request = RedactImageRequest.newBuilder()
+                .setParent(project.toString())
+                .setByteItem(byteItem)
+                .setInspectConfig(config)
+                .build();
+
+        // Use the client to send the API request.
+        RedactImageResponse response = dlp.redactImage(request);
+
+        // Parse the response and process results.
+        try (FileOutputStream redacted = new FileOutputStream(outputFilePath)) {
+            redacted.write(response.getRedactedImage().toByteArray());
+        }
+
+        System.out.println("\tRedacted image written to: " + outputFilePath);
+
+    } catch (Exception e) {
+        System.out.println("Error during redactImageFile:\n" + e);
+    }
+}
+```
 
 ## Conclusion
 
@@ -264,5 +638,5 @@ I do think this is a very good API and with the additional training has fantasti
 ## Did this help?
 
 *   **Like, comment and share this article**
-*   **Follow this blog** to receive notifications of new postings
+*   **Follow this blog** to receive notifications of new postings
 *   **View** [previous postings](https://robertleggett.com.au/)

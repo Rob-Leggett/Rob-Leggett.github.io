@@ -23,7 +23,7 @@ What you will gain reading this post:
 What you can do to help support:
 
 *   **Like, comment and share this article**
-*   **Follow this blog** to receive notifications of new postings
+*   **Follow this blog** to receive notifications of new postings
 
 Now, let’s get started.
 
@@ -43,7 +43,7 @@ The agency business model typically is less flexible in having control over what
 
 **Product** - A company or individual that does "it's own solutions" and approaches the clients with a pre-defined product they have or will have.
 
-The product business model typically is much more flexible in having control over what you can standardise and may benefit you greatly by having a component library, with a component library you could present to the client a solution to suit their requirement as well as providing a level of security through component and patterns that you have tested and proven to be successful in the market, you can add a level of customisation through theming while benefiting in an increase speed to market, reusability, maintainability and cost. 
+The product business model typically is much more flexible in having control over what you can standardise and may benefit you greatly by having a component library, with a component library you could present to the client a solution to suit their requirement as well as providing a level of security through component and patterns that you have tested and proven to be successful in the market, you can add a level of customisation through theming while benefiting in an increase speed to market, reusability, maintainability and cost.
 
 I would recommend this as a good candidate for a component library.
 
@@ -61,7 +61,7 @@ It is really important to understand what you are trying to solve when exploring
 
 ### How many UX standards are you trying to support?
 
-A standard in this context refers to a set of components and patterns that only differ in theming.  If you are required to support more than a single UX standard, I have the following recommendations:
+A standard in this context refers to a set of components and patterns that only differ in theming.  If you are required to support more than a single UX standard, I have the following recommendations:
 
 1.  Have a single component library per standard, this will help ensure you are not creating a polluted environment that will eventually result in a maintenance nightmare.
 2.  Don't rush into a component library, create the components and patterns in each project, you will then have enough knowledge to determine commonalities and will be able to then break that component or pattern into a component library.
@@ -75,7 +75,7 @@ Short answer NO.
 
 You should work with your designers to determine what you want to be themed, you will have a couple different types of theming considerations:
 
-1.  Themes that are required to enable the components or patterns to behave functionally, an example of this would be a custom checkbox or custom radio button, typically this involves hiding the native control the shows if the component has been selected or not, resulting in an theme to be added to recreate that native behaviour.  These functional themes I would not recommend to be customisable.
+1.  Themes that are required to enable the components or patterns to behave functionally, an example of this would be a custom checkbox or custom radio button, typically this involves hiding the native control the shows if the component has been selected or not, resulting in an theme to be added to recreate that native behaviour.  These functional themes I would not recommend to be customisable.
 2.  Themes that will give your components a different "look and feel", while technically you can make everything customisable, I would advise against this, I would work with your designers to help determine what you will require to be different, as a base I would recommend typography, borders and colours to be customisable and then expand on that as required ensuring to test various combination in your theming as you can end up with some funny and unexpected behaviours, I would also not recommend trying to customise native behaviours where possible as this can have significant consequences when trying to support multiple devices and browsers, with great power comes great responsibility...
 
 ## What won't a component library solve?
@@ -91,41 +91,41 @@ At the time of writing this article, there are the technology choices that I cho
 
 This is a library created for component development and combined with the TypeScript language will have strong typing at compile time.
 
-Please see via GitHub [React](https://github.com/facebook/react) & [TypeScript](https://github.com/Microsoft/TypeScript)
+Please see via GitHub [React](https://github.com/facebook/react) & [TypeScript](https://github.com/Microsoft/TypeScript)
 
 ### **Styled Components**
 
 This is a library that allows you to style your components using javascript while utilising css and pre-processor syntax support.
 
-Please see via GitHub [Styled-Components](https://github.com/styled-components/styled-components)
+Please see via GitHub [Styled-Components](https://github.com/styled-components/styled-components)
 
-For an alternative that is very similar to Styled-Component, check out Glamorous [Glamorous](https://github.com/paypal/glamorous)
+For an alternative that is very similar to Styled-Component, check out Glamorous [Glamorous](https://github.com/paypal/glamorous)
 
 ### **Styleguist**
 
 This is a library that can be integrated into the component library and bring your component visually to life, it has built in state management to easily demonstrate the full power of your component library.
 
-Please see via GitHub [Styleguist](https://github.com/styleguidist)
+Please see via GitHub [Styleguist](https://github.com/styleguidist)
 
 ### **Travis CI**
 
 This is a fantastic continuous integration service that you configure in your project to perform build and deployments without the need to maintain your own instance or hardware (or you can if you wish), it allows for an configurable environment that support many languages and has integration with third party tools.
 
-Please feel free to read and see my usage via a previous blog [Publish your documentation with Github Pages and Travis CI](https://robertleggett.com.au/2018/04/06/nodejs-with-github-pages-and-travis-ci/)
+Please feel free to read and see my usage via a previous blog [Publish your documentation with Github Pages and Travis CI](https://robertleggett.com.au/2018/04/06/nodejs-with-github-pages-and-travis-ci/)
 
-Please see via Site [Travis CI](https://travis-ci.org/)
+Please see via Site [Travis CI](https://travis-ci.org/)
 
 ## Tips
 
-*   Create the components and composite components (patterns) as simple, stateless / dumb as possible
+*   Create the components and composite components (patterns) as simple, stateless / dumb as possible
 *   Don't try to over engineer and with a purpose in mind.
 *   Have your component library only make use of internal state when required, this then allows any state management to be used with your components and patterns
-*   If you require speed to market, abstract your state management and validations into a seperate library, that will wrap your component library so you can consume that in your projects 
-*   You can also create a layout system such as a grid and even go as far as a page
+*   If you require speed to market, abstract your state management and validations into a seperate library, that will wrap your component library so you can consume that in your projects
+*   You can also create a layout system such as a grid and even go as far as a page
 *   Have a style guide to demonstrate your components
 *   Also a sample project to consume your components to ensure that they actually work in a real environment.
 
 ## Did this help?
 
 *   **Like, comment and share this article**
-*   **Follow this blog** to receive notifications of new postings
+*   **Follow this blog** to receive notifications of new postings
