@@ -283,10 +283,10 @@ async function main() {
 
     let markdown = turndown.turndown(content);
 
-    // ✅ Fix Turndown backtick escaping
+    // Fix Turndown backtick escaping
     markdown = markdown.replace(/\\`/g, "`");
 
-    // ✅ Apply final cleanup
+    // Apply final cleanup
     markdown = cleanCodeFences(markdown);
     markdown = escapeMdxExpressions(markdown);
 

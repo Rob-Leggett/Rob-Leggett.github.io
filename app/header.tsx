@@ -17,17 +17,17 @@ export default function Header() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:gap-6 lg:gap-8">
         {/* Avatar */}
         <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
+          initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.35 }}
-          className="relative mx-auto sm:mx-0 w-24 h-24 sm:w-28 sm:h-28"
+          className="relative mx-auto sm:mx-0 w-32 h-32 sm:w-40 sm:h-40"
         >
           <Image
             src="/avatar/headshot.png"
             alt="Rob Leggett"
             fill
             priority
-            className="rounded-full object-cover border border-blue-400/30 shadow-[0_0_18px_-8px_rgba(59,130,246,0.45)]"
+            className="rounded-full object-cover border border-blue-400/40 shadow-[0_0_25px_-6px_rgba(59,130,246,0.5)]"
           />
         </motion.div>
 

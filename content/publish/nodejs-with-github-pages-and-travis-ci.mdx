@@ -37,7 +37,7 @@ Now, let’s get started.
 ![Github personal access token Diagram](/blog/nodejs-with-github-pages-and-travis-ci/inline-1.png)
 
 *   Create a **.travis.yml** file to build your project
-*   Log into [Travis CI](https://travis-ci.org/) and add the **GITHUB\_TOKEN** environment variable.
+*   Log into [Travis CI](https://travis-ci.org/) and add the **GITHUB_TOKEN** environment variable.
     *   Select the project repository > More Options > Settings
 
 ![travis ci environment variables Diagram](/blog/nodejs-with-github-pages-and-travis-ci/inline-2.png)
@@ -64,7 +64,7 @@ In short all the hard work is done in Travis CI, meaning...
 
 **script**: will run a list of commands to build our project, in this particular example I am running `npm run styleguide:build` which will build a static site.
 
-**after\_success**: will run a list of commands after your build has succeeded
+**after_success**: will run a list of commands after your build has succeeded
 
 **deploy**: this step is what actually pushes the static site into Github Pages after every build
 
@@ -92,4 +92,4 @@ In short all the hard work is done in Travis CI, meaning...
 
 *   **Like, comment and share this article**
 *   **Follow this blog** to receive notifications of new postings
-*   **View** [previous postings](https://robertleggett.blog/)
+*   **View** [previous postings](https://robertleggett.com.au/)

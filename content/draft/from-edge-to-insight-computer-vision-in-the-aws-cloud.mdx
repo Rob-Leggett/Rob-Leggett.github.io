@@ -46,11 +46,11 @@ It includes six key areas:
 5.  **User Portal & Visualisation**
 6.  **Centralised Logging & Cost Control**
 
-![](https://robertleggett.blog/wp-content/uploads/2025/07/image-1024x501.png)
+![](https://robertleggett.com.au/wp-content/uploads/2025/07/image-1024x501.png)
 
 Computer Vision - AWS Architecture
 
-## **1\. On-Premise: Smart Edge Inference**
+## **1. On-Premise: Smart Edge Inference**
 
 Video feeds from 100+ IP cameras are managed by a local **Video Management System (VMS)**, using NAS or SAN storage. An **AI Agent**—installed on a customer‑owned server or VM—handles lightweight inference and metadata publishing:
 
@@ -64,7 +64,7 @@ Video feeds from 100+ IP cameras are managed by a local **Video Management Syst
 
 This layer ensures real‑time processing close to the data source, reducing centralised processing load.
 
-## **2\. Networking: Hybrid Connectivity**
+## **2. Networking: Hybrid Connectivity**
 
 Connectivity is facilitated via a dedicated **Networking Account**, which provides:
 
@@ -78,7 +78,7 @@ Security includes:
 *   TLS encryption end‑to‑end
 *   Proper IAM segregation across environments
 
-### **3\. Edge Streaming Platform (AWS Account)**
+### **3. Edge Streaming Platform (AWS Account)**
 
 This account ingests, routes and enriches video metadata streams in real time.
 
@@ -91,7 +91,7 @@ This account serves as the operational backbone of the vision pipeline.
 
 💡 New ML models can be deployed dynamically to AI Agents from this account.
 
-## **4\. Identity & Authentication**
+## **4. Identity & Authentication**
 
 Authentication and identity management are centralised using:
 
@@ -102,7 +102,7 @@ Authentication and identity management are centralised using:
 
 This approach enables true **multi-tenant SSO** with separation of identity responsibilities.
 
-## **5\. Portal (Dev, Test, Prod)**
+## **5. Portal (Dev, Test, Prod)**
 
 Users access web apps via **Fargate-hosted portals** in isolated environments:
 
@@ -113,7 +113,7 @@ Users access web apps via **Fargate-hosted portals** in isolated environments:
 
 Portal access is dynamically routed based on domain (e.g., `portal.cloud.computervision.ai`).
 
-## **6\. Logging, Observability & Cost Control**
+## **6. Logging, Observability & Cost Control**
 
 A dedicated **Logging Account** aggregates telemetry from all environments:
 
@@ -174,4 +174,4 @@ Have questions or want to dig into one area deeper? Let me know.
 
 *   **Like, comment and share this article**
 *   **Follow this blog** to receive notifications of new postings
-*   **View** [previous postings](https://robertleggett.blog/)
+*   **View** [previous postings](https://robertleggett.com.au/)
