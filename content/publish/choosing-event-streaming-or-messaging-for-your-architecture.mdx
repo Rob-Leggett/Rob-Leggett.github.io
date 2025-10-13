@@ -55,7 +55,7 @@ An example, when a customer places a reservation on a DVD but requests it be col
 
 A **message** is often interchanged with the term **Event**, however it is intended for different purposes even though there are many commonalities between them.
 
-![Sample Command and Event Flow Diagram](https://robertleggett.blog/wp-content/uploads/2020/03/Sample-Command-and-Event-Flow-Diagram-1024x996.png)
+![Sample Command and Event Flow Diagram](/blog/choosing-event-streaming-or-messaging-for-your-architecture/inline-1.png)
 
 Sample Command and Event Flow Diagram
 
@@ -138,7 +138,7 @@ Event Streaming Use Case Table
 *   It can persist events supporting the rebuilding of the state through replaying events in the order they were received
 *   It allows multiple consumers to receive each event
 
-![Event streaming pattern](https://robertleggett.blog/wp-content/uploads/2020/02/Event-Streaming-1024x245.png)
+![Event streaming pattern](/blog/choosing-event-streaming-or-messaging-for-your-architecture/inline-2.png)
 
 Event Streaming pattern
 
@@ -148,7 +148,7 @@ Depending on the cloud provider you are using the options are quite extensible a
 
 Below is a simplistic decision flow to help you determine which technology may be more suitable depending on your use case, for more complex scenarios it would be worth asking yourself more questions to determine if the particular technology choice will be suitable.
 
-![Event Streaming technology options](https://robertleggett.blog/wp-content/uploads/2020/02/Streaming-Technology-Choices-1-1024x509.png)
+![Event Streaming technology options](/blog/choosing-event-streaming-or-messaging-for-your-architecture/inline-3.png)
 
 Event Streaming technology options
 
@@ -187,7 +187,7 @@ Messaging Pub / Sub Use Case Table
 *   It allows multiple consumers to receive each message in a topic
 *   Publish-subscribe ensures that each consumer receives messages in a topic in the exact order in which they were received by the messaging system
 
-![Message Pub / Sub (Push / Pull) pattern](https://robertleggett.blog/wp-content/uploads/2020/02/Message-Pub-_-Sub-1-1024x327.png)
+![Message Pub / Sub (Push / Pull) pattern](/blog/choosing-event-streaming-or-messaging-for-your-architecture/inline-4.png)
 
 Message Pub / Sub (Push / Pull) pattern
 
@@ -216,7 +216,7 @@ Message Queueing Use Case Table
 *   It does not ensure that messages are delivered or processed in order
 *   However, each message is removed from the queue once it has been delivered but it does requires consumer acknowledgement
 
-![](https://robertleggett.blog/wp-content/uploads/2020/02/Message-Queueing-1-1024x312.png)
+![](/blog/choosing-event-streaming-or-messaging-for-your-architecture/inline-5.png)
 
 Message Queue (push / pull) pattern
 
@@ -226,7 +226,7 @@ Once again, depending on the cloud provider you are using the options are quite 
 
 Below is a simplistic decision flow to help you determine which technology may be more suitable depending on your use case, for more complex scenarios it would be worth asking yourself more questions to determine if the particular technology choice will be suitable.
 
-![Messaging Pub / Sub & Queueing technology options](https://robertleggett.blog/wp-content/uploads/2020/02/Messaging-Technology-Choices-3-1024x649.png)
+![Messaging Pub / Sub & Queueing technology options](/blog/choosing-event-streaming-or-messaging-for-your-architecture/inline-6.png)
 
 Messaging Pub / Sub & Queueing technology options
 

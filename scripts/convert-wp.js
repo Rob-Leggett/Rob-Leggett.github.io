@@ -32,23 +32,11 @@ function stripWpComments(html) {
 
 function normalizeFences(s) {
   let out = stripWpComments(s);
-
-  // Insert newline after opening fences like ```textimport -> ```text\nimport
-  out = out.replace(/```text(?=\S)/g, "```text\n");
-
-  // Add newline after language if missing, e.g. ```javapublic -> ```java\npublic
   out = out.replace(/```([a-z0-9_+-]+)(?=\S)/gi, "```$1\n");
-
-  // Add newline after plain ``` if directly followed by text
-  out = out.replace(/```(?=\S)/g, "```\n");
-
-  // Ensure closing fences are on their own line
+  out = out.replace(/```text(?=\S)/gi, "```text\n");
   out = out.replace(/([^\n])```/g, "$1\n```");
-
-  // Balance unmatched fences
   const ticks = (out.match(/```/g) || []).length;
   if (ticks % 2 !== 0) out += "\n```";
-
   return out;
 }
 
@@ -62,16 +50,81 @@ function fenceAllCode(content) {
 
 function escapeAllDangerousSyntax(str) {
   return str
-    .replace(/`/g, "\\`")
     .replace(/{/g, "&#123;")
     .replace(/}/g, "&#125;")
     .replace(/<(?!\/?br|\/?img|\/?a)/g, "&lt;")
     .replace(/>(?!\s|$)/g, "&gt;");
 }
 
-// --- download helper ---
+function htmlToPlainText(s = "") {
+  return s.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?[^>]+>/g, "");
+}
 
-// fetch image as Buffer
+function guessLangFromSnippet(snippet = "") {
+  const s = snippet;
+  if (/\bpackage\s+main\b/.test(s) || /\bfunc\s+main\s*\(/.test(s)) return "go";
+  if (/\b#include\s*<.*>/.test(s) || /\bint\s+main\s*\(/.test(s)) return "c";
+  if (/\bpublic\s+class\b/.test(s) || /\bSystem\.out\.println\b/.test(s)) return "java";
+  if (/\bdef\s+.+\(/.test(s) || (/\bimport\s+\w+/.test(s) && s.includes("python"))) return "python";
+  if (/\bfunction\b|\bconst\b|\blet\b|\bvar\b/.test(s)) return "javascript";
+  return "text";
+}
+
+function convertWpPreBlocks(html = "") {
+  return html.replace(
+    /<!--\s*wp:preformatted[\s\S]*?-->\s*<pre[^>]*>([\s\S]*?)<\/pre>\s*<!--\s*\/wp:preformatted\s*-->/gi,
+    (_, inner) => {
+      const decoded = decodeEntities(inner).trim();
+      const lang = /\bpackage\s+main\b|\bfunc\s+main\b/.test(decoded) ? "go" : "text";
+      return `\n\`\`\`${lang}\n${decoded}\n\`\`\`\n`;
+    }
+  );
+}
+
+function convertWpPreToFences(html = "") {
+  return html.replace(
+    /<pre[^>]*class=["'][^"']*wp-block-preformatted[^"']*["'][^>]*>([\s\S]*?)<\/pre>/gi,
+    (_, inner) => {
+      const raw = htmlToPlainText(inner);
+      const decoded = decodeEntities(raw).trim();
+      const lang = guessLangFromSnippet(decoded);
+      return `\n\`\`\`${lang}\n${decoded}\n\`\`\`\n`;
+    }
+  );
+}
+
+function stripInvisibleSpaces(s = "") {
+  return s.replace(/[\u00A0\u1680\u180E\u2000-\u200D\u202F\u205F\u3000]/g, " ");
+}
+
+/* ✅ Enhanced fence cleaner — handles escaped backticks, invisible spaces, and split language names */
+function cleanCodeFences(md = "") {
+  // Step 1: unescape any escaped backticks (\`\`\` → ```)
+  md = md.replace(/\\```/g, "```");
+
+  // Step 2: remove stray invisible spaces between ``` and language
+  md = md.replace(
+    /(^|\n)```[ \t\u00A0\u200B\u200C\u200D]*([A-Za-z0-9+_.-]+)[ \t\u00A0\u200B\u200C\u200D]*(?=\n|$)/gm,
+    "$1```$2"
+  );
+
+  // Step 3: fix split or broken language names
+  md = md.replace(/```t\s*e\s*x\s*t/gi, "```text");
+  md = md.replace(/```g\s*o/gi, "```go");
+  md = md.replace(/```j\s*s\s*o\s*n/gi, "```json");
+  md = md.replace(/```j\s*a\s*v\s*a/gi, "```java");
+
+  // Step 4: remove escaped newlines after fence headers
+  md = md.replace(/```([a-z0-9+_-]+)\s*\\n/gi, "```$1\n");
+
+  return md;
+}
+
+function escapeMdxExpressions(str = "") {
+  return str.replace(/{/g, "&#123;").replace(/}/g, "&#125;");
+}
+
+// --- image helpers ---
 async function fetchImageBuffer(url) {
   return new Promise((resolve) => {
     https
@@ -85,34 +138,51 @@ async function fetchImageBuffer(url) {
   });
 }
 
-// download image
-async function downloadImage(url, destPath) {
-  if (!url) return false;
-  return new Promise((resolve) => {
-    const file = fs.createWriteStream(destPath);
-    https
-      .get(url, (response) => {
-        if (response.statusCode !== 200) {
-          file.close();
-          fs.unlinkSync(destPath);
-          return resolve(false);
-        }
-        response.pipe(file);
-        file.on("finish", () => {
-          file.close();
-          resolve(true);
-        });
-      })
-      .on("error", (err) => {
-        console.warn(`⚠️  Failed to download ${url}: ${err.message}`);
-        resolve(false);
-      });
+async function saveAsPng(buffer, localPath) {
+  const png = await sharp(buffer).png({ quality: 90 }).toBuffer();
+  fs.writeFileSync(localPath, png);
+}
+
+async function downloadAndRewriteInlineImages(html, slug) {
+  if (!html) return html;
+  const imgDir = path.join(process.cwd(), `public/blog/${slug}`);
+  fs.mkdirSync(imgDir, { recursive: true });
+  html = html.replace(/\s+srcset="[^"]*"/gi, "");
+  const seen = new Map();
+  let index = 1;
+
+  html = html.replace(/<img\b[^>]*?\bsrc=["']([^"']+)["'][^>]*>/gi, (m, src) => {
+    if (!/^https?:\/\//i.test(src)) return m;
+    if (!seen.has(src)) {
+      const fileName = `inline-${index++}.png`;
+      const localPath = path.join(imgDir, fileName);
+      const publicPath = `/blog/${slug}/${fileName}`;
+      seen.set(src, { localPath, publicPath });
+    }
+    const { publicPath } = seen.get(src);
+    return m.replace(src, publicPath);
   });
+
+  const promises = [];
+  for (const [remote, { localPath }] of seen.entries()) {
+    if (fs.existsSync(localPath)) continue;
+    promises.push(
+      (async () => {
+        try {
+          const buf = await fetchImageBuffer(remote);
+          if (buf) await saveAsPng(buf, localPath);
+        } catch (e) {
+          console.warn(`⚠️  Inline image failed: ${remote} (${e?.message || e})`);
+        }
+      })()
+    );
+  }
+  if (promises.length) await Promise.all(promises);
+  return html;
 }
 
 async function main() {
   const xmlPath = path.join(process.cwd(), "scripts", "techinthecloud.WordPress.2025-10-11.xml");
-
   const baseContent = path.join(process.cwd(), "content");
   const skipDir = path.join(baseContent, "skipped");
   const logDir = path.join(baseContent, "logs");
@@ -126,7 +196,6 @@ async function main() {
   const data = parser.parse(xml);
   const items = data?.rss?.channel?.item || [];
 
-  // --- Build attachment map ---
   const attachments = {};
   for (const item of items) {
     if (item["wp:post_type"] === "attachment" && item["wp:attachment_url"]) {
@@ -158,74 +227,68 @@ async function main() {
     const date = (item["wp:post_date"] || "").split(" ")[0];
 
     let content = decodeEntities(item["content:encoded"] || "");
+    content = convertWpPreBlocks(content);
+    content = convertWpPreToFences(content);
 
-    // Clean WP wrappers
     content = content
       .replace(/<[/]?[a-z0-9-]*--[a-z0-9-]*[^>]*>/gi, "")
       .replace(/<\/?wp-[^>]+>/gi, "")
       .replace(/<\/?div[^>]*>/gi, "")
       .replace(/<\/?figure[^>]*>/gi, "");
 
-    // Convert <pre><code> blocks
     content = content.replace(/<pre[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, (_, inner) => {
       const safe = escapeAllDangerousSyntax(inner);
       return `\n\`\`\`text\n${safe.trim()}\n\`\`\`\n`;
     });
 
-    // Normalize and fence code
+    if (status === "publish") {
+      content = await downloadAndRewriteInlineImages(content, slug);
+    } else {
+      console.log(`ℹ️  Skipping inline image download for non-published post: ${slug}`);
+    }
+
+    content = stripInvisibleSpaces(content);
     content = normalizeFences(content);
     if (!/```/.test(content)) content = fenceAllCode(content);
+    content = content.replace(/(?<!`)`([^`\n]+)`(?!`)/g, (_, inner) => "`" + escapeAllDangerousSyntax(inner) + "`");
 
-    // Escape inline code braces
-    content = content.replace(/`([^`]+)`/g, (_, inner) => "`" + escapeAllDangerousSyntax(inner) + "`");
-
-    // --- Image handling (feature + inline attachments) ---
     let feature_image_local = "";
     const parentAttachments = attachments[postId];
-
     if (parentAttachments?.length && status === "publish") {
-      // Create the local image directory
       const imgDir = path.join(process.cwd(), `public/blog/${slug}`);
       fs.mkdirSync(imgDir, { recursive: true });
-
-      // Sort so the last (usually largest / featured) image is feature
       const sortedUrls = [...parentAttachments].sort().reverse();
-
       for (let i = 0; i < sortedUrls.length; i++) {
         const imageUrl = sortedUrls[i];
         const isFeature = i === 0;
         const fileName = isFeature ? "feature-image.png" : `image-${i}.png`;
         const localPath = path.join(imgDir, fileName);
         const publicPath = `/blog/${slug}/${fileName}`;
-
         try {
-          // Skip download if already exists (cache)
           if (fs.existsSync(localPath)) {
             if (isFeature) feature_image_local = publicPath;
             continue;
           }
-
           const buf = await fetchImageBuffer(imageUrl);
-          if (!buf) {
-            console.warn(`⚠️  Failed to fetch image: ${imageUrl}`);
-            continue;
-          }
-
-          // Convert and save as PNG
-          const png = await sharp(buf).png({ quality: 90 }).toBuffer();
-          fs.writeFileSync(localPath, png);
-
+          if (!buf) continue;
+          await saveAsPng(buf, localPath);
           if (isFeature) feature_image_local = publicPath;
         } catch (err) {
           console.warn(`⚠️  Error downloading ${imageUrl}: ${err.message} from ${slug}`);
         }
       }
-    } else if (status !== "publish") {
-      console.log(`ℹ️  Skipping image download for non-published post: ${slug}`);
+    } else {
+      console.log(`ℹ️  Skipping attachment image download for non-published post: ${slug}`);
     }
 
-    // Convert to Markdown
-    const markdown = turndown.turndown(content);
+    let markdown = turndown.turndown(content);
+
+    // ✅ Fix Turndown backtick escaping
+    markdown = markdown.replace(/\\`/g, "`");
+
+    // ✅ Apply final cleanup
+    markdown = cleanCodeFences(markdown);
+    markdown = escapeMdxExpressions(markdown);
 
     const full = `---
 title: "${safeTitle}"

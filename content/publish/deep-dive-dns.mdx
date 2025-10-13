@@ -52,7 +52,7 @@ You contact the individuals manager, who does have the contact address of the in
 
 For a more detailed and technical way to understand how DNS works, then please continue.
 
-![DNS Sequence Flow Diagram](https://robertleggett.blog/wp-content/uploads/2019/10/how-dns-works-1.png?w=1024)
+![DNS Sequence Flow Diagram](/blog/deep-dive-dns/inline-1.png)
 
 DNS Sequence Flow
 
@@ -76,7 +76,7 @@ A domain name is a human readable name that is used to represent an identity or 
 
 For a domain name to work it must be registered and unique.
 
-![Domain Name Diagram](https://robertleggett.blog/wp-content/uploads/2019/10/domain-name.png?w=1024)
+![Domain Name Diagram](/blog/deep-dive-dns/inline-2.png)
 
 Domain Name
 
@@ -88,7 +88,7 @@ If you take http://www.robertleggett.blog as an example excluding the root level
 
 Below is a simple domain name hierarchy diagram to demonstrate that order as well as a short description explaining the different levels levels.
 
-![Domain Name Hierarchy Diagram](https://robertleggett.blog/wp-content/uploads/2019/10/domain-hierarchy-.png?w=1024)
+![Domain Name Hierarchy Diagram](/blog/deep-dive-dns/inline-3.png)
 
 Domain Name Hierarchy
 
@@ -151,7 +151,7 @@ The order of the servers the DNS resolver queries are:
 
 You can see the flow as described in the diagram below by running the command: **dig a robertleggett.blog +trace**
 
-![DNS resolving robertleggett.blog Diagram](https://robertleggett.blog/wp-content/uploads/2019/11/how-does-dns-resolver-work.png?w=1024)
+![DNS resolving robertleggett.blog Diagram](/blog/deep-dive-dns/inline-4.png)
 
 DNS resolving robertleggett.blog
 
@@ -168,7 +168,7 @@ DNS resolving robertleggett.blog
 
 A DNS cache is a temporary database, containing records of all the recent and attempted visits for requested domains names.
 
-![Local DNS cache Diagram](https://robertleggett.blog/wp-content/uploads/2019/11/dns-cache.png?w=660)
+![Local DNS cache Diagram](/blog/deep-dive-dns/inline-5.png)
 
 Local DNS Cache
 
@@ -182,7 +182,7 @@ Is it important to also be aware that there are DNS caches for every hierarchy l
 
 A DNS query also known as DNS request, are requests made to resolve the domain name to the IP address.
 
-![DNS query flow Diagram](https://robertleggett.blog/wp-content/uploads/2019/11/dns-query.png?w=1024)
+![DNS query flow Diagram](/blog/deep-dive-dns/inline-6.png)
 
 DNS Query Flow
 
@@ -194,7 +194,7 @@ As each domain is further divided into sub-domains. Each becomes a DNS zone itse
 
 To help visually represent the different domain boundaries, please refer to the diagram below.
 
-![DNS zone boundaries Diagram](https://robertleggett.blog/wp-content/uploads/2019/11/dns-zones-5.png?w=1024)
+![DNS zone boundaries Diagram](/blog/deep-dive-dns/inline-7.png)
 
 DNS Zone Boundaries
 
@@ -202,15 +202,13 @@ Briefly touching on DNS hosting but still related to DNS zones.
 
 By running the command: **dig soa robertleggett.blog +trace**, a section of information I get back is:
 
-robertleggett.blog. 86400 IN SOA **ns1.wordpress.com.** hostmaster.wordpress.com. 2005071858 14400 7200 604800 300
+```text robertleggett.blog. 86400 IN SOA **ns1.wordpress.com.** hostmaster.wordpress.com. 2005071858 14400 7200 604800 300 ```
 
 The **ns1.wordpress.com.** is the primary. This is not enforced unless through dynamic updates, but the recommended approach is to put the primary name server there. The primary **ns1.wordpress.com.** will notify **ns2.wordpress.com.** and **ns3.wordpress.com.** keeping them all in sync.
 
 By running the command: **dig ns robertleggett.blog +trace**, a section of information I get back is:
 
-robertleggett.blog. 86400 IN NS **ns3.wordpress.com.**
-robertleggett.blog. 86400 IN NS **ns1.wordpress.com.**
-robertleggett.blog. 86400 IN NS **ns2.wordpress.com.**
+```text robertleggett.blog. 86400 IN NS **ns3.wordpress.com.** robertleggett.blog. 86400 IN NS **ns1.wordpress.com.** robertleggett.blog. 86400 IN NS **ns2.wordpress.com.** ```
 
 These could be primary or secondary DNS zones.
 
@@ -231,7 +229,7 @@ Root hints are a list of Authoritative Nameservers, typically the Root Nameserve
 *   They are used to resolve queries for zones that do not exist on the DNS server
 *   Also only when forwarders are not configured or it has a failure to respond
 
-![DNS forwarders and root hint flow Diagram](https://robertleggett.blog/wp-content/uploads/2019/11/dns-forwarders-and-root-hints.png?w=1024)
+![DNS forwarders and root hint flow Diagram](/blog/deep-dive-dns/inline-8.png)
 
 DNS Forwarders & Root hint flow
 

@@ -1,5 +1,12 @@
 [
   {
+    "slug": "seizing-the-future-an-eager-approach-to-digital-identity-migration-strategies",
+    "title": "Seizing the Future - An Eager Approach to Digital Identity Migration Strategies",
+    "date": "2024-10-17",
+    "excerpt": "In today's digital age, managing digital identities efficiently and securely has become a cornerstone for any online platform. Among the various strategies to upgrade or shift digital identity management systems, two approaches stand out: Eager Migration and Lazy Migration, each…",
+    "feature_image": "/blog/seizing-the-future-an-eager-approach-to-digital-identity-migration-strategies/feature-image.png"
+  },
+  {
     "slug": "aws-dns-and-certificate-management",
     "title": "Securing Your Online Presence - Unraveling the Relationship Between DNS and Certificate Management",
     "date": "2023-03-24",
@@ -98,6 +105,13 @@
     "feature_image": "/blog/top-5-cloud-training-providers-for-2019/feature-image.png"
   },
   {
+    "slug": "why-i-dont-think-googles-data-loss-prevention-api-is-ready-for-use",
+    "title": "Why I don’t think Googles Data Loss Prevention API is ready for use with images",
+    "date": "2019-12-03",
+    "excerpt": "Data protection is critical within any business and data has a lot of value. Loss of data can be detrimental to both the business holding the data and the individual who's data has been compromised resulting in drastic consequences. Loss of data is a breach of both privacy and se…",
+    "feature_image": "/blog/why-i-dont-think-googles-data-loss-prevention-api-is-ready-for-use/feature-image.png"
+  },
+  {
     "slug": "deep-dive-dns",
     "title": "DNS Explained - The Backbone of the Internet",
     "date": "2019-11-25",
@@ -145,6 +159,13 @@
     "date": "2016-12-20",
     "excerpt": "**Do you enjoy your work culture?** Who doesn't want to show up to work and be in an environment with like minded and talented team members (ability, passion, desire not skill-set). **Do you enjoy your work environment?**…",
     "feature_image": "/blog/agile-high-performing-team/feature-image.png"
+  },
+  {
+    "slug": "websockets-with-spring-spring-security",
+    "title": "WebSockets Security with Spring and Spring Security",
+    "date": "2015-05-27",
+    "excerpt": "WebSockets with custom message security is not a topic that appears widely online, let alone example on how to make it happen, therefore I decided to present on web sockets and in particular allowing custom security on the socket level. ## Before you start About this post:…",
+    "feature_image": "/blog/websockets-with-spring-spring-security/feature-image.png"
   },
   {
     "slug": "jersey-restful-webservice-jax-rs-with-jpa-and-derby-in-memory-database",

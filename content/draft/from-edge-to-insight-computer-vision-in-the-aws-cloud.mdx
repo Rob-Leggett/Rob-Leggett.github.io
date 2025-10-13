@@ -6,7 +6,7 @@ status: "draft"
 
 ---
 
-In an era dominated by visual data, unlocking intelligence from video streams is reshaping industries—from smart cities and retail to manufacturing and compliance. This guide presents a **generic, AWS‑based reference architecture**, enabling companies to process video at the edge and deliver insights in the cloud securely and at scale.
+In an era dominated by visual data, unlocking intelligence from video streams is reshaping industries—from smart cities and retail to manufacturing and compliance. This guide presents a **generic, AWS‑based reference architecture**, enabling companies to process video at the edge and deliver insights in the cloud securely and at scale.
 
 ## Before you start
 
@@ -56,7 +56,7 @@ Video feeds from 100+ IP cameras are managed by a local **Video Management Syst
 
 *   Options include:
     *   **NVIDIA Jetson + DeepStream with AWS Greengrass**
-    *   **Containerised inference agents** running on virtual platforms (AWS, Azure, GCP)
+    *   **Containerised inference agents** running on virtual platforms (AWS, Azure, GCP)
 *   Capabilities:
     *   Object detection (e.g. vehicles, PPE compliance)
     *   Video redaction or filtering
@@ -68,13 +68,13 @@ This layer ensures real‑time processing close to the data source, reducing cen
 
 Connectivity is facilitated via a dedicated **Networking Account**, which provides:
 
-*   **AWS Site‑to‑Site VPN** or **Direct Connect**
-*   **Transit Gateway** for central routing across multiple accounts
-*   Secure DNS via **Route 53**, and NAT Gateway configurations
+*   **AWS Site‑to‑Site VPN** or **Direct Connect**
+*   **Transit Gateway** for central routing across multiple accounts
+*   Secure DNS via **Route 53**, and NAT Gateway configurations
 
 Security includes:
 
-*   **AWS WAF** to protect edge‑exposed services
+*   **AWS WAF** to protect edge‑exposed services
 *   TLS encryption end‑to‑end
 *   Proper IAM segregation across environments
 
@@ -117,8 +117,8 @@ Portal access is dynamically routed based on domain (e.g., `portal.cloud.comput
 
 A dedicated **Logging Account** aggregates telemetry from all environments:
 
-*   **CloudTrail**, **CloudWatch Logs**, and **X-Ray**
-*   **OpenSearch** or third-party integrations for search and dashboarding
+*   **CloudTrail**, **CloudWatch Logs**, and **X-Ray**
+*   **OpenSearch** or third-party integrations for search and dashboarding
 *   Cross-account S3 logging with access auditing
 
 Additionally, a **Management Account** oversees:

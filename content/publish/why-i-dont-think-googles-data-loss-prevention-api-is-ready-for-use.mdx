@@ -1,0 +1,268 @@
+---
+title: "Why I don’t think Googles Data Loss Prevention API is ready for use with images"
+date: "2019-12-03"
+slug: "why-i-dont-think-googles-data-loss-prevention-api-is-ready-for-use"
+status: "publish"
+feature_image: "/blog/why-i-dont-think-googles-data-loss-prevention-api-is-ready-for-use/feature-image.png"
+---
+
+Data protection is critical within any business and data has a lot of value. Loss of data can be detrimental to both the business holding the data and the individual who's data has been compromised resulting in drastic consequences. Loss of data is a breach of both privacy and security and with data storage being so cheap, it has expanded massively in volume. While data breaches of sensitive data have been occurring for a long time, they have been becoming more frequent.
+
+## Before you start
+
+About this post:
+
+*   5 – 15 min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   An understanding of data loss prevention
+*   An understanding of what you need to consider before using the Google Data Loss Prevention API
+*   An breakdown of the code used to execute Google's Data Loss Prevention API
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let’s get started.
+
+## What is the role Data Loss Prevention plays?
+
+Data security policies are made and individuals are required to strictly follow those policies.
+
+Data Loss Prevention services are:
+
+*   Made available to identify, monitor and protect data in storage as well as over the network.
+*   Used to enforce those policies, to prevent unauthorised access and usage of sensitive data.
+
+Data loss can occur for many reasons such as intentional misuse, leakage, carelessness, BYOD or theft.
+
+## What are use cases for Data Loss Prevention?
+
+*   Enforcement of Data Loss Prevention services as a measure to ensure Data Loss Prevention policies.
+*   Data Loss Prevention can help prevent accidental disclosure or theft by employees having access to sensitive data.
+*   Data Loss Prevention can help prevent lawsuits, loss of reputation, loss of credibility, loss of revenue, remember data does have a value.
+
+## What are steps you can put in place to help minimise Data Loss?
+
+*   Implementation of the Data Loss Prevention policies
+*   Utilise Data Loss Prevention services
+*   Avoid BYOD situations where possible
+*   Ensure logging of data security events for monitoring and analysis
+*   Encrypt sensitive data where possible
+*   Ensure you have your own policies on the storage that hosts data in the cloud, don't just rely on the cloud provider
+
+## What is the Google Data Loss Prevention API?
+
+Google's Cloud Data Loss Prevention API (DLP) provides classification and redaction for sensitive data like credit card numbers, names, social security numbers, international identifier numbers, phone numbers, and GCP credentials.
+
+To get a deeper understand visit the API documentation - [https://cloud.google.com/dlp/](https://cloud.google.com/dlp/)
+
+## Test Cases
+
+**NOTE**: All the test case data was run against actual credit cards, the images uploaded in these three test cases have been modified or generic images to **remove** sensitive information.
+
+### Test Case #1
+
+#### Condition of actual card processed
+
+*   Not a new card, this card has been used over a period of time, highly used
+*   Outlines around the digits of the card have faded or scratched off causing the digits to have the same contrast and colour of the background
+*   Highly likely other individuals cards are of similar condition
+*   Looks exactly like image below
+
+![NAB Visa Debit Card Example](/blog/why-i-dont-think-googles-data-loss-prevention-api-is-ready-for-use/inline-1.png)
+
+NAB Visa Debit Card Example (not actual card)
+
+#### Result - Unsuccessful
+
+**Project ID** = my-gcp-project-id
+
+**Path** = /.../dlp/build/resources/main/image/cc1.jpg
+
+**Output** = cc1-redacted.jpg
+
+**Findings**: 0
+
+When this card was processed through the Google Data Loss Prevention API, it was unable to locate the credit card number and therefore unable to mask the data or perform a redact on the photo.
+
+### Test Case #2
+
+#### Condition of actual card processed
+
+*   Not a new card, this card has been used over a period of time, rarely used
+*   Outlines around the digits of the card have faded causing the digits to have the same contrast and colour of the background
+*   Highly likely other individuals cards are of similar condition
+*   Looks exactly like image below
+
+![](/blog/why-i-dont-think-googles-data-loss-prevention-api-is-ready-for-use/inline-2.png)
+
+NAB Visa Card Example (not actual card)
+
+### Result - Success
+
+**Project ID** = my-gcp-project-id
+
+**Path** = /.../dlp/build/resources/main/image/cc2.jpg
+
+**Output** = cc2-redacted.jpg
+
+**Findings**: 1
+
+**Quote**: 4303 3012 3456 7890
+
+**Info type**: CREDIT\_CARD\_NUMBER
+
+**Likelihood**: LIKELY
+
+**Masked**: \*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*
+
+Redacted image written to: cc2-redacted.jpg
+
+The **inspect** results clearly indicate that the value found was a credit card number and the likelihood that provides the assurance indicates that the match was a success. For a list of the likelihood possible outcomes please refer to this link [https://cloud.google.com/dlp/docs/likelihood](https://cloud.google.com/dlp/docs/likelihood)
+
+The **deidentification** results were also a clear success as the requested masking was complete
+
+The **redact** which is represented below in the form of an image clearly shows a successful masking of the sensitive data and provided a clever overlay on top of the original image and produces a seperate image file
+
+![NAB Visa Card Example Redacted](/blog/why-i-dont-think-googles-data-loss-prevention-api-is-ready-for-use/inline-3.png)
+
+NAB Visa Card Example Redacted (not actual card)
+
+### Test Case #3
+
+#### Condition of actual card processed
+
+*   New card, never used
+*   Outlines around the digits of the card are very clear resulting in the digits to have the different contrast and colour of the background
+*   Likely other individuals cards are of similar condition
+*   Looks almost like image below, however there is no white square border American Express logo, and a chip appears above the first four credit care numbers (refer image two below)
+
+*   ![NAB American Express Card Example](/blog/why-i-dont-think-googles-data-loss-prevention-api-is-ready-for-use/inline-4.png)
+*   ![NAB American Express Card Example](/blog/why-i-dont-think-googles-data-loss-prevention-api-is-ready-for-use/inline-5.png)
+
+### Result - Unsuccessful
+
+**Project ID** = my-gcp-project-id
+
+**Path** = /.../dlp/build/resources/main/image/cc3.jpg
+
+**Output** = cc3-redacted.jpg
+
+**Findings**: 0
+
+When this card was processed through the Google Data Loss Prevention API, it was unable to locate the credit card number and therefore unable to mask the data or perform a redact on the photo.
+
+### Test Summary
+
+For **Test Case #1** the result really didn't come as a surprise to me with the contrast between the digits and the background of the card, it was a result that I was expecting, however for **Test Case #3** the contrast between the digits and the background of the card was the complete opposite and I was very surprised with the unsuccessful outcome.
+
+For **Test Case #2** this also actually came as a surprise to me, I was expecting the same result from **Test Case #1**.
+
+It is also worth noting that I did run these same test cases with different images taken of the same cards and the results were different, for that result **Test Case #1** and **Test Case #2** both were unsuccessful where as **Test Case #3** was successful.
+
+## Execution
+
+This is a run through of the code that I ran for the Google Data Loss Prevention API Test Cases
+
+### Prerequisite
+
+Follow this guide to allow the code to execute against your Google account: [https://cloud.google.com/apis/docs/getting-started](https://cloud.google.com/apis/docs/getting-started)
+
+**Install the SDK locally** - [https://cloud.google.com/sdk/docs/quickstart-macos](https://cloud.google.com/sdk/docs/quickstart-macos)
+
+Ensure you setup the required authentication of the service to allow for execution against your Google account: **export GOOGLE\_APPLICATION\_CREDENTIALS="/user//\[service-account-key\].json"**
+
+### Main Class
+
+Below is the following code I used to execute the against the Test Cases.
+
+Ensure you do the following:
+
+1.  Replace **my-gcp-project-id** with your actual GCP Project ID
+2.  Ensure you have an image file in a resources package under an image folder - **image/cc1.jpg**
+3.  Change the output location to a path and file you want - **cc1-redacted.jpg**
+
+```text import au.com.gcp.dlp.InspectImageFile; import java.net.URL; public class App &#123; public static void main(String... args) &#123; App app = new App(); app.run(); &#125; private void run() &#123; URL url = this.getClass().getClassLoader().getResource("image/cc1.jpg"); String projectId = "my-gcp-project-id"; String path = (url == null) ? null : url.getPath(); String output = "cc1-redacted.jpg"; System.out.println("Project ID = " + projectId + " Path = " + path + " Output = " + output); InspectImageFile.inspectImageFile(projectId, path); InspectImageFile.redactImageFile(projectId, path, output); &#125; &#125; ```
+
+### Helper Class
+
+This class simply contains the different methods to be able to **inspect image, deidentitify with masking and redact** the image file parsed in.
+
+NOTE: this code can be refined for better performance, such as removing the need to connect to the API client for each method etc, but for the demonstration purposes it is easier to breakdown and explain.
+
+```text package au.com.gcp.dlp; import com.google.cloud.dlp.v2.DlpServiceClient; import com.google.privacy.dlp.v2.\*; import com.google.privacy.dlp.v2.ByteContentItem.BytesType; import com.google.protobuf.ByteString; import java.io.FileInputStream; import java.io.FileOutputStream; import java.util.ArrayList; import java.util.List; public class InspectImageFile &#123; public static void inspectImageFile(String projectId, String filePath) &#123; // Initialize client that will be used to send requests. This client only needs to be created // once, and can be reused for multiple requests. After completing all of your requests, call // the "close" method on the client to safely clean up any remaining background resources. try (DlpServiceClient dlp = DlpServiceClient.create()) &#123; // Specify the project used for request. ProjectName project = ProjectName.of(projectId); // Specify the type and content to be inspected. ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath)); ByteContentItem byteItem = ByteContentItem.newBuilder() .setType(BytesType.IMAGE\_JPEG) .setData(fileBytes) .build(); ContentItem item = ContentItem.newBuilder() .setByteItem(byteItem) .build(); // Specify the type of info the inspection will look for. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT\_CARD\_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; // Construct the configuration for the Inspect request. InspectConfig config = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .setIncludeQuote(true) .build(); // Construct the Inspect request to be sent by the client. InspectContentRequest request = InspectContentRequest.newBuilder() .setParent(project.toString()) .setItem(item) .setInspectConfig(config) .build(); // Use the client to send the API request. InspectContentResponse response = dlp.inspectContent(request); // Parse the response and process results System.out.println("Findings: " + response.getResult().getFindingsCount()); for (Finding f : response.getResult().getFindingsList()) &#123; System.out.println("\\tQuote: " + f.getQuote()); System.out.println("\\tInfo type: " + f.getInfoType().getName()); System.out.println("\\tLikelihood: " + f.getLikelihood()); deIdentifyWithMask(f.getQuote(), '\*', f.getQuote().length(), projectId); &#125; &#125; catch (Exception e) &#123; System.out.println("Error during inspectFile: \\n" + e.toString()); &#125; &#125; private static void deIdentifyWithMask( String value, Character maskingCharacter, int numberToMask, String projectId) &#123; // instantiate a client try (DlpServiceClient dlpServiceClient = DlpServiceClient.create()) &#123; ContentItem contentItem = ContentItem.newBuilder().setValue(value).build(); CharacterMaskConfig characterMaskConfig = CharacterMaskConfig.newBuilder() .setMaskingCharacter(maskingCharacter.toString()) .setNumberToMask(numberToMask) .build(); // Create the deidentification transformation configuration PrimitiveTransformation primitiveTransformation = PrimitiveTransformation.newBuilder().setCharacterMaskConfig(characterMaskConfig).build(); InfoTypeTransformations.InfoTypeTransformation infoTypeTransformationObject = InfoTypeTransformations.InfoTypeTransformation.newBuilder() .setPrimitiveTransformation(primitiveTransformation) .build(); InfoTypeTransformations infoTypeTransformationArray = InfoTypeTransformations.newBuilder() .addTransformations(infoTypeTransformationObject) .build(); // Specify the type of info the inspection will look for. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT\_CARD\_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; InspectConfig inspectConfig = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .build(); DeidentifyConfig deidentifyConfig = DeidentifyConfig.newBuilder() .setInfoTypeTransformations(infoTypeTransformationArray) .build(); // Create the deidentification request object DeidentifyContentRequest request = DeidentifyContentRequest.newBuilder() .setParent(ProjectName.of(projectId).toString()) .setInspectConfig(inspectConfig) .setDeidentifyConfig(deidentifyConfig) .setItem(contentItem) .build(); // Execute the deidentification request DeidentifyContentResponse response = dlpServiceClient.deidentifyContent(request); // Print the character-masked input value // e.g. "My SSN is 123456789" --> "My SSN is \*\*\*\*\*\*\*\*\*" String result = response.getItem().getValue(); System.out.println("\\tMasked: " +result); &#125; catch (Exception e) &#123; System.out.println("Error in deidentifyWithMask: " + e.getMessage()); &#125; &#125; public static void redactImageFile(String projectId, String filePath, String outputFilePath) &#123; // Initialize client that will be used to send requests. This client only needs to be created // once, and can be reused for multiple requests. After completing all of your requests, call // the "close" method on the client to safely clean up any remaining background resources. try (DlpServiceClient dlp = DlpServiceClient.create()) &#123; // Specify the project used for request. ProjectName project = ProjectName.of(projectId); // Specify the content to be inspected. ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath)); ByteContentItem byteItem = ByteContentItem.newBuilder().setType(BytesType.IMAGE).setData(fileBytes).build(); // Specify the type of info and likelihood necessary to redact. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT\_CARD\_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; InspectConfig config = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .setMinLikelihood(Likelihood.LIKELY) .build(); // Construct the Redact request to be sent by the client. RedactImageRequest request = RedactImageRequest.newBuilder() .setParent(project.toString()) .setByteItem(byteItem) .setInspectConfig(config) .build(); // Use the client to send the API request. RedactImageResponse response = dlp.redactImage(request); // Parse the response and process results. FileOutputStream redacted = new FileOutputStream(outputFilePath); redacted.write(response.getRedactedImage().toByteArray()); redacted.close(); System.out.println("\\tRedacted image written to: " + outputFilePath); &#125; catch (Exception e) &#123; System.out.println("Error during inspectFile: \\n" + e.toString()); &#125; &#125; &#125; ```
+
+Now, let's look at each method separately in greater detail.
+
+### Inspect Image
+
+What is happening here is quite simple:
+
+1.  A connection to the API is established with **DlpServiceClient.create()**
+2.  A image containing the sensitive data in loaded into a stream new **FileInputStream(filePath)**
+3.  The image in then constructed into a content item ready for inspection **ContentItem.newBuilder()**
+4.  The info types are specified on what sensitive data the API is looking for **InfoType.newBuilder().setName(typeName).build()**
+5.  The request in constructed **InspectContentRequest.newBuilder()**
+6.  The request is executed made to the API **dlp.inspectContent(request)**
+7.  The results returned from the request are iterated over **response.getResult().getFindingsList()**
+8.  Each finding is printed **Quote, InfoType and Likelihood** as you see in Test Case #2
+9.  A call to then execute the deidentification is performed **deIdentifyWithMask(f.getQuote(), '\*', f.getQuote().length(), projectId)**
+
+```text public static void inspectImageFile(String projectId, String filePath) &#123; // Initialize client that will be used to send requests. This client only needs to be created // once, and can be reused for multiple requests. After completing all of your requests, call // the "close" method on the client to safely clean up any remaining background resources. try (DlpServiceClient dlp = DlpServiceClient.create()) &#123; // Specify the project used for request. ProjectName project = ProjectName.of(projectId); // Specify the type and content to be inspected. ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath)); ByteContentItem byteItem = ByteContentItem.newBuilder() .setType(BytesType.IMAGE\_JPEG) .setData(fileBytes) .build(); ContentItem item = ContentItem.newBuilder() .setByteItem(byteItem) .build(); // Specify the type of info the inspection will look for. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT\_CARD\_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; // Construct the configuration for the Inspect request. InspectConfig config = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .setIncludeQuote(true) .build(); // Construct the Inspect request to be sent by the client. InspectContentRequest request = InspectContentRequest.newBuilder() .setParent(project.toString()) .setItem(item) .setInspectConfig(config) .build(); // Use the client to send the API request. InspectContentResponse response = dlp.inspectContent(request); // Parse the response and process results System.out.println("Findings: " + response.getResult().getFindingsCount()); for (Finding f : response.getResult().getFindingsList()) &#123; System.out.println("\\tQuote: " + f.getQuote()); System.out.println("\\tInfo type: " + f.getInfoType().getName()); System.out.println("\\tLikelihood: " + f.getLikelihood()); deIdentifyWithMask(f.getQuote(), '\*', f.getQuote().length(), projectId); &#125; &#125; catch (Exception e) &#123; System.out.println("Error during inspectFile: \\n" + e.toString()); &#125; &#125; ```
+
+### Deidentity with Mask
+
+Similar to the inspect image, what is happening here is quite simple as well:
+
+1.  A connection to the API is established with **DlpServiceClient.create()**
+2.  The value in then constructed into a content item ready for inspection **ContentItem.newBuilder()**
+3.  The mask is then constructed **CharacterMaskConfig.newBuilder()** into a configuration item
+4.  The info types are specified on what sensitive data the API is looking for **InfoType.newBuilder().setName(typeName).build()**
+5.  The request in constructed **DeidentifyContentRequest.newBuilder()**
+6.  The request is executed made to the API **dlpServiceClient.deidentifyContent(request)**
+7.  The result returned from the request is printed **response.getItem().getValue()**
+
+```text private static void deIdentifyWithMask( String value, Character maskingCharacter, int numberToMask, String projectId) &#123; // instantiate a client try (DlpServiceClient dlpServiceClient = DlpServiceClient.create()) &#123; ContentItem contentItem = ContentItem.newBuilder().setValue(value).build(); CharacterMaskConfig characterMaskConfig = CharacterMaskConfig.newBuilder() .setMaskingCharacter(maskingCharacter.toString()) .setNumberToMask(numberToMask) .build(); // Create the deidentification transformation configuration PrimitiveTransformation primitiveTransformation = PrimitiveTransformation.newBuilder().setCharacterMaskConfig(characterMaskConfig).build(); InfoTypeTransformations.InfoTypeTransformation infoTypeTransformationObject = InfoTypeTransformations.InfoTypeTransformation.newBuilder() .setPrimitiveTransformation(primitiveTransformation) .build(); InfoTypeTransformations infoTypeTransformationArray = InfoTypeTransformations.newBuilder() .addTransformations(infoTypeTransformationObject) .build(); // Specify the type of info the inspection will look for. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT\_CARD\_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; InspectConfig inspectConfig = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .build(); DeidentifyConfig deidentifyConfig = DeidentifyConfig.newBuilder() .setInfoTypeTransformations(infoTypeTransformationArray) .build(); // Create the deidentification request object DeidentifyContentRequest request = DeidentifyContentRequest.newBuilder() .setParent(ProjectName.of(projectId).toString()) .setInspectConfig(inspectConfig) .setDeidentifyConfig(deidentifyConfig) .setItem(contentItem) .build(); // Execute the deidentification request DeidentifyContentResponse response = dlpServiceClient.deidentifyContent(request); // Print the character-masked input value // e.g. "My SSN is 123456789" --> "My SSN is \*\*\*\*\*\*\*\*\*" String result = response.getItem().getValue(); System.out.println("\\tMasked: " +result); &#125; catch (Exception e) &#123; System.out.println("Error in deidentifyWithMask: " + e.getMessage()); &#125; &#125; ```
+
+### Redact
+
+Similar to the inspect image, what is happening here is quite simple as well:
+
+1.  A connection to the API is established with **DlpServiceClient.create()**
+2.  A image containing the sensitive data in loaded into a stream new **FileInputStream(filePath)**
+3.  The image in then constructed into a content item ready for inspection **ByteContentItem.newBuilder()**
+4.  The info types are specified on what sensitive data the API is looking for **InfoType.newBuilder().setName(typeName).build()**
+5.  The request in constructed **RedactImageRequest.newBuilder()**
+6.  The request is executed made to the API **dlp.redactImage(request)**
+7.  The redacted image is written to a stream which is written to the disk **new FileOutputStream(outputFilePath)**
+
+```text public static void redactImageFile(String projectId, String filePath, String outputFilePath) &#123; // Initialize client that will be used to send requests. This client only needs to be created // once, and can be reused for multiple requests. After completing all of your requests, call // the "close" method on the client to safely clean up any remaining background resources. try (DlpServiceClient dlp = DlpServiceClient.create()) &#123; // Specify the project used for request. ProjectName project = ProjectName.of(projectId); // Specify the content to be inspected. ByteString fileBytes = ByteString.readFrom(new FileInputStream(filePath)); ByteContentItem byteItem = ByteContentItem.newBuilder().setType(BytesType.IMAGE).setData(fileBytes).build(); // Specify the type of info and likelihood necessary to redact. List<InfoType> infoTypes = new ArrayList<>(); // See https://cloud.google.com/dlp/docs/infotypes-reference for complete list of info types for (String typeName : new String\[\] &#123;"CREDIT\_CARD\_NUMBER"&#125;) &#123; infoTypes.add(InfoType.newBuilder().setName(typeName).build()); &#125; InspectConfig config = InspectConfig.newBuilder() .addAllInfoTypes(infoTypes) .setMinLikelihood(Likelihood.LIKELY) .build(); // Construct the Redact request to be sent by the client. RedactImageRequest request = RedactImageRequest.newBuilder() .setParent(project.toString()) .setByteItem(byteItem) .setInspectConfig(config) .build(); // Use the client to send the API request. RedactImageResponse response = dlp.redactImage(request); // Parse the response and process results. FileOutputStream redacted = new FileOutputStream(outputFilePath); redacted.write(response.getRedactedImage().toByteArray()); redacted.close(); System.out.println("\\tRedacted image written to: " + outputFilePath); &#125; catch (Exception e) &#123; System.out.println("Error during inspectFile: \\n" + e.toString()); &#125; &#125; &#125; ```
+
+## Conclusion
+
+What I believe is that the inspection of [images for sensitive data](https://cloud.google.com/dlp/docs/inspecting-images) is still quite immature and over time, most likely through the help of machine learning will be able to improve its detection capabilities and provide reliable outcome. The results as it currently is, are not reliable and consistent enough in the detection.
+
+While the photos I uploaded are not perfect I think they are pretty clear.
+
+As you can image most of the use cases for Google Data Loss Prevention API with images would be individuals uploading them to a platform for:
+
+*   Purposes of verification
+*   Matching of data inputed to actual physical entity supporting validation etc
+*   If you fall under compliance
+*   Simply want to restrict the sensitive data that is stored by you as a business
+
+As it is, it has to many unsuccessful results to be usable, there is also the external factor such as the capture of the image the produced different results based of the angle in which the image was captured or how the light reflects and doesn't illuminate enough.
+
+It is also missing key info types such as CVV/CVC numbers, which appears on the front of certain cards such as in **Test Case #3**. For a list of support info types refer to [https://cloud.google.com/dlp/docs/infotypes-reference](https://cloud.google.com/dlp/docs/infotypes-reference)
+
+I do think this is a very good API and with the additional training has fantastic potential, but for now I would just use this API for [text based](https://cloud.google.com/dlp/docs/inspecting-text) detection or [storage and database](https://cloud.google.com/dlp/docs/inspecting-storage) detection and wait until the [image detection](https://cloud.google.com/dlp/docs/inspecting-images) has matured.
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.blog/)
