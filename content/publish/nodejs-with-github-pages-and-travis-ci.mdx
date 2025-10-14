@@ -10,11 +10,13 @@ When trying to find instructions on how to publish into Github Pages, I found th
 
 I thought it would be good to write a guide on publishing a static site into Github Pages and hopefully eliminate any confusion in trying to do so.
 
+---
+
 ## Before you start
 
 About this post:
 
-*   2 – 7 min average reading time
+*   2 – 7-min average reading time
 *   Suitable for beginner’s through to advanced
 
 What you will gain reading this post:
@@ -27,6 +29,8 @@ What you can do to help support:
 *   **Follow this blog** to receive notifications of new postings
 
 Now, let’s get started.
+
+---
 
 ## **Steps**
 
@@ -52,11 +56,35 @@ Now, let’s get started.
 
 ![Github settings github pages Diagram](/blog/nodejs-with-github-pages-and-travis-ci/inline-4.png)
 
+---
+
 ## **Let me break it down**
 
 In short all the hard work is done in Travis CI, meaning...
 
-`language: node_js   install:   - npm install   script:   - npm install codecov -g   - npm run test   - npm run styleguide:build   after_success:   - codecov   deploy:   provider: pages   skip-cleanup: true   github-token: $GITHUB_TOKEN # Set in travis-ci.org dashboard, marked secure   keep-history: true   local-dir: styleguide`
+```yaml
+language: node_js
+node_js:
+  - "lts/*"
+
+install:
+  - npm install
+
+script:
+  - npm install -g codecov
+  - npm run test
+  - npm run styleguide:build
+
+after_success:
+  - codecov
+
+deploy:
+  provider: pages
+  skip_cleanup: true
+  github_token: $GITHUB_TOKEN  # Set this in the Travis CI settings (Repository > Settings > Environment Variables)
+  keep_history: true
+  local_dir: styleguide
+```
 
 **language**: Tells Travis CI that the project is a node project and will make available node and npm
 
@@ -76,6 +104,8 @@ In short all the hard work is done in Travis CI, meaning...
 
 **Congratulations**, on publishing a static site with Github Pages and Travis CI.
 
+---
+
 ## **Benefits**
 
 *   Easy, quick and simple to setup with none to minimal maintenance
@@ -83,10 +113,14 @@ In short all the hard work is done in Travis CI, meaning...
 *   Automated deployment of your static site every time you push your code to Github
 *   Free hosting of your static site
 
+---
+
 ## **References**
 
 [Travis CI to Github Pages deployment documentation](https://docs.travis-ci.com/user/deployment/pages/)  
 [Github Pages documentation](https://help.github.com/articles/configuring-a-publishing-source-for-github-pages/)
+
+---
 
 ## Did this help?
 

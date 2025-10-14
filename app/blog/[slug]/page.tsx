@@ -1,17 +1,18 @@
+// app/blog/[slug]/page.tsx
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
 import remarkGfm from "remark-gfm";
 import rehypeSlug from "rehype-slug";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
-import rehypeRaw from "rehype-raw"; // keep if your MDX contains raw HTML
 import { MDXRemote } from "next-mdx-remote/rsc";
 import BlogLayout from "@/components/portfolio/blog/[slug]/blog-layout";
 import CodeBlock from "@/components/common/code-block";
+import CloudComparisonTable from "@/components/common/cloud-comparison-table";
+import cloudData from "@/content/data/cloud-services.json";
 
 const PUBLISH_DIR = path.join(process.cwd(), "content/publish");
 
-// Pre-render all slugs for static export
 export async function generateStaticParams() {
   return fs
     .readdirSync(PUBLISH_DIR)
@@ -19,35 +20,26 @@ export async function generateStaticParams() {
     .map((file) => ({ slug: file.replace(/\.mdx?$/, "") }));
 }
 
-// MDX components
 const mdxComponents = {
-  // Headings (styled)
   h1: (p: any) => <h1 {...p} className="mt-10 mb-4 text-3xl font-extrabold leading-tight" />,
   h2: (p: any) => <h2 {...p} className="mt-8 mb-3 text-2xl font-bold leading-snug" />,
   h3: (p: any) => <h3 {...p} className="mt-6 mb-2 text-xl font-semibold" />,
-
-  // Inline code stays inline (no <pre>!)
   code: (p: any) => <code {...p} />,
-
-  // Fenced code blocks: MDX renders <pre><code class="language-xxx">...</code></pre>
-  // We intercept <pre> and hand the inner text to our CodeBlock
   pre: (p: any) => {
     const child = p?.children?.props ?? {};
-    const lang =
-      typeof child.className === "string" && child.className.startsWith("language-")
-        ? child.className.replace("language-", "")
-        : "text";
-
-    // child.children can be string or array; normalize to string
+    const lang = typeof child.className === "string" && child.className.startsWith("language-")
+      ? child.className.replace("language-", "")
+      : "text";
     const code =
       typeof child.children === "string"
         ? child.children
         : Array.isArray(child.children)
           ? child.children.join("")
           : String(child.children ?? "");
-
     return <CodeBlock language={lang} value={code} />;
   },
+  // expose your table to MDX
+  CloudComparisonTable: () => <CloudComparisonTable data={cloudData} />,
 };
 
 export default async function PostPage({ params }: { params: { slug: string } }) {
@@ -63,15 +55,13 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
   return (
     <BlogLayout title={data.title} date={data.date} feature_image={data.feature_image}>
-      <article
-        className="
-          prose prose-neutral dark:prose-invert max-w-none
-          prose-pre:bg-gray-900 prose-pre:text-gray-100
-          prose-code:before:content-none prose-code:after:content-none
-          [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-1.5
-          [&_p]:my-4 prose-headings:mt-8 prose-headings:mb-3
-        "
-      >
+      <article className="
+        prose prose-neutral dark:prose-invert max-w-none
+        prose-pre:bg-gray-900 prose-pre:text-gray-100
+        prose-code:before:content-none prose-code:after:content-none
+        [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-1.5
+        [&_p]:my-4 prose-headings:mt-8 prose-headings:mb-3
+      ">
         <MDXRemote
           source={normalized}
           components={mdxComponents}
@@ -81,7 +71,6 @@ export default async function PostPage({ params }: { params: { slug: string } })
               rehypePlugins: [
                 rehypeSlug,
                 [rehypeAutolinkHeadings, { behavior: "wrap" }],
-                rehypeRaw, // keep only if you really need raw HTML from WordPress
               ],
               format: "mdx",
             },

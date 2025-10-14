@@ -12,7 +12,7 @@ Welcome to the "DNS Deep Dive" series! In this comprehensive exploration, we wil
 
 About this post:
 
-*   10 – 20 min average reading time
+*   10 – 20-min average reading time
 *   Suitable for intermediate through to advanced
 
 What you will gain reading this post:
@@ -26,17 +26,23 @@ What you can do to help support:
 
 Now, let’s get started.
 
+---
+
 ## What is DNS?
 
 The acronym DNS stands for "Domain Name System".
 
 To better relate to this you can think of it as a "address book" where you lookup a **name** that is tied to a unique **address** that you use for communicating with an individual, however this "address book" is for the internet and when you enter a domain **name** such as [robertleggett.blog](http://robertleggett.blog) into a browser, it will be translated to the tied unique IP **address** which it will use to communicate to a machine and serve up content that is hosted on it, in this instance my blog.
 
+---
+
 ## Why do we need DNS?
 
 Without DNS the Internet would be much more difficult to navigate.
 
 We would need to remember what the IP **address** is to access a particular device and with dynamic IP addresses continuously changing, we would not be able to rely on the IP address that we have remembered. This is where DNS plays a fundamental part in the way that we use the Internet.
+
+---
 
 ## How does DNS work?
 
@@ -68,11 +74,13 @@ DNS Sequence Flow
 10.  The browser sends a request for robertleggett.blog to the IP address that it got from the DNS resolver.
 11.  The server or other resource at 192.145.82.18 returns the website for robertleggett.blog to the browser which displays the page.
 
+---
+
 ## Okay, what terminology do I need to understand before progressing?
 
 ### What is a Domain Name?
 
-A domain name is a human readable name that is used to represent an identity or brand and is used to identity Internet resources.
+A domain name is a human-readable name that is used to represent an identity or brand and is used to identity Internet resources.
 
 For a domain name to work it must be registered and unique.
 
@@ -114,7 +122,7 @@ The lower level domain, second to the nth, is handled by the **TLD Nameserver**,
 
 A IP address is a unique **address** for identifying a device on a network. Having an IP address allows different devices to communicate with one another that support the Internet Protocol.
 
-Presented in a human readable format, an IP address can be static which is a non changing address or dynamic which is a changing address, in most cases IP addresses are dynamic and often changing.
+Presented in a human-readable format, an IP address can be static which is a non changing address or dynamic which is a changing address, in most cases IP addresses are dynamic and often changing.
 
 IP addresses are represented in two possible standards, IPv4 or IPv6.
 
@@ -124,11 +132,13 @@ An example of this is as follows **129.167.25.7**
 
 IPv6 consists of 128 binary bits (2^128) and is presented as eight groups of hexadecimal numbers with each number separated by a colon.
 
-An example of this is as follows **2001:0dbf:4321:0000:0000:0000:0000:0000** or it could also be represented as **2001:dbf:4321::**
+An example of this is as follows **2001:0dbf:4321:0000:0000:0000:0000:0000,** or it could also be represented as **2001:dbf:4321::**
 
 Due to the increase of devices on the Internet there was a concern of exhausting the number of IP addresses that IPv4 can produce, therefore IPv6 was developed with the vision to replace IPv4.
 
 While this has been the vision it is important to know that for the foreseeable future the Internet is expected to be running both IPv4 and IPv6 IP addresses.
+
+---
 
 ## Okay, now what are the different components that make up DNS?
 
@@ -233,7 +243,7 @@ Root hint files are used to configure DNS Resolvers to know how to locate Root N
 Root hints are a list of Authoritative Nameservers, typically the Root Nameservers, stored in a root hint file configured in the DNS Resolver
 
 *   They are used to resolve queries for zones that do not exist on the DNS server
-*   Also only when forwarders are not configured or it has a failure to respond
+*   Also, only when forwarders are not configured, or it has a failure to respond
 
 ![DNS forwarders and root hint flow Diagram](/blog/deep-dive-dns/inline-8.png)
 
@@ -354,6 +364,8 @@ A Service record is a specification of data defining the location, i.e., the hos
 #### TXT Record (Text Record)
 
 This is a bit of a catch-all record, not intended to direct any traffic, but instead to provide information to external sources. It serves several different purposes depending on your needs.
+
+---
 
 ## Finally, we made it, did this help?
 

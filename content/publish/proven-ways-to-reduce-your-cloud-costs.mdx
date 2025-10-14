@@ -8,11 +8,13 @@ feature_image: "/blog/proven-ways-to-reduce-your-cloud-costs/feature-image.png"
 
 In the realm of cloud computing, one aspect that excites us all is the potential for cost savings. The allure of achieving remarkable benefits with minimal effort is undeniable. With the abundance of cloud providers available, hosting solutions in the cloud not only offers unparalleled flexibility, reliability, and scalability, but it also presents a more cost-effective alternative to maintaining the same solution in a traditional data center over time. The key lies in leveraging the cloud effectively to optimize your costs. In this article, we will explore several proven strategies for optimizing and reducing your cloud costs. By identifying these optimization opportunities, we aim to empower you to unlock savings and fully enjoy the advantages of cloud computing. Join us as we embark on a journey to maximize the value of your cloud investments while minimizing expenditure. Let's delve into the realm of cloud cost optimization and unleash its potential together.
 
+---
+
 ## Before you start
 
 About this post:
 
-*   5 – 15 min average reading time
+*   5 – 15-min average reading time
 *   Suitable for intermediate through to advanced
 
 What you will gain reading this post:
@@ -26,6 +28,8 @@ What you can do to help support:
 
 Now, let’s get started.
 
+---
+
 ## Startup and Shutdown
 
 *   Difficulty to adopt: **1** out of 10 (manual), **3** out of 10 (automated)
@@ -35,7 +39,7 @@ If you are running VM instances here are a few important consideration to make b
 
 Will your data be deleted if you start or stop your instance, meaning is it using a persistent storage or ephemeral?
 
-Does your instances need to be running 24/7 or are there times where they are not used? If you determine you are in a position to start and stop instances this is a simple and effective way to reduce your cloud costs.
+Do your instances need to be running 24/7 or are there times when they are not used? If you determine you are in a position to start and stop instances this is a simple and effective way to reduce your cloud costs.
 
 AWS does not charge for [STOPPED](https://docs.amazonaws.cn/en_us/AWSEC2/latest/UserGuide/Stop_Start.html) instances, GCP does not charge for [TERMINATED](https://cloud.google.com/compute/docs/instances/stop-start-instance) instances, and Azure does not charge for [STOPPED (Deallocated)](https://blogs.technet.microsoft.com/keithmayer/2013/06/19/best-of-teched-2013-windows-azure-new-choices-and-flexibility-for-stopped-vms/) instances. However, you must remember that other resources like persistent disk and static IPs will still incur a cost.
 
@@ -47,12 +51,14 @@ Check out the following guides to help automate this approach.
 
 **This is a proven way where large cost savings can be made.**
 
+---
+
 ## Scaling
 
 *   Difficulty to adopt: **2** out of 10
-*   Limitations: Only a subset of cloud services support scaling to zero and solutions must be build to run in those services
+*   Limitations: Only a subset of cloud services support scaling to zero and solutions must be built to run in those services
 
-If you have times where you are not receiving any traffic, the result is you are paying for resources that you actual don't require.
+If you have times when you are not receiving any traffic, the result is you are paying for resources that you actually don't require.
 
 However rather than scheduling startup and shutdowns, for reasons such as, you have unpredictable traffic flow and/or require the ability to scale up quickly to support an influx of traffic. You can make use of scaling down to zero.
 
@@ -64,12 +70,14 @@ For the other cloud providers, AWS and Azure it may be possible, however I haven
 
 **This is a proven way where large cost savings can be made.**
 
+---
+
 ## Spot and Reserved Instances
 
 *   Difficulty to adopt: **5** out of 10
 *   Limitations: With Spot instances the workloads need to be flexible, they must be able to support unscheduled shutdowns, there is no guarantee on next spot instance availability. With Reserved instances, you are committed for a period or time, and to make the most of the savings you need to be sure on the capacity you are reserving.
 
-Do you have non critical workloads that can be stopped and commenced at a later time? Spot instances for heavy non critical work loads are actually a better way to control costs. Does your workflow run in containers?
+Do you have non-critical workloads that can be stopped and commenced at a later time? Spot instances for heavy non critical work loads are actually a better way to control costs. Does your workflow run in containers?
 
 See how you can still use containers with spot instances in [AWS](https://aws.amazon.com/ec2/spot/containers-for-less/) and [GCP](https://cloud.google.com/kubernetes-engine/docs/how-to/preemptible-vms) to further reduce your cloud costs. Better yet you can mix these instances with on demand and reserved instances, check out these examples from [AWS](https://aws.amazon.com/blogs/compute/run-your-kubernetes-workloads-on-amazon-ec2-spot-instances-with-amazon-eks/) and [GCP](https://cloud.google.com/blog/products/containers-kubernetes/cutting-costs-with-google-kubernetes-engine-using-the-cluster-autoscaler-and-preemptible-vms) for possible strategies.
 
@@ -79,11 +87,13 @@ Do you have workloads that you know will be running for a 1 - 3 year timeframe? 
 
 If that is the case, then reserved instances are the better option for you to significantly be able to reduce your cloud costs.
 
-Does you workflow run in containers?
+Do you workflow run in containers?
 
 Try checking out [this](https://www.replex.io/blog/the-ultimate-kubernetes-cost-guide-aws-vs-gce-vs-azure-vs-digital-ocean) detailed cost breakdown of running on-demand and reserved instances in both managed and non managed containers for each Cloud Provider, and see the cost savings.
 
 **This is a proven way where large cost savings can be made.**
+
+---
 
 ## Serverless
 
@@ -101,7 +111,7 @@ Metrics and analytics play a vital role in the decisions we make and when determ
 
 [GCP](https://cloud.google.com/resource-manager/docs/creating-managing-labels), [AWS](https://docs.aws.amazon.com/lambda/latest/dg/tagging.html) and [Azure](https://docs.microsoft.com/en-us/azure/cloud-adoption-framework/decision-guides/resource-tagging/) all support tagging of the resources providing you a way to track costing of individual functions and help you determine which functions are costing you the most.
 
-Be sure to checkout this great [use case and journey](https://medium.com/foxintelligence-inside/how-we-reduced-lambda-functions-costs-by-thousands-of-dollars-8279b0a69931) post, saving them thousands through optimisation.
+Be sure to check out this great [use case and journey](https://medium.com/foxintelligence-inside/how-we-reduced-lambda-functions-costs-by-thousands-of-dollars-8279b0a69931) post, saving them thousands through optimisation.
 
 Influencing factors such as execution time and resource consumption (memory and CPU), vastly affect the cost.
 
@@ -111,8 +121,8 @@ The formula is **total cost = invocations + execution time + networking**
 256MB memory  
 300 ms execution time
 
-\- Invocations (2,000,000 \* $0.0000002)  
-\- GB seconds (150,000 \* $0.0000166667)
+- Invocations (2,000,000 * $0.0000002)
+- GB seconds (150,000 * $0.0000166667)
 
 $0.40  
 $2.50
@@ -120,8 +130,8 @@ $2.50
 256MB memory  
 500 ms execution time
 
-\- Invocations (2,000,000 \* $0.0000002)  
-\- GB seconds (250,000 \* $0.0000166667)
+- Invocations (2,000,000 * $0.0000002)
+- GB seconds (250,000 * $0.0000166667)
 
 $0.40  
 $4.17
@@ -129,8 +139,8 @@ $4.17
 512MB memory  
 300 ms execution time
 
-\- Invocations (2,000,000 \* $0.0000002)  
-\- GB seconds (300,000 \* $0.0000166667)
+- Invocations (2,000,000 * $0.0000002)
+- GB seconds (300,000 * $0.0000166667)
 
 $0.40  
 $5.00
@@ -140,9 +150,9 @@ $5.00
 (400MHz CPU)  
 300 ms execution time
 
-\- Invocations (2,000,000 \* $0.0000004)  
-\- GB seconds (150,000 \* $0.0000025)  
-\- GHz seconds (240,000 \* $0.0000100)
+- Invocations (2,000,000 * $0.0000004)
+- GB seconds (150,000 * $0.0000025)
+- GHz seconds (240,000 * $0.0000100)
 
 $0.80  
 $0.38  
@@ -152,9 +162,9 @@ $2.40
 (400MHz CPU)  
 500 ms execution time
 
-\- Invocations (2,000,000 \* $0.0000004)  
-\- GB seconds (250,000 \* $0.0000025)  
-\- GHz seconds (400,000 \* $0.0000100)
+- Invocations (2,000,000 * $0.0000004)
+- GB seconds (250,000 * $0.0000025)
+- GHz seconds (400,000 * $0.0000100)
 
 $0.80  
 $0.63  
@@ -164,9 +174,9 @@ $4.00
 (800MHz CPU)  
 300 ms execution time
 
-\- Invocations (2,000,000 \* $0.0000004)  
-\- GB seconds (300,000 \* $0.0000025)  
-\- GHz seconds (480,000 \* $0.0000100)
+- Invocations (2,000,000 * $0.0000004)
+- GB seconds (300,000 * $0.0000025)
+- GHz seconds (480,000 * $0.0000100)
 
 $0.80  
 $0.75  
@@ -176,8 +186,8 @@ $4.80
 256MB memory  
 300 ms execution time
 
-\- Invocations (2,000,000 \* $0.0000002)  
-\- GB seconds (150,000 \* $0.000016)
+- Invocations (2,000,000 * $0.0000002)
+- GB seconds (150,000 * $0.000016)
 
 $0.40  
 $2.40
@@ -185,8 +195,8 @@ $2.40
 256MB memory  
 500 ms execution time
 
-\- Invocations (2,000,000 \* $0.0000002)  
-\- GB seconds (250,000 \* $0.000016)
+- Invocations (2,000,000 * $0.0000002)
+- GB seconds (250,000 * $0.000016)
 
 $0.40  
 $4.00
@@ -194,8 +204,8 @@ $4.00
 512MB memory  
 300 ms execution time
 
-\- Invocations (2,000,000 \* $0.0000002)  
-\- GB seconds (300,000 \* $0.000016)
+- Invocations (2,000,000 * $0.0000002)
+- GB seconds (300,000 * $0.000016)
 
 $0.40  
 $4.80
@@ -211,6 +221,8 @@ It is also worth noting that the above calculations do not include network data 
 However, if you are to take away one point take away **optimising functions is essential**, and can provide great cost savings.
 
 **This is a proven way where large cost savings can be made.**
+
+---
 
 ## Sizing and Type
 
@@ -229,6 +241,8 @@ Ensure you have adequate **metics** to determine you are utilising the instances
 
 For sizing and types [GCP](https://cloud.google.com/compute/vm-instance-pricing), [AWS](https://aws.amazon.com/ec2/pricing/) and [Azure](https://azure.microsoft.com/en-au/pricing/details/virtual-machines/linux/) all support it.
 
+---
+
 ## Hosting
 
 *   Difficultly to adopt: **2** out of 10
@@ -244,6 +258,8 @@ Today, many websites are **static** and don't require to be hosted on web server
 From a cloud costing perspective this means that the cost of storage in a Bucket is a much cheaper option as opposed to running on a server instance or containers.
 
 Check out the [AWS](https://aws.amazon.com/getting-started/projects/host-static-website/), [GCP](https://cloud.google.com/storage/docs/hosting-static-website) and [Azure](https://docs.microsoft.com/en-us/azure/storage/blobs/storage-blob-static-website) guides on hosting a static website.
+
+---
 
 ## Archive data and use lifecycle policies
 
@@ -261,31 +277,31 @@ In this example, referring to the table below, this does not contain **all** the
 
 **AWS**
 
-50 TB (50000 GB) Standard Storage \* $0.023 per GB
+50 TB (50000 GB) Standard Storage * $0.023 per GB
 
 $1,150.00
 
-50 TB (50000 GB) Standard I/A Storage \* $0.0125 per GB
+50 TB (50000 GB) Standard I/A Storage * $0.0125 per GB
 
 $625.00
 
 **GCP**
 
-60 TB (61440 GB) Standard Storage \* $0.026 per GB
+60 TB (61440 GB) Standard Storage * $0.026 per GB
 
 $1,597.44
 
-60 TB (61440 GB) Nearline Storage \* $0.010 per GB
+60 TB (61440 GB) Nearline Storage * $0.010 per GB
 
 $614.40
 
 **Azure**
 
-50 TB (50000 GB) Hot Storage \* $0.0253 per GB
+50 TB (50000 GB) Hot Storage * $0.0253 per GB
 
 $1,265.00
 
-50 TB (50000 GB) Cold Storage \* $0.01373 per GB
+50 TB (50000 GB) Cold Storage * $0.01373 per GB
 
 $686.50
 
@@ -296,6 +312,8 @@ Additionally, it is important to be aware that frequently accessing the data fro
 Also to benefit from the savings it is important to use the different tiers following their recommended use cases.
 
 **This is a proven way where large cost savings can be made.**
+
+---
 
 ## Create a new account per product
 
@@ -312,11 +330,15 @@ If you want to link all of your free accounts to an Organisation to remove the m
 
 The cost savings come with each cloud provider supplying additional savings, be it free credit such as [GCP](https://cloud.google.com/free/) or [Azure](https://azure.microsoft.com/en-us/free/) or additional service usage such as [AWS](https://aws.amazon.com/free/?all-free-tier.sort-by=item.additionalFields.SortRank&all-free-tier.sort-order=asc) you can have further reduced cloud costs in the first 12 month.
 
+---
+
 ## Conclusion
 
 In short, there are some areas you most likely have addressed, there is also a high probability that you have the ability to optimise and improve on some of these proven ways mentioned through out this post, even to the point of reviewing services you are running in certain Cloud Providers and potentially making a switch, and as a result, you could potential reduce your cloud costs by **thousands** of dollars.
 
 No matter your current situation, I highly recommend you review your current environment and have in place the **adequate metrics** in place to capture areas of **optimisation** in the ever growing services and reap the benefits of a much nicer cloud bill.
+
+---
 
 ## Did this help?
 

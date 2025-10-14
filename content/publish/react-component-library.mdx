@@ -8,11 +8,13 @@ feature_image: "/blog/react-component-library/feature-image.png"
 
 Within the vast realm of software development, numerous companies and individuals have contributed remarkable component libraries, generously shared and readily available on GitHub. These repositories stand as testament to the collaborative nature of our industry and the collective pursuit of excellence. In this article, however, our focus is to delve deeper into the concept of component libraries. We aim to provide comprehensive guidance to those who aspire to embark on their own journey of creating and curating a component library. By exploring this topic in greater detail, we will uncover the underlying principles, best practices, and valuable insights that will empower you to build your own library with confidence. Join us on this enlightening expedition as we unlock the power of component libraries and pave the way for a more efficient, scalable, and collaborative software development landscape. Let's embark on this enriching journey together.
 
+---
+
 ## Before you start
 
 About this post:
 
-*   5 – 10 min average reading time
+*   5 – 10-min average reading time
 *   Suitable for beginner’s through to advanced
 
 What you will gain reading this post:
@@ -27,11 +29,15 @@ What you can do to help support:
 
 Now, let’s get started.
 
+---
+
 ## How do you know you need a component library?
 
-While I recommend the use of a component library, I understand that venturing into creating a component library can be quite costly in regards to time and investment.
+While I recommend the use of a component library, I understand that venturing into creating a component library can be quite costly in regard to time and investment.
 
-Therefore I recommend that you seriously consider the below categories to help evaluate if you really need one or not.
+Therefore, I recommend that you seriously consider the below categories to help evaluate if you really need one or not.
+
+---
 
 ## What is your business model?
 
@@ -47,6 +53,8 @@ The product business model typically is much more flexible in having control ove
 
 I would recommend this as a good candidate for a component library.
 
+---
+
 ## What are you trying to solve?
 
 It is really important to understand what you are trying to solve when exploring the path of developing a component library, there are many great reasons and benefits, but as with anything there are also a few trade-offs.
@@ -56,6 +64,8 @@ It is really important to understand what you are trying to solve when exploring
 *   Decrease maintenance
 *   Decrease cost
 *   Establish standardisation
+
+---
 
 ## Has design been considered?
 
@@ -78,10 +88,14 @@ You should work with your designers to determine what you want to be themed, you
 1.  Themes that are required to enable the components or patterns to behave functionally, an example of this would be a custom checkbox or custom radio button, typically this involves hiding the native control the shows if the component has been selected or not, resulting in an theme to be added to recreate that native behaviour.  These functional themes I would not recommend to be customisable.
 2.  Themes that will give your components a different "look and feel", while technically you can make everything customisable, I would advise against this, I would work with your designers to help determine what you will require to be different, as a base I would recommend typography, borders and colours to be customisable and then expand on that as required ensuring to test various combination in your theming as you can end up with some funny and unexpected behaviours, I would also not recommend trying to customise native behaviours where possible as this can have significant consequences when trying to support multiple devices and browsers, with great power comes great responsibility...
 
+---
+
 ## What won't a component library solve?
 
 *   If you have different API's that you need to pass the data through to, this typically may require a level of data transformation that will live in the project that is consuming the component library.
-*   Customisation outside of what it was designed for.
+*   Customisation outside what it was designed for.
+
+---
 
 ## My technology choices at the time of writing this article
 
@@ -115,15 +129,19 @@ Please feel free to read and see my usage via a previous blog [Publish your docu
 
 Please see via Site [Travis CI](https://travis-ci.org/)
 
+---
+
 ## Tips
 
 *   Create the components and composite components (patterns) as simple, stateless / dumb as possible
-*   Don't try to over engineer and with a purpose in mind.
+*   Don't try to overengineer and with a purpose in mind.
 *   Have your component library only make use of internal state when required, this then allows any state management to be used with your components and patterns
-*   If you require speed to market, abstract your state management and validations into a seperate library, that will wrap your component library so you can consume that in your projects
+*   If you require speed to market, abstract your state management and validations into a separate library, that will wrap your component library so you can consume that in your projects
 *   You can also create a layout system such as a grid and even go as far as a page
 *   Have a style guide to demonstrate your components
-*   Also a sample project to consume your components to ensure that they actually work in a real environment.
+*   Also, a sample project to consume your components to ensure that they actually work in a real environment.
+
+---
 
 ## Did this help?
 

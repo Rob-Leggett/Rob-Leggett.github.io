@@ -10,11 +10,13 @@ Both Choreography or Orchestration are fascinating patterns, they are fantastic 
 
 Just because you have taken one of these approaches in a previous solution does not mean that it the right approach for your next, hopefully, this post will be able to give you a high-level overview of what you should consider and help you to manage your Architecture decision.
 
+---
+
 ## Before you start
 
 About this post:
 
-*   5 - 10 min average reading time
+*   5 - 10-min average reading time
 *   Suitable for intermediate through to advanced
 
 What you will gain reading this post:
@@ -30,12 +32,14 @@ What you can do to help support:
 
 Now, let's get started.
 
+---
+
 ## Choreography
 
 ### What is the choreography of Microservices?
 
 *   Choreography is simply the distribution and decentralization of decisions, logic, and interactions between services
-*   Choreographies most common pattern relies on broadcasting data known as events in which any service that is interested in that data can consume it and perform the action that they are tasked to do
+*   Choreographer most common pattern relies on broadcasting data known as events in which any service that is interested in that data can consume it and perform the action that they are tasked to do
 *   The service/s should not require instructions on how to behave and should be self-aware on what they need to do, they, in turn, have a brain of their own rather than being controlled by a centralized brain
 
 ### Benefits
@@ -59,6 +63,8 @@ Now, let's get started.
 *   When your systems don't require client blocking behavior.
 
 While these can be solved with various other techniques using choreography e.g. CRUD, multiple calls, reactive as well as others it does require a mindset change and a different way of interacting.
+
+---
 
 ## Orchestration
 
@@ -89,6 +95,8 @@ While these can be solved with various other techniques using choreography e.g. 
 *   Systems that require synchronous requests and responses
 *   When your Systems require client blocking behavior
 
+---
+
 ## Hybrid
 
 ### What do you mean by Hybrid?
@@ -107,7 +115,7 @@ While these can be solved with various other techniques using choreography e.g. 
 
 *   It is a more complex solution to implement, incurring the usual costs of implementing a complex solution
 *   Ultimately the centralized service is a single point of failure
-*   Typically the centralized service is referred to a monolithic
+*   Typically, the centralized service is referred to a monolithic
 *   It requires a change in mindset
 
 ![Hybrid component Diagram](/blog/when-should-you-choose-choreography-vs-orchestration-for-your-microservices-architecture/inline-5.png)
@@ -115,6 +123,8 @@ While these can be solved with various other techniques using choreography e.g. 
 ### What are good use cases for a Hybrid approach?
 
 *   Any of the systems mentioned above under the Choreography and Orchestration sections
+
+---
 
 ## Conclusion
 
@@ -136,19 +146,21 @@ How do you want to manage the transaction? and I think the most important questi
 
 Do you want to fail fast? How about validating your data on receiving the request and inform the sender of any errors that have occurred upfront? Does the client need to wait for a response or can you fire and forget?
 
-Typically this is controlled via Asynchronous vs Synchronous requests/events, if you require Synchronous requests it would be better to use orchestration or hybrid, if you are however only dealing with Asynchronous requests/events then choreography would be a good solution.
+Typically, this is controlled via Asynchronous vs Synchronous requests/events, if you require Synchronous requests it would be better to use orchestration or hybrid, if you are however only dealing with Asynchronous requests/events then choreography would be a good solution.
 
 ### Result
 
 My experience is that you can achieve the results and solutions you are looking for via either choreography or orchestration.
 
-However based on requirements you can make the solution less complex, easier to deliver, and easier to support, with the suggested above I am hoping you will be able to pick the best option based on the requirements you are supporting.
+However, based on requirements you can make the solution less complex, easier to deliver, and easier to support, with the suggested above I am hoping you will be able to pick the best option based on the requirements you are supporting.
 
 ## Resources
 
 Saga - https://microservices.io/patterns/data/saga.html
 
 CQRS - https://microservices.io/patterns/data/cqrs.html
+
+---
 
 ## Did this help?
 

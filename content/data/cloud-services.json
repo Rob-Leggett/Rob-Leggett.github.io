@@ -1,0 +1,1916 @@
+[
+  {
+    "category": "Storage",
+    "subcategory": "Block storage",
+    "type": "Block storage",
+    "description": "Store data from VM instances running in state-of-the-art block storage offering",
+    "gcp": [
+      "Persistent Disk"
+    ],
+    "aws": [
+      "Amazon Elastic Block Store (EBS)"
+    ],
+    "azure": [
+      "Azure Disk Storage"
+    ]
+  },
+  {
+    "category": "Storage",
+    "subcategory": "File storage",
+    "type": "File storage",
+    "description": "Provide fully managed NFS file servers on Cloud for applications running on VM instances or clusters.",
+    "gcp": [
+      "Filestore"
+    ],
+    "aws": [
+      "Amazon Elastic File System (EFS)"
+    ],
+    "azure": [
+      "Azure Disk Storage",
+      "Azure Files"
+    ]
+  },
+  {
+    "category": "Storage",
+    "subcategory": "Object storage (infrequent)",
+    "type": "Infrequently accessed object storage",
+    "description": "Store infrequently accessed data using ultra low-cost, durable archival storage.",
+    "gcp": [
+      "Cloud Storage Archive"
+    ],
+    "aws": [
+      "Amazon S3 Glacier"
+    ],
+    "azure": [
+      "Azure Archive Storage"
+    ]
+  },
+  {
+    "category": "Storage",
+    "subcategory": "Object storage",
+    "type": "Object storage",
+    "description": "Store any amount of data and retrieve it as often as you’d like.",
+    "gcp": [
+      "Cloud Storage"
+    ],
+    "aws": [
+      "Amazon Simple Storage Service (S3)"
+    ],
+    "azure": [
+      "Azure Blob Storage"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Build",
+    "type": "User content storage & serving",
+    "description": "Store and serve user-generated content from apps, bandwidth-friendly and synced in real time.",
+    "gcp": [
+      "Cloud Storage for Firebase"
+    ],
+    "aws": [
+      "Amazon Simple Storage Service (S3)"
+    ],
+    "azure": [
+      "Azure Blob Storage"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Build",
+    "type": "Authentication",
+    "description": "Drop-in auth UI or SDKs to integrate one or several sign-in methods.",
+    "gcp": [
+      "Firebase Auth"
+    ],
+    "aws": [
+      "Amazon Cognito"
+    ],
+    "azure": [
+      "Azure Active Directory (AD)"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Build",
+    "type": "Static & dynamic hosting",
+    "description": "Fast and secure hosting for web apps, static & dynamic content, and microservices.",
+    "gcp": [
+      "Firebase Hosting"
+    ],
+    "aws": [
+      "Amazon Simple Storage Service (S3)"
+    ],
+    "azure": [
+      "GitHub Pages",
+      "Static Web Apps"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Build",
+    "type": "Realtime NoSQL database",
+    "description": "Store and sync app data in a NoSQL cloud database with realtime sync and offline support.",
+    "gcp": [
+      "Firebase Realtime Database"
+    ],
+    "aws": [
+      "Amazon DynamoDB",
+      "AWS AppSync"
+    ],
+    "azure": [
+      "Azure Cosmos DB"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Engage",
+    "type": "A/B testing",
+    "description": "Deploy experiments to test UI/features/engagement campaign impact before wide rollout.",
+    "gcp": [
+      "Firebase A/B Testing"
+    ],
+    "aws": [
+      "Amazon Pinpoint"
+    ],
+    "azure": [
+      "Azure PlayFab"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Engage",
+    "type": "Push notifications & messaging",
+    "description": "Send and receive cross-platform notifications with reliable, efficient delivery.",
+    "gcp": [
+      "Firebase Cloud Messaging"
+    ],
+    "aws": [
+      "Amazon Device Messaging (ADM)",
+      "Amazon Simple Notification Service (SNS)"
+    ],
+    "azure": [
+      "Azure Notification Hubs"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Engage",
+    "type": "Deferred deep links",
+    "description": "Deep-link smart URLs that route users within iOS/Android apps even across install flow.",
+    "gcp": [
+      "Firebase Dynamic Links"
+    ],
+    "aws": [],
+    "azure": []
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Engage",
+    "type": "In-app messaging",
+    "description": "Targeted, contextual messages inside the app to drive key actions.",
+    "gcp": [
+      "Firebase In-App Messaging"
+    ],
+    "aws": [
+      "Amazon Device Messaging (ADM)",
+      "Amazon Simple Notification Service (SNS)"
+    ],
+    "azure": [
+      "Azure Notification Hubs"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Engage",
+    "type": "Remote config",
+    "description": "Change behavior/appearance on the fly and A/B test without app store review delays.",
+    "gcp": [
+      "Firebase Remote Config"
+    ],
+    "aws": [],
+    "azure": [
+      "Azure App Configuration"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Engage",
+    "type": "Analytics",
+    "description": "Free analytics with unlimited reporting for up to 500 custom events, integrated with Cloud.",
+    "gcp": [
+      "Google Analytics"
+    ],
+    "aws": [],
+    "azure": []
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Event handling",
+    "type": "Event routing",
+    "description": "Asynchronously deliver events from services, SaaS, and your apps; react to state changes.",
+    "gcp": [
+      "Eventarc"
+    ],
+    "aws": [
+      "AWS EventBridge"
+    ],
+    "azure": [
+      "Azure Event Grid"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Kubernetes platform",
+    "type": "Serverless on Kubernetes",
+    "description": "Build, deploy, and manage modern serverless workloads on a Kubernetes-based platform.",
+    "gcp": [
+      "Knative"
+    ],
+    "aws": [
+      "AWS Fargate"
+    ],
+    "azure": [
+      "Azure Kubernetes Service"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Release & monitor",
+    "type": "App distribution",
+    "description": "Distribute builds to trusted testers quickly.",
+    "gcp": [
+      "Firebase App Distribution"
+    ],
+    "aws": [],
+    "azure": [
+      "Azure App Center"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Release & monitor",
+    "type": "Crash reporting",
+    "description": "Native crash reporting with real-time insights and export.",
+    "gcp": [
+      "Firebase Crashlytics"
+    ],
+    "aws": [],
+    "azure": [
+      "Azure App Center"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Release & monitor",
+    "type": "Performance monitoring",
+    "description": "Monitor app performance with metrics like network, CPU, memory, and custom metrics.",
+    "gcp": [
+      "Firebase Performance Monitoring"
+    ],
+    "aws": [],
+    "azure": []
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Release & monitor",
+    "type": "Device testing",
+    "description": "Test your application on devices hosted in data centers.",
+    "gcp": [
+      "Firebase Test Lab"
+    ],
+    "aws": [
+      "AWS Device Farm"
+    ],
+    "azure": [
+      "Azure App Center"
+    ]
+  },
+  {
+    "category": "Serverless",
+    "subcategory": "Workflow orchestration",
+    "type": "Serverless workflows",
+    "description": "Orchestrate and automate Cloud and HTTP-based APIs with serverless workflows.",
+    "gcp": [
+      "Workflows"
+    ],
+    "aws": [
+      "AWS Step Functions"
+    ],
+    "azure": [
+      "Azure Functions"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Certificate management",
+    "type": "Private CA",
+    "description": "Managed private certificate authorities without managing infrastructure.",
+    "gcp": [
+      "Certificate Authority Service"
+    ],
+    "aws": [
+      "AWS Certificate Manager"
+    ],
+    "azure": [
+      "Azure Active Directory Certificate Authority"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "CIAM",
+    "type": "Customer identity & access management",
+    "description": "Add identity and access management to applications with user protection and scale.",
+    "gcp": [
+      "Identity Platform"
+    ],
+    "aws": [
+      "Amazon Cognito"
+    ],
+    "azure": [
+      "Azure Active Directory B2C"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Container security",
+    "type": "Trusted container registry",
+    "description": "Deploy only trusted containers with managed registry features.",
+    "gcp": [
+      "Artifact Registry"
+    ],
+    "aws": [
+      "Amazon Elastic Container Registry (ECR)"
+    ],
+    "azure": [
+      "Azure Container Registry"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Container security",
+    "type": "Image vulnerability scanning",
+    "description": "Scan container images and track vulnerabilities.",
+    "gcp": [
+      "Container Analysis"
+    ],
+    "aws": [
+      "Amazon ECR Image Scanning"
+    ],
+    "azure": [
+      "Azure Defender for container registries"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Container security",
+    "type": "Runtime & host protection",
+    "description": "Secure your container environment on Cloud.",
+    "gcp": [
+      "Container Security"
+    ],
+    "aws": [
+      "Security in Amazon Elastic Container Service (ECS)"
+    ],
+    "azure": [
+      "Container Security in Azure Security Center"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Container security",
+    "type": "Kernel isolation / sandbox",
+    "description": "Protect host kernel when containers execute unknown or untrusted code.",
+    "gcp": [
+      "GKE Sandbox"
+    ],
+    "aws": [
+      "Amazon EKS Container Sandbox"
+    ],
+    "azure": [
+      "Azure Container Sandbox Development Environment"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Data loss prevention (DLP)",
+    "type": "DLP",
+    "description": "Discover, classify, and help protect sensitive cloud data.",
+    "gcp": [
+      "Cloud Data Loss Prevention"
+    ],
+    "aws": [
+      "Amazon Macie"
+    ],
+    "azure": [
+      "Azure Information Protection"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Encryption",
+    "type": "Confidential computing",
+    "description": "Encrypt data in-use with confidential computing and nodes.",
+    "gcp": [
+      "Confidential Computing"
+    ],
+    "aws": [
+      "AWS Nitro Enclaves"
+    ],
+    "azure": [
+      "Azure Confidential Computing"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Exfiltration prevention",
+    "type": "Service perimeter",
+    "description": "Isolate resources of multi-tenant services to mitigate data exfiltration.",
+    "gcp": [
+      "VPC Service Controls"
+    ],
+    "aws": [],
+    "azure": []
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Hardware security module (HSM)",
+    "type": "Managed HSM",
+    "description": "Host encryption keys and perform crypto operations in certified HSMs.",
+    "gcp": [
+      "Cloud HSM"
+    ],
+    "aws": [
+      "AWS CloudHSM"
+    ],
+    "azure": [
+      "Azure Dedicated HSM"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "IAM",
+    "type": "Identity service (users & groups)",
+    "description": "Centrally manage users and groups and federate identities with other IdPs.",
+    "gcp": [
+      "Cloud Identity"
+    ],
+    "aws": [
+      "AWS Identity Services"
+    ],
+    "azure": [
+      "Azure Active Directory"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "IAM",
+    "type": "Resource access control",
+    "description": "Fine-grained access control and visibility for centrally managing resources.",
+    "gcp": [
+      "Identity and Access Management (IAM)"
+    ],
+    "aws": [
+      "AWS Identity and Access Management (IAM)"
+    ],
+    "azure": [
+      "Azure Identity Management"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "IAM",
+    "type": "Managed Microsoft AD",
+    "description": "Highly available, hardened service running actual Microsoft Active Directory.",
+    "gcp": [
+      "Managed Service for Microsoft Active Directory"
+    ],
+    "aws": [
+      "AWS Managed Microsoft AD"
+    ],
+    "azure": [
+      "Azure Active Directory"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Resource monitoring",
+    "type": "Asset inventory",
+    "description": "View, monitor, and analyze resources and metadata across projects and services.",
+    "gcp": [
+      "Cloud Asset Inventory"
+    ],
+    "aws": [
+      "AWS Config"
+    ],
+    "azure": [
+      "Azure Security Control"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Resource monitoring",
+    "type": "Resource hierarchy & management",
+    "description": "Manage resources by project, folder, and organization.",
+    "gcp": [
+      "Resource Manager"
+    ],
+    "aws": [
+      "AWS OpsWorks"
+    ],
+    "azure": [
+      "Azure Resource Manager"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Secret management",
+    "type": "Secrets manager",
+    "description": "Store API keys, passwords, certificates, and other sensitive data.",
+    "gcp": [
+      "Secret Manager"
+    ],
+    "aws": [
+      "AWS Secrets Manager"
+    ],
+    "azure": [
+      "Azure Key Vault"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Security administration",
+    "type": "Key management service",
+    "description": "Manage encryption keys on Cloud.",
+    "gcp": [
+      "Cloud Key Management Service (KMS)"
+    ],
+    "aws": [
+      "AWS Key Management Service (KMS)"
+    ],
+    "azure": [
+      "Azure Key Vault"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Security & risk management",
+    "type": "Security posture management",
+    "description": "Cloud security and risk management platform.",
+    "gcp": [
+      "Security Command Center"
+    ],
+    "aws": [
+      "Amazon GuardDuty",
+      "AWS Security Hub"
+    ],
+    "azure": [
+      "Azure Security Center",
+      "Azure Defender"
+    ]
+  },
+  {
+    "category": "Security & identity",
+    "subcategory": "Zero trust",
+    "type": "Zero trust access",
+    "description": "Secure access to critical apps and services with integrated threat and data protection.",
+    "gcp": [
+      "BeyondCorp Enterprise"
+    ],
+    "aws": [],
+    "azure": [
+      "Azure AD Conditional Access"
+    ]
+  },
+  {
+    "category": "Operations",
+    "subcategory": "Audit logging",
+    "type": "Audit logs",
+    "description": "Log all user activity on Cloud.",
+    "gcp": [
+      "Cloud Audit Logs"
+    ],
+    "aws": [
+      "AWS CloudTrail"
+    ],
+    "azure": [
+      "Azure Audit Logs"
+    ]
+  },
+  {
+    "category": "Operations",
+    "subcategory": "Debugging",
+    "type": "Production debugger",
+    "description": "Investigate code behavior in production.",
+    "gcp": [
+      "Cloud Debugger"
+    ],
+    "aws": [
+      "AWS X-Ray"
+    ],
+    "azure": [
+      "Azure Monitor Application Insights Snapshot Debugger"
+    ]
+  },
+  {
+    "category": "Operations",
+    "subcategory": "Logging",
+    "type": "Centralized logging",
+    "description": "Manage logging and analysis in real time at scale.",
+    "gcp": [
+      "Cloud Logging"
+    ],
+    "aws": [
+      "Amazon CloudWatch Logs"
+    ],
+    "azure": [
+      "Azure Monitor Logs"
+    ]
+  },
+  {
+    "category": "Operations",
+    "subcategory": "Monitoring",
+    "type": "Monitoring",
+    "description": "Performance, availability, and health monitoring for apps and infrastructure.",
+    "gcp": [
+      "Cloud Monitoring"
+    ],
+    "aws": [
+      "Amazon CloudWatch"
+    ],
+    "azure": [
+      "Azure Monitor"
+    ]
+  },
+  {
+    "category": "Operations",
+    "subcategory": "Performance tracing",
+    "type": "Distributed tracing",
+    "description": "Find performance bottlenecks in production.",
+    "gcp": [
+      "Cloud Trace"
+    ],
+    "aws": [
+      "AWS X-Ray"
+    ],
+    "azure": [
+      "Azure Monitor Application Insights Distributed Tracing"
+    ]
+  },
+  {
+    "category": "Operations",
+    "subcategory": "Profiling",
+    "type": "Code profiling",
+    "description": "Understand resource consumption paths in your code.",
+    "gcp": [
+      "Cloud Profiler"
+    ],
+    "aws": [
+      "Amazon CodeGuru Profiler"
+    ],
+    "azure": [
+      "Azure Monitor Application Insights Profiler"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "CDN",
+    "type": "Content delivery network",
+    "description": "Serve web and video content globally, efficiently, and reliably.",
+    "gcp": [
+      "Cloud CDN"
+    ],
+    "aws": [
+      "Amazon CloudFront"
+    ],
+    "azure": [
+      "Azure Content Delivery Network"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "DDoS firewall",
+    "type": "Managed DDoS protection",
+    "description": "Protect web apps/services from DDoS and internet threats.",
+    "gcp": [
+      "Google Cloud Armor Managed Protection"
+    ],
+    "aws": [
+      "AWS Shield Basic",
+      "AWS Shield Advanced"
+    ],
+    "azure": [
+      "Azure DDoS Protection Basic",
+      "Azure DDoS Protection Standard"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "Dedicated connectivity",
+    "type": "Dedicated interconnect",
+    "description": "Extend on-prem network to cloud via high-availability, low-latency links.",
+    "gcp": [
+      "Cloud Interconnect"
+    ],
+    "aws": [
+      "AWS Direct Connect"
+    ],
+    "azure": [
+      "Azure ExpressRoute"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "DNS & Domains",
+    "type": "Managed DNS & Domains",
+    "description": "Publish zones and records, and manage domains without self-managing DNS servers.",
+    "gcp": [
+      "Cloud DNS",
+      "Cloud Domains"
+    ],
+    "aws": [
+      "Amazon Route 53"
+    ],
+    "azure": [
+      "Azure DNS",
+      "Azure App Service Domains"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "Load balancer",
+    "type": "Load balancing",
+    "description": "Distribute network traffic across VMs.",
+    "gcp": [
+      "Cloud Load Balancing"
+    ],
+    "aws": [
+      "AWS Elastic Load Balancing",
+      "AWS Application Load Balancer"
+    ],
+    "azure": [
+      "Azure Load Balancer"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "Network monitoring",
+    "type": "Network ops center",
+    "description": "Centralize network monitoring to validate configs and optimize performance.",
+    "gcp": [
+      "Network Intelligence Center"
+    ],
+    "aws": [],
+    "azure": []
+  },
+  {
+    "category": "Networking",
+    "subcategory": "Network monitoring",
+    "type": "Flow logs",
+    "description": "Record a sample of network flows for monitoring, forensics, and cost analysis.",
+    "gcp": [
+      "VPC Flow Logs"
+    ],
+    "aws": [
+      "Amazon VPC Flow Logs"
+    ],
+    "azure": [
+      "Azure Network Watcher"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "Network security",
+    "type": "IPsec VPN",
+    "description": "Connect peer networks to your VPC via IPsec VPN.",
+    "gcp": [
+      "Cloud VPN"
+    ],
+    "aws": [
+      "AWS VPN"
+    ],
+    "azure": [
+      "Azure VPN"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "Premium networking",
+    "type": "Network service tiers",
+    "description": "Optimize network for performance or cost with tiered services.",
+    "gcp": [
+      "Network Service Tiers"
+    ],
+    "aws": [],
+    "azure": []
+  },
+  {
+    "category": "Networking",
+    "subcategory": "Service mesh",
+    "type": "Global load balancing across clusters",
+    "description": "Global LB across clusters/VMs; offload health checks; advanced traffic control.",
+    "gcp": [
+      "Traffic Director"
+    ],
+    "aws": [
+      "AWS App Mesh"
+    ],
+    "azure": [
+      "Azure Service Fabric Mesh"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "Services",
+    "type": "Service directory & discovery",
+    "description": "Publish, discover, and connect services from a single directory.",
+    "gcp": [
+      "Service Directory"
+    ],
+    "aws": [
+      "AWS Cloud Map"
+    ],
+    "azure": [
+      "Consul on Azure"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "Virtual networks",
+    "type": "NAT services",
+    "description": "Private cluster/VM egress without external IP addresses.",
+    "gcp": [
+      "Cloud NAT"
+    ],
+    "aws": [
+      "Amazon VPC NAT instances",
+      "Amazon VPC NAT Gateway"
+    ],
+    "azure": [
+      "Azure NAT"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "Virtual networks",
+    "type": "Virtual private network",
+    "description": "Managed networking for cloud-based services.",
+    "gcp": [
+      "Virtual Private Cloud (VPC)"
+    ],
+    "aws": [
+      "Amazon Virtual Private Cloud (VPC)"
+    ],
+    "azure": [
+      "Azure Virtual Network"
+    ]
+  },
+  {
+    "category": "Networking",
+    "subcategory": "Web application firewall",
+    "type": "WAF",
+    "description": "Protect applications and websites against DoS and web attacks.",
+    "gcp": [
+      "Google Cloud Armor"
+    ],
+    "aws": [
+      "AWS WAF"
+    ],
+    "azure": [
+      "Azure WAF"
+    ]
+  },
+  {
+    "category": "Migration",
+    "subcategory": "Container migration",
+    "type": "Container migration",
+    "description": "Extract, migrate, and modernize apps to run in containers.",
+    "gcp": [
+      "Migrate for Anthos"
+    ],
+    "aws": [
+      "AWS App2Container"
+    ],
+    "azure": [
+      "Azure Migrate"
+    ]
+  },
+  {
+    "category": "Migration",
+    "subcategory": "Server migration",
+    "type": "VM migration",
+    "description": "Migrate VM instances.",
+    "gcp": [
+      "Migrate for Compute Engine"
+    ],
+    "aws": [
+      "AWS Server Migration Service"
+    ],
+    "azure": [
+      "Azure Migrate"
+    ]
+  },
+  {
+    "category": "Migration",
+    "subcategory": "SQL database migration",
+    "type": "Database migration",
+    "description": "Migrate databases from on-prem to Cloud.",
+    "gcp": [
+      "Database Migration Service"
+    ],
+    "aws": [
+      "AWS Database Migration Service"
+    ],
+    "azure": [
+      "Azure Database Migration Service"
+    ]
+  },
+  {
+    "category": "Migration",
+    "subcategory": "Storage migration",
+    "type": "Online transfer",
+    "description": "Large-scale online data transfers to Cloud.",
+    "gcp": [
+      "Storage Transfer Service"
+    ],
+    "aws": [
+      "AWS Storage Gateway"
+    ],
+    "azure": [
+      "Azure Migrate"
+    ]
+  },
+  {
+    "category": "Migration",
+    "subcategory": "Storage migration",
+    "type": "Offline transfer appliance",
+    "description": "Securely migrate large data volumes without disrupting operations.",
+    "gcp": [
+      "Transfer Appliance"
+    ],
+    "aws": [
+      "AWS Snowball"
+    ],
+    "azure": [
+      "Azure Data Box"
+    ]
+  },
+  {
+    "category": "Management tools",
+    "subcategory": "API management",
+    "type": "API management",
+    "description": "Design, secure, analyze, and scale APIs with visibility and control.",
+    "gcp": [
+      "Apigee API Management"
+    ],
+    "aws": [
+      "Amazon API Gateway"
+    ],
+    "azure": [
+      "Azure API Management"
+    ]
+  },
+  {
+    "category": "Management tools",
+    "subcategory": "Cost management",
+    "type": "Cost management",
+    "description": "Monitor, control, and optimize Cloud costs.",
+    "gcp": [
+      "Cost Management"
+    ],
+    "aws": [
+      "AWS Budgets"
+    ],
+    "azure": [
+      "Azure Cost Management"
+    ]
+  },
+  {
+    "category": "Management tools",
+    "subcategory": "Deployment",
+    "type": "IaC templates",
+    "description": "Create and manage cloud resources with templates.",
+    "gcp": [
+      "Cloud Deployment Manager"
+    ],
+    "aws": [
+      "AWS CloudFormation"
+    ],
+    "azure": [
+      "Azure Deployment Manager"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "Cloud cost optimization",
+    "type": "Recommendations",
+    "description": "Optimize cloud usage with actionable recommendations.",
+    "gcp": [
+      "Recommender"
+    ],
+    "aws": [
+      "AWS Cost Optimization"
+    ],
+    "azure": [
+      "Azure Advisor"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "Conversational interface",
+    "type": "Conversational AI",
+    "description": "Omnichannel conversational AI for customer interactions.",
+    "gcp": [
+      "Dialogflow"
+    ],
+    "aws": [
+      "Amazon Lex"
+    ],
+    "azure": [
+      "Azure Conversational AI"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "ML for structured data",
+    "type": "AutoML for tables",
+    "description": "Build and deploy ML models on structured data.",
+    "gcp": [
+      "AutoML Tables"
+    ],
+    "aws": [
+      "Amazon SageMaker"
+    ],
+    "azure": [
+      "AutoML in Azure ML Studio"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "ML platform",
+    "type": "Training & hosting",
+    "description": "Train models at scale and host them for predictions.",
+    "gcp": [
+      "AI Platform (Unified)"
+    ],
+    "aws": [
+      "Amazon SageMaker"
+    ],
+    "azure": [
+      "Azure AI Platform",
+      "Azure Machine Learning",
+      "Azure Cognitive Services"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "ML platform",
+    "type": "Deep learning VMs",
+    "description": "Preconfigured VMs for deep learning workloads.",
+    "gcp": [
+      "AI Platform Deep Learning VM Image"
+    ],
+    "aws": [
+      "Amazon SageMaker",
+      "Amazon EC2 P3"
+    ],
+    "azure": [
+      "Azure Data Science Virtual Machines"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "ML platform",
+    "type": "Managed notebooks",
+    "description": "Managed JupyterLab environments with ML frameworks.",
+    "gcp": [
+      "AI Platform Notebooks"
+    ],
+    "aws": [
+      "Amazon SageMaker"
+    ],
+    "azure": [
+      "Azure Notebooks"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "ML platform",
+    "type": "Enterprise TensorFlow",
+    "description": "Reliability and performance for AI applications with managed services.",
+    "gcp": [
+      "TensorFlow Enterprise"
+    ],
+    "aws": [
+      "TensorFlow on AWS"
+    ],
+    "azure": [
+      "Azure Databricks"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "Natural language processing",
+    "type": "Text analysis",
+    "description": "Derive insights from unstructured text using ML.",
+    "gcp": [
+      "Cloud Natural Language API"
+    ],
+    "aws": [
+      "Amazon Comprehend"
+    ],
+    "azure": [
+      "Azure Text Analytics"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "Personalization",
+    "type": "Recommendations",
+    "description": "Personalized product recommendations at scale.",
+    "gcp": [
+      "Recommendations AI"
+    ],
+    "aws": [
+      "Amazon Personalize"
+    ],
+    "azure": [
+      "Azure Personalizer"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "Translation",
+    "type": "ML translation",
+    "description": "Automatic translation between languages.",
+    "gcp": [
+      "AutoML Translation"
+    ],
+    "aws": [
+      "Amazon Translate"
+    ],
+    "azure": [
+      "Azure Translator"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "Video intelligence",
+    "type": "Video analysis",
+    "description": "Categorize video content with predefined and custom labels.",
+    "gcp": [
+      "Video Intelligence API"
+    ],
+    "aws": [
+      "Amazon Rekognition Video"
+    ],
+    "azure": [
+      "Azure Video Indexer"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "Vision: Read and extract text",
+    "type": "Vision OCR & more",
+    "description": "Cloud/edge vision models to detect emotion, understand text, etc.",
+    "gcp": [
+      "Cloud Vision"
+    ],
+    "aws": [
+      "Amazon Textract"
+    ],
+    "azure": [
+      "Azure Computer Vision"
+    ]
+  },
+  {
+    "category": "Machine learning (ML)",
+    "subcategory": "Vision: Speech-to-text",
+    "type": "Speech recognition",
+    "description": "Accurate speech-to-text via API.",
+    "gcp": [
+      "Speech-to-Text"
+    ],
+    "aws": [
+      "Amazon Transcribe"
+    ],
+    "azure": [
+      "Azure Speech to Text"
+    ]
+  },
+  {
+    "category": "Internet of things (IoT)",
+    "subcategory": "IoT platform",
+    "type": "IoT core platform",
+    "description": "Connect, store, and analyze device data at edge and in cloud.",
+    "gcp": [
+      "Cloud IoT"
+    ],
+    "aws": [
+      "AWS IoT Core"
+    ],
+    "azure": [
+      "Azure IoT Hub"
+    ]
+  },
+  {
+    "category": "Enterprise",
+    "subcategory": "Marketplace",
+    "type": "Cloud marketplace",
+    "description": "Online discovery, purchasing, and fulfillment of enterprise-grade solutions.",
+    "gcp": [
+      "Google Cloud Marketplace"
+    ],
+    "aws": [
+      "AWS Marketplace"
+    ],
+    "azure": [
+      "Azure Marketplace"
+    ]
+  },
+  {
+    "category": "Developer tools",
+    "subcategory": "Client libraries",
+    "type": "SDKs",
+    "description": "Tools and libraries for interacting with cloud services.",
+    "gcp": [
+      "Cloud SDK"
+    ],
+    "aws": [
+      "AWS SDKs"
+    ],
+    "azure": [
+      "Azure SDKs"
+    ]
+  },
+  {
+    "category": "Developer tools",
+    "subcategory": "Cloud development IDE plugin",
+    "type": "IDE plugins",
+    "description": "Write, debug, and deploy cloud apps from IntelliJ/VS Code.",
+    "gcp": [
+      "Cloud Code for IntelliJ",
+      "Cloud Code for VS Code"
+    ],
+    "aws": [
+      "AWS Toolkit for IntelliJ",
+      "AWS Toolkit for Visual Studio Code"
+    ],
+    "azure": [
+      "Azure Toolkit for IntelliJ",
+      "Azure Tools for Visual Studio Code"
+    ]
+  },
+  {
+    "category": "Developer tools",
+    "subcategory": "Cloud-based IDE",
+    "type": "Browser-based shell/IDE",
+    "description": "Manage infrastructure and develop from any browser.",
+    "gcp": [
+      "Cloud Shell"
+    ],
+    "aws": [
+      "AWS CloudShell"
+    ],
+    "azure": [
+      "Azure Cloud Shell"
+    ]
+  },
+  {
+    "category": "Developer tools",
+    "subcategory": "Command-line interface (CLI)",
+    "type": "CLI",
+    "description": "Command-line tools for interacting with cloud services.",
+    "gcp": [
+      "Cloud SDK"
+    ],
+    "aws": [
+      "AWS CLI"
+    ],
+    "azure": [
+      "Azure CLI"
+    ]
+  },
+  {
+    "category": "Database",
+    "subcategory": "Document data storage",
+    "type": "Document DB",
+    "description": "Fully managed, scalable, serverless document database.",
+    "gcp": [
+      "Firestore"
+    ],
+    "aws": [
+      "Amazon DocumentDB",
+      "Amazon DynamoDB",
+      "AWS AppSync"
+    ],
+    "azure": [
+      "Azure Cosmos DB"
+    ]
+  },
+  {
+    "category": "Database",
+    "subcategory": "In-memory data store",
+    "type": "Cache",
+    "description": "Scalable, secure, and highly available Redis/Memcached service.",
+    "gcp": [
+      "Memorystore"
+    ],
+    "aws": [
+      "Amazon ElastiCache"
+    ],
+    "azure": [
+      "Azure Cache for Redis"
+    ]
+  },
+  {
+    "category": "Database",
+    "subcategory": "NoSQL: Indexed",
+    "type": "NoSQL DB",
+    "description": "Highly scalable NoSQL database for web & mobile apps.",
+    "gcp": [
+      "Datastore"
+    ],
+    "aws": [
+      "Amazon DynamoDB"
+    ],
+    "azure": [
+      "Azure Cosmos DB"
+    ]
+  },
+  {
+    "category": "Database",
+    "subcategory": "NoSQL: Key-value",
+    "type": "Bigtable / key-value",
+    "description": "Fully managed, scalable key-value database for large workloads.",
+    "gcp": [
+      "Cloud Bigtable"
+    ],
+    "aws": [
+      "Amazon DynamoDB"
+    ],
+    "azure": [
+      "Azure Cosmos DB"
+    ]
+  },
+  {
+    "category": "Database",
+    "subcategory": "RDBMS",
+    "type": "Global relational DB",
+    "description": "Relational database with global scale, strong consistency, and 99.999% availability.",
+    "gcp": [
+      "Cloud Spanner"
+    ],
+    "aws": [
+      "Amazon Aurora"
+    ],
+    "azure": [
+      "Azure SQL Database"
+    ]
+  },
+  {
+    "category": "Database",
+    "subcategory": "RDBMS",
+    "type": "Managed relational DB (MySQL/PostgreSQL/SQL Server)",
+    "description": "Managed relational databases for workloads under ~30TB.",
+    "gcp": [
+      "Cloud SQL"
+    ],
+    "aws": [
+      "Amazon RDS",
+      "Amazon Aurora"
+    ],
+    "azure": [
+      "Azure Database for MySQL",
+      "Azure Database for PostgreSQL"
+    ]
+  },
+  {
+    "category": "Database",
+    "subcategory": "Relational (Oracle)",
+    "type": "Oracle workloads",
+    "description": "Lift and shift Oracle workloads to Cloud.",
+    "gcp": [
+      "Bare Metal Solution"
+    ],
+    "aws": [
+      "Amazon RDS for Oracle"
+    ],
+    "azure": [
+      "Azure Oracle Database Enterprise Edition"
+    ]
+  },
+  {
+    "category": "Data analytics",
+    "subcategory": "Business intelligence",
+    "type": "BI",
+    "description": "Explore, share, and visualize data for better decisions.",
+    "gcp": [
+      "Looker"
+    ],
+    "aws": [
+      "Amazon QuickSight"
+    ],
+    "azure": [
+      "Microsoft Power BI"
+    ]
+  },
+  {
+    "category": "Data analytics",
+    "subcategory": "Data discovery and metadata management",
+    "type": "Data catalog",
+    "description": "Discover, understand, and manage data at scale.",
+    "gcp": [
+      "Data Catalog"
+    ],
+    "aws": [
+      "AWS Glue Data Catalog"
+    ],
+    "azure": [
+      "Azure Purview"
+    ]
+  },
+  {
+    "category": "Data analytics",
+    "subcategory": "Data Integration / ETL",
+    "type": "Managed ETL",
+    "description": "Cloud-native data integration at scale.",
+    "gcp": [
+      "Cloud Data Fusion"
+    ],
+    "aws": [
+      "Amazon AppFlow",
+      "AWS Glue"
+    ],
+    "azure": [
+      "Azure Data Factory"
+    ]
+  },
+  {
+    "category": "Data analytics",
+    "subcategory": "Data warehouse",
+    "type": "Serverless data warehouse",
+    "description": "Highly scalable, cost-effective multi-cloud data warehouse.",
+    "gcp": [
+      "BigQuery"
+    ],
+    "aws": [
+      "Amazon Athena",
+      "Amazon Redshift"
+    ],
+    "azure": [
+      "Azure Synapse Analytics"
+    ]
+  },
+  {
+    "category": "Data analytics",
+    "subcategory": "Messaging",
+    "type": "Pub/Sub messaging",
+    "description": "Messaging and ingestion for event-driven systems and streaming analytics.",
+    "gcp": [
+      "Pub/Sub",
+      "Pub/Sub Lite"
+    ],
+    "aws": [
+      "Amazon Simple Notification Service (SNS)",
+      "Amazon Simple Queue Service (SQS)"
+    ],
+    "azure": [
+      "Azure Service Bus Messaging"
+    ]
+  },
+  {
+    "category": "Data analytics",
+    "subcategory": "Open source processing",
+    "type": "Hadoop/Spark & batch",
+    "description": "Managed open-source data processing services.",
+    "gcp": [
+      "Dataproc"
+    ],
+    "aws": [
+      "Amazon EMR",
+      "AWS Batch",
+      "AWS Glue"
+    ],
+    "azure": [
+      "Azure Data Lake Analytics",
+      "HDInsight"
+    ]
+  },
+  {
+    "category": "Data analytics",
+    "subcategory": "Query service",
+    "type": "SQL analytics",
+    "description": "Analyze petabytes of data using ANSI SQL.",
+    "gcp": [
+      "BigQuery"
+    ],
+    "aws": [
+      "Amazon Redshift Spectrum"
+    ],
+    "azure": [
+      "Azure Synapse Analytics"
+    ]
+  },
+  {
+    "category": "Data analytics",
+    "subcategory": "Stream data ingest",
+    "type": "Streaming ingest",
+    "description": "Create scalable messaging/ingestion for streaming analytics.",
+    "gcp": [
+      "Pub/Sub"
+    ],
+    "aws": [
+      "Amazon Kinesis"
+    ],
+    "azure": [
+      "Azure Event Hubs"
+    ]
+  },
+  {
+    "category": "Data analytics",
+    "subcategory": "Stream data processing",
+    "type": "Streaming processing",
+    "description": "Unified stream and batch processing, serverless and fast.",
+    "gcp": [
+      "Dataflow"
+    ],
+    "aws": [
+      "Amazon Kinesis Data Analytics"
+    ],
+    "azure": [
+      "Azure Stream Analytics"
+    ]
+  },
+  {
+    "category": "Data analytics",
+    "subcategory": "Workflow orchestration",
+    "type": "Managed Airflow",
+    "description": "Fully managed workflow orchestration service built on Apache Airflow.",
+    "gcp": [
+      "Cloud Composer"
+    ],
+    "aws": [
+      "AWS Glue",
+      "Amazon Data Pipeline",
+      "Managed Workflows for Apache Airflow"
+    ],
+    "azure": [
+      "Azure Data Factory"
+    ]
+  },
+  {
+    "category": "Containers",
+    "subcategory": "CaaS",
+    "type": "Managed Kubernetes",
+    "description": "Secured and managed Kubernetes with autoscaling and multi-cluster support.",
+    "gcp": [
+      "Google Kubernetes Engine (GKE)"
+    ],
+    "aws": [
+      "Amazon EKS",
+      "Amazon ECS"
+    ],
+    "azure": [
+      "Azure Kubernetes Service (AKS)"
+    ]
+  },
+  {
+    "category": "Containers",
+    "subcategory": "Container registry",
+    "type": "Container registry",
+    "description": "Store, manage, and secure container images.",
+    "gcp": [
+      "Artifact Registry"
+    ],
+    "aws": [
+      "Amazon ECR"
+    ],
+    "azure": [
+      "Azure Container Registry"
+    ]
+  },
+  {
+    "category": "Containers",
+    "subcategory": "Containers without infrastructure",
+    "type": "Serverless containers",
+    "description": "Deploy containerized apps on fully managed serverless platform.",
+    "gcp": [
+      "Cloud Run"
+    ],
+    "aws": [
+      "AWS Fargate",
+      "AWS Lambda",
+      "AWS App Runner"
+    ],
+    "azure": [
+      "Azure Container Instances"
+    ]
+  },
+  {
+    "category": "Compute",
+    "subcategory": "Core compute",
+    "type": "GPUs",
+    "description": "Accelerators for ML model training and inference.",
+    "gcp": [
+      "Cloud GPUs"
+    ],
+    "aws": [
+      "Amazon EC2 P3"
+    ],
+    "azure": [
+      "GPU Optimized VMs"
+    ]
+  },
+  {
+    "category": "Compute",
+    "subcategory": "Core compute",
+    "type": "VMs",
+    "description": "High-performance virtual machines.",
+    "gcp": [
+      "Compute Engine"
+    ],
+    "aws": [
+      "Amazon EC2"
+    ],
+    "azure": [
+      "Azure Virtual Machines"
+    ]
+  },
+  {
+    "category": "Compute",
+    "subcategory": "Core compute",
+    "type": "Autoscaling groups",
+    "description": "Automatically add/delete VM instances based on load.",
+    "gcp": [
+      "Compute Engine Autoscaler"
+    ],
+    "aws": [
+      "AWS Auto Scaling"
+    ],
+    "azure": [
+      "Azure Autoscale",
+      "Azure VM Scale Sets"
+    ]
+  },
+  {
+    "category": "Compute",
+    "subcategory": "Core compute",
+    "type": "OS login / SSH via IAM",
+    "description": "Manage SSH access to instances using IAM, no local keys.",
+    "gcp": [
+      "OS Login"
+    ],
+    "aws": [
+      "EC2 Instance Connect"
+    ],
+    "azure": []
+  },
+  {
+    "category": "Compute",
+    "subcategory": "Core compute",
+    "type": "Block storage (VM)",
+    "description": "Reliable, high-performance block storage for VMs.",
+    "gcp": [
+      "Persistent Disk"
+    ],
+    "aws": [
+      "Amazon EBS"
+    ],
+    "azure": [
+      "Azure Managed Disks"
+    ]
+  },
+  {
+    "category": "Compute",
+    "subcategory": "Dedicated VMs",
+    "type": "Dedicated hosts",
+    "description": "Run VMs on hardware dedicated to your project.",
+    "gcp": [
+      "Sole-tenant nodes"
+    ],
+    "aws": [
+      "Amazon EC2 Dedicated Host"
+    ],
+    "azure": [
+      "Azure Dedicated Host"
+    ]
+  },
+  {
+    "category": "Compute",
+    "subcategory": "FaaS",
+    "type": "Functions as a Service",
+    "description": "Run code with zero server management, pay-as-you-go.",
+    "gcp": [
+      "Cloud Functions"
+    ],
+    "aws": [
+      "AWS Lambda"
+    ],
+    "azure": [
+      "Azure Functions"
+    ]
+  },
+  {
+    "category": "Compute",
+    "subcategory": "PaaS",
+    "type": "App platform",
+    "description": "Fully managed platform for highly scalable apps.",
+    "gcp": [
+      "App Engine"
+    ],
+    "aws": [
+      "AWS Elastic Beanstalk"
+    ],
+    "azure": [
+      "Azure App Service"
+    ]
+  },
+  {
+    "category": "Compute",
+    "subcategory": "VMware connectivity",
+    "type": "VMware on cloud",
+    "description": "Migrate and run VMware workloads on Cloud.",
+    "gcp": [
+      "VMware Engine"
+    ],
+    "aws": [
+      "VMware Cloud on AWS"
+    ],
+    "azure": [
+      "Azure VMware Solution"
+    ]
+  },
+  {
+    "category": "App Modernization",
+    "subcategory": "CI/CD",
+    "type": "CI/CD services",
+    "description": "Build, test, and deploy with managed CI/CD.",
+    "gcp": [
+      "Cloud Build"
+    ],
+    "aws": [
+      "AWS CodeBuild",
+      "AWS CodeDeploy",
+      "AWS CodePipeline"
+    ],
+    "azure": [
+      "Azure DevOps",
+      "GitHub Actions"
+    ]
+  },
+  {
+    "category": "App Modernization",
+    "subcategory": "Multi-cloud",
+    "type": "Anthos / Hybrid & multi-cloud",
+    "description": "Extend services & practices across environments; manage K8s clusters anywhere.",
+    "gcp": [
+      "Anthos",
+      "Anthos attached clusters",
+      "Anthos on bare metal",
+      "Anthos clusters on AWS",
+      "Anthos clusters on VMware"
+    ],
+    "aws": [
+      "AWS Outposts"
+    ],
+    "azure": [
+      "Azure Arc",
+      "App Modernization with Microsoft Azure"
+    ]
+  },
+  {
+    "category": "App Modernization",
+    "subcategory": "Multi-cloud",
+    "type": "Config management",
+    "description": "Automate policy and security at scale for hybrid/multi-cloud K8s.",
+    "gcp": [
+      "Anthos Config Management"
+    ],
+    "aws": [
+      "Chef Automate",
+      "AWS OpsWorks"
+    ],
+    "azure": [
+      "Azure App Configuration"
+    ]
+  },
+  {
+    "category": "App Modernization",
+    "subcategory": "Multi-cloud",
+    "type": "Kubernetes resource management",
+    "description": "Manage cloud resources declaratively via Kubernetes.",
+    "gcp": [
+      "Config Connector"
+    ],
+    "aws": [
+      "AWS Controllers for Kubernetes"
+    ],
+    "azure": [
+      "Azure Service Operator"
+    ]
+  },
+  {
+    "category": "App Modernization",
+    "subcategory": "Multi-cloud",
+    "type": "Container-optimized OS",
+    "description": "Efficiently and securely run Docker containers on VMs.",
+    "gcp": [
+      "Container-Optimized OS"
+    ],
+    "aws": [],
+    "azure": [
+      "Azure Container Instances"
+    ]
+  },
+  {
+    "category": "App Modernization",
+    "subcategory": "Multi-cloud",
+    "type": "Hybrid connectivity",
+    "description": "Connect infrastructure to Cloud on your terms, from anywhere.",
+    "gcp": [
+      "Hybrid Connectivity"
+    ],
+    "aws": [
+      "AWS Direct Connect"
+    ],
+    "azure": [
+      "Hybrid Connections"
+    ]
+  },
+  {
+    "category": "App Modernization",
+    "subcategory": "Multi-cloud",
+    "type": "SAP on cloud",
+    "description": "Run SAP workloads on Cloud.",
+    "gcp": [
+      "SAP on Google Cloud"
+    ],
+    "aws": [
+      "SAP on AWS"
+    ],
+    "azure": [
+      "SAP on Azure"
+    ]
+  },
+  {
+    "category": "App Modernization",
+    "subcategory": "Service mesh",
+    "type": "Managed service mesh",
+    "description": "Manage and secure microservices architectures.",
+    "gcp": [
+      "Anthos Service Mesh"
+    ],
+    "aws": [
+      "AWS App Mesh"
+    ],
+    "azure": [
+      "Azure Service Fabric"
+    ]
+  },
+  {
+    "category": "App Modernization",
+    "subcategory": "Service mesh",
+    "type": "Cloud router (BGP)",
+    "description": "Exchange routes between VPC and on-prem via BGP.",
+    "gcp": [
+      "Cloud Router"
+    ],
+    "aws": [
+      "Amazon VPC"
+    ],
+    "azure": [
+      "Azure VPN Gateway"
+    ]
+  },
+  {
+    "category": "App Modernization",
+    "subcategory": "Service mesh",
+    "type": "Istio on managed K8s",
+    "description": "Create clusters ready for Istio service mesh.",
+    "gcp": [
+      "Istio on Google Kubernetes Engine"
+    ],
+    "aws": [
+      "Istio on Amazon EKS"
+    ],
+    "azure": [
+      "Istio in Azure Kubernetes Service"
+    ]
+  },
+  {
+    "category": "App Modernization",
+    "subcategory": "Service mesh",
+    "type": "Multi-cluster/global LB",
+    "description": "Global LB across clusters and VMs with advanced traffic control.",
+    "gcp": [
+      "Traffic Director"
+    ],
+    "aws": [
+      "AWS App Mesh"
+    ],
+    "azure": [
+      "Azure Service Fabric Mesh"
+    ]
+  }
+]

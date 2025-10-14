@@ -8,11 +8,13 @@ feature_image: "/blog/websockets-with-spring-spring-security/feature-image.png"
 
 WebSockets with custom message security is not a topic that appears widely online, let alone example on how to make it happen, therefore I decided to present on web sockets and in particular allowing custom security on the socket level.
 
+---
+
 ## Before you start
 
 About this post:
 
-*   5 – 10 min average reading time
+*   5 – 10-min average reading time
 *   Suitable for beginner’s through to advanced
 
 What you will gain reading this post:
@@ -27,6 +29,8 @@ What you can do to help support:
 *   **Follow this blog** to receive notifications of new postings
 
 Now, let’s get started.
+
+---
 
 ## **Spring Security**
 
@@ -405,6 +409,8 @@ public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBro
 }
 ```
 
+---
+
 ## **Client**
 
 The client is using Angular JS with SocksJS and STOMP.
@@ -464,9 +470,11 @@ angular
           connection = $stomp.connect(propertiesConstant.WEBSOCKET_API_URL + '/stomp', headers);
         }
       }
-    },
+    }
   ]);
 ```
+
+---
 
 ## Example
 
@@ -496,6 +504,8 @@ What you can learn:
 *   Unit Tests
 *   Integration Tests
 *   Jasmine Tests
+
+---
 
 ## Did this help?
 

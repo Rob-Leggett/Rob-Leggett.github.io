@@ -8,18 +8,20 @@ feature_image: "/blog/why-i-dont-think-googles-data-loss-prevention-api-is-ready
 
 Data protection is critical within any business and data has a lot of value. Loss of data can be detrimental to both the business holding the data and the individual who's data has been compromised resulting in drastic consequences. Loss of data is a breach of both privacy and security and with data storage being so cheap, it has expanded massively in volume. While data breaches of sensitive data have been occurring for a long time, they have been becoming more frequent.
 
+---
+
 ## Before you start
 
 About this post:
 
-*   5 – 15 min average reading time
+*   5 – 15-min average reading time
 *   Suitable for intermediate through to advanced
 
 What you will gain reading this post:
 
 *   An understanding of data loss prevention
 *   An understanding of what you need to consider before using the Google Data Loss Prevention API
-*   An breakdown of the code used to execute Google's Data Loss Prevention API
+*   A breakdown of the code used to execute Google's Data Loss Prevention API
 
 What you can do to help support:
 
@@ -27,6 +29,8 @@ What you can do to help support:
 *   **Follow this blog** to receive notifications of new postings
 
 Now, let’s get started.
+
+---
 
 ## What is the role Data Loss Prevention plays?
 
@@ -39,11 +43,15 @@ Data Loss Prevention services are:
 
 Data loss can occur for many reasons such as intentional misuse, leakage, carelessness, BYOD or theft.
 
+---
+
 ## What are use cases for Data Loss Prevention?
 
 *   Enforcement of Data Loss Prevention services as a measure to ensure Data Loss Prevention policies.
 *   Data Loss Prevention can help prevent accidental disclosure or theft by employees having access to sensitive data.
 *   Data Loss Prevention can help prevent lawsuits, loss of reputation, loss of credibility, loss of revenue, remember data does have a value.
+
+---
 
 ## What are steps you can put in place to help minimise Data Loss?
 
@@ -54,11 +62,15 @@ Data loss can occur for many reasons such as intentional misuse, leakage, carele
 *   Encrypt sensitive data where possible
 *   Ensure you have your own policies on the storage that hosts data in the cloud, don't just rely on the cloud provider
 
+---
+
 ## What is the Google Data Loss Prevention API?
 
 Google's Cloud Data Loss Prevention API (DLP) provides classification and redaction for sensitive data like credit card numbers, names, social security numbers, international identifier numbers, phone numbers, and GCP credentials.
 
 To get a deeper understand visit the API documentation - [https://cloud.google.com/dlp/](https://cloud.google.com/dlp/)
+
+---
 
 ## Test Cases
 
@@ -118,7 +130,7 @@ NAB Visa Card Example (not actual card)
 
 **Likelihood**: LIKELY
 
-**Masked**: \*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*
+**Masked**: *******************
 
 Redacted image written to: cc2-redacted.jpg
 
@@ -164,6 +176,8 @@ For **Test Case #2** this also actually came as a surprise to me, I was expectin
 
 It is also worth noting that I did run these same test cases with different images taken of the same cards and the results were different, for that result **Test Case #1** and **Test Case #2** both were unsuccessful where as **Test Case #3** was successful.
 
+---
+
 ## Execution
 
 This is a run through of the code that I ran for the Google Data Loss Prevention API Test Cases
@@ -174,7 +188,7 @@ Follow this guide to allow the code to execute against your Google account: [htt
 
 **Install the SDK locally** - [https://cloud.google.com/sdk/docs/quickstart-macos](https://cloud.google.com/sdk/docs/quickstart-macos)
 
-Ensure you setup the required authentication of the service to allow for execution against your Google account: **export GOOGLE_APPLICATION_CREDENTIALS="/user//\[service-account-key\].json"**
+Ensure you set up the required authentication of the service to allow for execution against your Google account: **export GOOGLE_APPLICATION_CREDENTIALS="/user//\[service-account-key\].json"**
 
 ### Main Class
 
@@ -407,7 +421,7 @@ What is happening here is quite simple:
 6.  The request is executed made to the API **dlp.inspectContent(request)**
 7.  The results returned from the request are iterated over **response.getResult().getFindingsList()**
 8.  Each finding is printed **Quote, InfoType and Likelihood** as you see in Test Case #2
-9.  A call to then execute the deidentification is performed **deIdentifyWithMask(f.getQuote(), '\*', f.getQuote().length(), projectId)**
+9.  A call to then execute the deidentification is performed **deIdentifyWithMask(f.getQuote(), '*', f.getQuote().length(), projectId)**
 
 ```java
 public static void inspectImageFile(String projectId, String filePath) {
@@ -616,6 +630,8 @@ public static void redactImageFile(String projectId, String filePath, String out
 }
 ```
 
+---
+
 ## Conclusion
 
 What I believe is that the inspection of [images for sensitive data](https://cloud.google.com/dlp/docs/inspecting-images) is still quite immature and over time, most likely through the help of machine learning will be able to improve its detection capabilities and provide reliable outcome. The results as it currently is, are not reliable and consistent enough in the detection.
@@ -634,6 +650,8 @@ As it is, it has to many unsuccessful results to be usable, there is also the ex
 It is also missing key info types such as CVV/CVC numbers, which appears on the front of certain cards such as in **Test Case #3**. For a list of support info types refer to [https://cloud.google.com/dlp/docs/infotypes-reference](https://cloud.google.com/dlp/docs/infotypes-reference)
 
 I do think this is a very good API and with the additional training has fantastic potential, but for now I would just use this API for [text based](https://cloud.google.com/dlp/docs/inspecting-text) detection or [storage and database](https://cloud.google.com/dlp/docs/inspecting-storage) detection and wait until the [image detection](https://cloud.google.com/dlp/docs/inspecting-images) has matured.
+
+---
 
 ## Did this help?
 

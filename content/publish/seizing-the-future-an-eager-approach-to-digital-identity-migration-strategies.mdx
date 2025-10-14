@@ -8,11 +8,13 @@ feature_image: "/blog/seizing-the-future-an-eager-approach-to-digital-identity-m
 
 In today's digital age, managing digital identities efficiently and securely has become a cornerstone for any online platform. Among the various strategies to upgrade or shift digital identity management systems, two approaches stand out: **Eager Migration** and **Lazy Migration**, each with its unique advantages and challenges. In this exploration, we delve into the nuances, particularly focusing on the proactive stance of Eager Migration.
 
+---
+
 ## Before you start
 
 About this post:
 
-- 5–10 min average reading time
+- 5 – 10-min average reading time
 - Suitable for intermediate through to advanced readers
 
 What you will gain reading this post:
@@ -51,8 +53,6 @@ Eager Migration represents a proactive and decisive approach, transferring all u
 - **Resource Intensive:** Requires significant upfront investment in planning and execution.
 
 Eager migration is ideal for platforms prioritizing consistency and control, especially when maintaining multiple systems would be costly or impractical.
-
----
 
 ### Lazy Migration
 
@@ -145,7 +145,7 @@ func configureMigration(router *mux.Router, fm *firebase.App) {
 }
 ```
 
-#### **_export_import_users.go**
+#### **exportimportusers.go**
 
 This code provides an HTTP API endpoint to **migrate users from Auth0 to Firebase**. It ensures that users are seamlessly exported from Auth0, converted into a Firebase-compatible format, and imported into the specified Firebase tenant. It also **handles common errors** like missing tenant IDs and import failures, and limits imports to **1000 users per batch** to comply with GCP Identity Platform’s constraints.
 
@@ -210,7 +210,7 @@ func ExportImportUsersHandler(fm *firebase.App) func(w http.ResponseWriter, r *h
 
 **HTTP Handler:**
 
-*   ExportImportUsersHandler(fm \*firebase.App): This function returns an HTTP handler that coordinates the **export and import of users** between Auth0 and Firebase.
+*   ExportImportUsersHandler(fm *firebase.App): This function returns an HTTP handler that coordinates the **export and import of users** between Auth0 and Firebase.
 
 **Workflow:**
 
@@ -226,7 +226,7 @@ Exporting Users from Auth0:
 
 Importing Users into Firebase:
 
-*   importAuth0Users(tc \*auth.TenantClient, users \[\]helpers.User):
+*   importAuth0Users(tc *auth.TenantClient, users \[\]helpers.User):
 *   Converts Auth0 users to Firebase-compatible user objects.
 *   Imports users into Firebase, with a **reminder to handle import limits (1000 users per batch)** if necessary.
 
@@ -922,6 +922,8 @@ func getPasswordHashForUser(user User, users []UserPassword) []byte {
 *   **User Parsing Errors:** If a user’s password or identity data fails to parse, the code logs the error and continues processing other users.
 
 To log in and test the credentials migrated across you will need to have a client that connects to the tenants, this blog post does not contain the instructions to configure that, however you can look at [https://github.com/firebase/firebaseui-web](https://github.com/firebase/firebaseui-web) for a starting point to help you establish a client for quick validation of your data.
+
+---
 
 ## Did this help?
 

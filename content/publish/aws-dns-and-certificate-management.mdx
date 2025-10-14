@@ -8,11 +8,13 @@ feature_image: "/blog/aws-dns-and-certificate-management/feature-image.png"
 
 In the digital landscape, maintaining a secure and reliable online presence is paramount. Two key components that play a vital role in achieving this are DNS (Domain Name System) and certificate management. Understanding how these elements work is crucial for safeguarding the safety and integrity of your online activities. While they operate independently, they also intertwine as essential security gateways into your domain. In this article, we will explore the intricate relationship between DNS and certificate management, shedding light on their individual significance and their collaborative role in fortifying your online presence. By gaining a comprehensive understanding of these components, you'll be better equipped to establish a robust and resilient digital foundation. Let's delve into the world of DNS and certificate management and unlock the secrets to a secure online journey.
 
+---
+
 ## Before you start
 
 About this post:
 
-*   5 - 10 min average reading time
+*   5 - 10-min average reading time
 *   Suitable for intermediate through to advanced
 
 What you will gain reading this post:
@@ -27,14 +29,18 @@ What you can do to help support:
 
 Now, let's get started.
 
-# **Overview**
+---
+
+## **Overview**
 
 This solution is to provide a way to delivery solutions to the market in a quicker and easier manner.
 
 *   Automate DNS and Certificate management
-*   Enable teams to support the end to end solution and devops practises
+*   Enable teams to support the end-to-end solution and devops practises
 
-# **Problem Statement**
+---
+
+## **Problem Statement**
 
 This solution is focused on three separate problems.
 
@@ -61,7 +67,9 @@ While they can be resolved independently, they are often interconnected and by s
 *   Many teams need to be engaged
 *   Lack of automation support
 
-# **Solution**
+---
+
+## **Solution**
 
 This solution captures the DNS and Certificate management for ingress and egress traffic for domains flowing from a centralised account into a cloud account.
 
@@ -69,11 +77,11 @@ This solution captures the DNS and Certificate management for ingress and egress
 
 High Level - Multi Account - Overview
 
-## Naming Strategy
+### Naming Strategy
 
-**Internal** - ....example.com
+**Internal** - .example.com
 
-**External** - ...example.com
+**External** - example.com
 
 ### Key Attributes
 
@@ -85,19 +93,19 @@ High Level - Multi Account - Overview
 
 **cloud** - the cloud provider the cloud accounts team workload resides in, e.g. aws, gcp or azure, useful for multi cloud enterprises running many workloads.
 
-## Zoning
+### Zoning
 
-**Cloud - Account** \- Authoritative DNS service: for both public and private domains they should be registered in the Public Hosted Zone, however private domains should NOT be publicly resolvable but have a TXT record registered in the public hosted zone for domain ownership verification purposes.
+**Cloud - Account** - Authoritative DNS service: for both public and private domains they should be registered in the Public Hosted Zone, however private domains should NOT be publicly resolvable but have a TXT record registered in the public hosted zone for domain ownership verification purposes.
 
 Refer to **Example** below for further clarification.
 
 **Cloud - Central DNS Account** - Authoritative DNS service: for both public and private domains, this is the authoritative service for the centralised domain, E.G. ..example.com and/or .example.com
 
-## Certificate Management
+### Certificate Management
 
-### Lifecycle Management
+#### Lifecycle Management
 
-_Issuing / Revoking / Renewing / Supporting_
+Issuing / Revoking / Renewing / Supporting
 
 *   Issuing: [https://docs.aws.amazon.com/acm/latest/userguide/gs.html](https://docs.aws.amazon.com/acm/latest/userguide/gs.html)
 *   Renewing: [https://docs.aws.amazon.com/acm/latest/userguide/managed-renewal.html](https://docs.aws.amazon.com/acm/latest/userguide/managed-renewal.html)
@@ -107,13 +115,15 @@ _Issuing / Revoking / Renewing / Supporting_
 *   Tagging: [https://docs.aws.amazon.com/acm/latest/userguide/tags.html](https://docs.aws.amazon.com/acm/latest/userguide/tags.html)
 *   Compliance: [https://aws.amazon.com/compliance/services-in-scope/](https://aws.amazon.com/compliance/services-in-scope/)
 
+---
+
 ## Deployment
 
 ![](/blog/aws-dns-and-certificate-management/inline-2.png)
 
 Detailed - Multi Account - Overview
 
-NOTE: This solution is dependant on the use of AWS PrivateLink, if you do not use AWS PrivateLink this solution will not be suitable, and it is recommended to look into alternative products capabilities to meet your requirements.
+NOTE: This solution is dependent on the use of AWS PrivateLink, if you do not use AWS PrivateLink this solution will not be suitable, and it is recommended to look into alternative products capabilities to meet your requirements.
 
 Also worth noting if AWS has a more feature rich product, then this could become an option in the future even without AWS PrivateLink - [https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vs-rest.html](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vs-rest.html)
 
@@ -128,14 +138,16 @@ Also worth noting if AWS has a more feature rich product, then this could become
 
 It is worth noting that at the time of writing this post the AWS API Gateway does not support custom domain names for private API’s - [Creating a private API in Amazon API Gateway - Amazon API Gateway](https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-private-apis.html).
 
-# Process
+---
 
-Recommended _steps_:
+## Process
 
-Each of these will be different, depending if you are doing this yourself or as part of an organisation.
+Recommended steps:
+
+Each of these will be different, depending on if you are doing this yourself or as part of an organisation.
 
 1.  Procure new domain
-    *   A sub domain of .example.com
+    *   A subdomain of .example.com
 2.  Request certificate
     *   Only to verify a txt record within route 53 (verify ownership)
 3.  Central Account to Account domain configuration
@@ -143,11 +155,13 @@ Each of these will be different, depending if you are doing this yourself or as 
 4.  Documentation
     *   Key Management Plan
 
-# Example
+---
 
-**...example.com** would be registered in the public hosted zone where a certificate would be issued to support the domain as well as any subdomains of ...example.com, because certificates become expensive.
+## Example
 
-However the subdomain of ...example.com in this example **api....example.com** would belong to a private hosted zone ensuring the private domain is publicly registered for ownership verification but not publicly resolvable.
+**example.com** would be registered in the public hosted zone where a certificate would be issued to support the domain as well as any subdomains of example.com, because certificates become expensive.
+
+However, the subdomain of example.com in this example **api.example.com** would belong to a private hosted zone ensuring the private domain is publicly registered for ownership verification but not publicly resolvable.
 
 The end result would look like the following:
 
@@ -156,7 +170,9 @@ Server: 10.1.1.1
 Address: 10.1.1.1
 
 Non-authoritative answer:  
-\*\*\* Can't find [](http://api.subdomain.centraldomain.aws.example.com)[api.subdomain.centraldomain.aws.example.com](http://api.subdomain.centraldomain.aws.example.com): No answer
+*** Can't find [](http://api.subdomain.centraldomain.aws.example.com)[api.subdomain.centraldomain.aws.example.com](http://api.subdomain.centraldomain.aws.example.com): No answer
+
+---
 
 ## Did this help?
 
