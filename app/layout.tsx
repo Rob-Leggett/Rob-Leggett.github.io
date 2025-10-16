@@ -30,14 +30,14 @@ export default function RootLayout({
       {/* Google Analytics */}
       <Script
         async
-        src="https://www.googletagmanager.com/gtag/js?id=G-XT5ZS9WSG5"
+        src="https://www.googletagmanager.com/gtag/js?id=G-G9GHB37RTG"
       />
       <Script id="google-analytics">
         {`
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', 'G-XT5ZS9WSG5', {
+            gtag('config', 'G-G9GHB37RTG', {
               page_path: window.location.pathname,
             });
           `}
