@@ -55,13 +55,27 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
   return (
     <BlogLayout title={data.title} date={data.date} feature_image={data.feature_image}>
-      <article className="
-        prose prose-neutral dark:prose-invert max-w-none
-        prose-pre:bg-gray-900 prose-pre:text-gray-100
-        prose-code:before:content-none prose-code:after:content-none
-        [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-1.5
-        [&_p]:my-4 prose-headings:mt-8 prose-headings:mb-3
-      ">
+      <article
+        className="
+          prose prose-neutral dark:prose-invert max-w-none
+          prose-pre:bg-gray-900 prose-pre:text-gray-100
+          prose-code:before:content-none prose-code:after:content-none
+          [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-1.5
+          [&_p]:my-4 prose-headings:mt-8 prose-headings:mb-3
+
+          /* Always-visible link styling */
+          [&_p>a]:text-blue-600 [&_li>a]:text-blue-600
+          dark:[&_p>a]:text-blue-400 dark:[&_li>a]:text-blue-400
+          [&_p>a]:font-medium [&_li>a]:font-medium
+          [&_p>a]:underline [&_li>a]:underline
+          [&_p>a]:underline-offset-4 [&_li>a]:underline-offset-4
+          [&_p>a]:decoration-blue-500/40 [&_li>a]:decoration-blue-500/40
+          [&_p>a:hover]:decoration-blue-500 [&_li>a:hover]:decoration-blue-500
+          [&_p>a:hover]:text-blue-700 [&_li>a:hover]:text-blue-700
+          dark:[&_p>a:hover]:text-blue-300 dark:[&_li>a:hover]:text-blue-300
+          transition-colors duration-200
+        "
+      >
         <MDXRemote
           source={normalized}
           components={mdxComponents}
