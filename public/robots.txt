@@ -1,0 +1,11 @@
+# robots.txt for https://robertleggett.com.au
+
+User-agent: *
+Allow: /
+
+# Blog sitemap and RSS feed
+Sitemap: https://robertleggett.com.au/sitemap.xml
+Sitemap: https://robertleggett.com.au/rss/feed.xml
+
+# Helpful reference for crawlers
+Host: https://robertleggett.com.au

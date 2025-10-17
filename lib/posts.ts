@@ -1,6 +1,6 @@
-import fs from "fs";
-import path from "path";
-import matter from "gray-matter";
+import fs from 'fs';
+import path from 'path';
+import matter from 'gray-matter';
 
 const PUBLISH_DIR = path.join(process.cwd(), "content/publish");
 
@@ -16,12 +16,12 @@ export function getAllPostSlugs(): string[] {
 
 export function getAllPosts(): PostMeta[] {
   const files = fs.readdirSync(PUBLISH_DIR);
-  const posts = files
+  return files
     .filter((f) => f.endsWith(".mdx"))
     .map((file) => {
       const filePath = path.join(PUBLISH_DIR, file);
       const raw = fs.readFileSync(filePath, "utf8");
-      const { data, content } = matter(raw);
+      const {data, content} = matter(raw);
       const excerpt = content.split("\n").slice(0, 3).join(" ");
       return {
         slug: data.slug || file.replace(/\.mdx$/, ""),
@@ -31,8 +31,6 @@ export function getAllPosts(): PostMeta[] {
       };
     })
     .sort((a, b) => (a.date < b.date ? 1 : -1));
-
-  return posts;
 }
 
 export function getPostContent(slug: string) {

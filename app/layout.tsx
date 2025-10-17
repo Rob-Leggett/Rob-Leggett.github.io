@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "Rob Leggett Portfolio",
   description: "Portfolio of Rob Leggett — Technology Strategy, Engineering, and AI Platforms",
+  alternates: {
+    types: {
+      "application/rss+xml": [
+        { url: "/rss/feed.xml", title: "Rob Leggett Blog RSS" },
+      ],
+    },
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
