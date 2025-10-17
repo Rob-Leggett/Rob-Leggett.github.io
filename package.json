@@ -11,7 +11,10 @@
     "dev": "next dev --turbopack",
     "build": "npm run script:generate-rss && npm run script:generate-sitemap && npm run script:generate-post-index && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "ping-search-engines": "npm run ping:bing && npm run ping:yandex",
+    "ping:bing": "curl -s 'https://www.bing.com/ping?sitemap=https://robertleggett.com.au/sitemap.xml'",
+    "ping:yandex": "curl -s 'https://api.indexnow.org/indexnow?url=https://robertleggett.com.au/&key=1234abcd5678ef901234abcd5678ef90'"
   },
   "dependencies": {
     "@icons-pack/react-simple-icons": "^13.8.0",
