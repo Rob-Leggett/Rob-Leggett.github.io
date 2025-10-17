@@ -10,6 +10,8 @@ import BlogLayout from "@/components/portfolio/blog/[slug]/blog-layout";
 import CodeBlock from "@/components/common/code-block";
 import CloudComparisonTable from "@/components/common/cloud-comparison-table";
 import cloudData from "@/content/data/cloud-services.json";
+import { notFound } from "next/navigation";
+import { Metadata } from 'next';
 
 const PUBLISH_DIR = path.join(process.cwd(), "content/publish");
 
@@ -20,38 +22,91 @@ export async function generateStaticParams() {
     .map((file) => ({ slug: file.replace(/\.mdx?$/, "") }));
 }
 
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const filePath = path.join(PUBLISH_DIR, `${slug}.mdx`);
+  if (!fs.existsSync(filePath)) notFound();
+
+  const src = fs.readFileSync(filePath, "utf8");
+  const { data } = matter(src);
+
+  const meta = data.meta ?? {};
+  const og = data.og ?? {};
+  const twitter = data.twitter ?? {};
+
+  return {
+    title: meta.title || data.title,
+    description: meta.description,
+    keywords: meta.keywords as string[] | undefined,
+    authors: meta.author ? [{ name: meta.author }] : undefined,
+    alternates: meta.canonical ? { canonical: meta.canonical } : undefined,
+    openGraph: {
+      type: og.type || "article",
+      title: og.title || meta.title || data.title,
+      description: og.description || meta.description,
+      url: og.url || meta.canonical,
+      images: og.image || meta.image ? [{ url: og.image || meta.image }] : undefined,
+    },
+    twitter: {
+      card: twitter.card || "summary_large_image",
+      title: twitter.title || meta.title || data.title,
+      description: twitter.description || meta.description,
+      images: twitter.image || meta.image ? [twitter.image || meta.image] : undefined,
+    },
+  };
+}
+
 const mdxComponents = {
   h1: (p: any) => <h1 {...p} className="mt-10 mb-4 text-3xl font-extrabold leading-tight" />,
   h2: (p: any) => <h2 {...p} className="mt-8 mb-3 text-2xl font-bold leading-snug" />,
   h3: (p: any) => <h3 {...p} className="mt-6 mb-2 text-xl font-semibold" />,
   code: (p: any) => <code {...p} />,
   pre: (p: any) => {
+    // Defensive extraction
     const child = p?.children?.props ?? {};
-    const lang = typeof child.className === "string" && child.className.startsWith("language-")
-      ? child.className.replace("language-", "")
-      : "text";
+    const rawLang = child.className || "";
+    const lang = rawLang.startsWith("language-")
+      ? rawLang.replace("language-", "")
+      : "plaintext";
+
+    const rawCode = child.children;
     const code =
-      typeof child.children === "string"
-        ? child.children
-        : Array.isArray(child.children)
-          ? child.children.join("")
-          : String(child.children ?? "");
-    return <CodeBlock language={lang} value={code} />;
+      typeof rawCode === "string"
+        ? rawCode
+        : Array.isArray(rawCode)
+          ? rawCode.join("")
+          : typeof rawCode === "number"
+            ? String(rawCode)
+            : "";
+
+    // Safety: return a React element explicitly
+    return <CodeBlock key={lang + code.slice(0, 20)} language={lang} value={code || ""} />;
   },
   // expose your table to MDX
   CloudComparisonTable: () => <CloudComparisonTable data={cloudData} />,
 };
 
-export default async function PostPage({ params }: { params: { slug: string } }) {
+function readPostFile(slug: string) {
+  const mdx = path.join(PUBLISH_DIR, `${slug}.mdx`);
+  const md  = path.join(PUBLISH_DIR, `${slug}.md`);
+  const filePath = fs.existsSync(mdx) ? mdx : fs.existsSync(md) ? md : null;
+  if (!filePath) notFound();
+  return fs.readFileSync(filePath, "utf8");
+}
+
+export default async function PostPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const filePath = path.join(PUBLISH_DIR, `${slug}.mdx`);
-  const src = fs.readFileSync(filePath, "utf8");
+  const src = readPostFile(slug);
   const { data, content } = matter(src);
 
   const normalized = content
     .replace(/\r\n/g, "\n")
     .replace(/([^\n])\n(#{1,6}\s)/g, "$1\n\n$2")
     .replace(/\n{3,}/g, "\n\n");
+
+  const sanitized = normalized
+    .replace(/<\/?text>/gi, "`text`")
+    .replace(/<\s*>/g, "&lt;&gt;");
 
   return (
     <BlogLayout title={data.title} date={data.date} feature_image={data.feature_image}>
@@ -77,7 +132,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
         "
       >
         <MDXRemote
-          source={normalized}
+          source={sanitized}
           components={mdxComponents}
           options={{
             mdxOptions: {
