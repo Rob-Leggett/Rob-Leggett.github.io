@@ -62,21 +62,7 @@ export default function Header() {
             className="mt-2 text-[0.95rem] text-gray-600 dark:text-gray-400 leading-snug"
           >
             <span className="font-mono text-blue-500 dark:text-blue-400">{`>`}</span>{" "}
-            Delivering intelligent cloud platforms, edge AI systems, and modern developer
-            infrastructure.
-          </motion.p>
-
-          <motion.p
-            initial={{ y: 6, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.25, duration: 0.35 }}
-            className="mt-2 text-[0.95rem] text-gray-600 dark:text-gray-400 leading-snug"
-          >
-            <span className="font-mono text-blue-500 dark:text-blue-400">{`>`}</span>{" "}
-            Building intelligent cloud platforms, delivering edge AI systems, and the next generation of{" "}
-            <span className="font-semibold text-blue-600 dark:text-blue-400">
-              developer infrastructure.
-            </span>
+            Building intelligent cloud and AI platforms, advancing edge intelligence, and shaping the next generation of developer infrastructure.
           </motion.p>
 
           {/* Buttons */}
