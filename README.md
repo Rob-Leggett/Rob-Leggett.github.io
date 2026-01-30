@@ -89,6 +89,18 @@ The site is statically exported and automatically deployed with GitHub Pages.
 
 Build output is generated to `out/` directory.
 
+### GitHub Pages Configuration
+
+GitHub Pages must be configured to use **GitHub Actions** as the build source (not branch deployment). If the site displays the README instead of the actual website, check the repository settings:
+
+1. Go to **Settings → Pages**
+2. Under **Build and deployment**, ensure **Source** is set to **GitHub Actions**
+
+Or via CLI:
+```bash
+gh api repos/Rob-Leggett/Rob-Leggett.github.io/pages -X PUT -f build_type=workflow
+```
+
 ## 📊 Analytics
 
 Google Analytics 4 is used to measure engagement and traffic insights.
