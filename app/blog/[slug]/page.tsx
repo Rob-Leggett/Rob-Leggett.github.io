@@ -12,6 +12,7 @@ import CloudComparisonTable from "@/components/common/cloud-comparison-table";
 import cloudData from "@/content/data/cloud-services.json";
 import { notFound } from "next/navigation";
 import { Metadata } from 'next';
+import { ComponentPropsWithoutRef } from "react";
 
 const PUBLISH_DIR = path.join(process.cwd(), "content/publish");
 
@@ -57,11 +58,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 }
 
 const mdxComponents = {
-  h1: (p: any) => <h1 {...p} className="mt-10 mb-4 text-3xl font-extrabold leading-tight" />,
-  h2: (p: any) => <h2 {...p} className="mt-8 mb-3 text-2xl font-bold leading-snug" />,
-  h3: (p: any) => <h3 {...p} className="mt-6 mb-2 text-xl font-semibold" />,
-  code: (p: any) => <code {...p} />,
-  pre: (p: any) => {
+  h1: (p: ComponentPropsWithoutRef<"h1">) => <h1 {...p} className="mt-10 mb-4 text-3xl font-extrabold leading-tight" />,
+  h2: (p: ComponentPropsWithoutRef<"h2">) => <h2 {...p} className="mt-8 mb-3 text-2xl font-bold leading-snug" />,
+  h3: (p: ComponentPropsWithoutRef<"h3">) => <h3 {...p} className="mt-6 mb-2 text-xl font-semibold" />,
+  code: (p: ComponentPropsWithoutRef<"code">) => <code {...p} />,
+  pre: (p: ComponentPropsWithoutRef<"pre"> & { children?: React.ReactElement<{ className?: string; children?: React.ReactNode }> }) => {
     // Defensive extraction
     const child = p?.children?.props ?? {};
     const rawLang = child.className || "";

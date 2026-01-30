@@ -26,8 +26,7 @@ const nextConfig = {
   // Treat .mdx as valid pages/components
   pageExtensions: ["ts", "tsx", "md", "mdx"],
 
-  // Optional: prevent build errors from missing env vars on export
-  eslint: { ignoreDuringBuilds: true },
+  // Optional: prevent build errors from missing types
   typescript: { ignoreBuildErrors: true },
 };
 

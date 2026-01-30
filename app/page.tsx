@@ -1,3 +1,4 @@
+import Link from "next/link";
 import BlogFeed from "@/components/portfolio/blog/blog-feed";
 import GitHubProjects from "@/components/portfolio/github/github-projects";
 import Header from "@/app/header";
@@ -13,9 +14,9 @@ export default function Home() {
         <section className="container mx-auto py-6 sm:py-8">
           <div className="flex items-center justify-between mb-6 border-b border-gray-200 dark:border-neutral-800 pb-2">
             <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">Latest Posts</h2>
-            <a href="/blog" className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">
+            <Link href="/blog" className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">
               View all →
-            </a>
+            </Link>
           </div>
 
           <div className="relative rounded-lg border border-gray-100 dark:border-neutral-800 bg-gray-50/30 dark:bg-neutral-800/30">

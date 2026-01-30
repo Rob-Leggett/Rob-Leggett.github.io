@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,8 +56,8 @@ export default function GitHubProjects({
           .sort((a, b) => b.stargazers_count - a.stargazers_count);
 
         if (!cancelled) setRepos(filtered);
-      } catch (err: any) {
-        if (!cancelled) setError(err.message);
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
         if (!cancelled) setLoading(false);
       }

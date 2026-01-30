@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -42,11 +43,14 @@ export default function BlogFeed() {
         >
           {/* Image */}
           {p.feature_image && (
-            <img
-              src={p.feature_image}
-              alt={p.title}
-              className="w-full h-40 object-cover"
-            />
+            <div className="relative w-full h-40">
+              <Image
+                src={p.feature_image}
+                alt={p.title}
+                fill
+                className="object-cover"
+              />
+            </div>
           )}
 
           {/* Body */}
