@@ -16,9 +16,9 @@ export default function CloudComparisonTable({ data }: { data: Row[] }) {
     items && items.length > 0 ? items.join(', ') : '—';
 
   return (
-    <div className="overflow-x-auto border rounded-lg shadow-sm my-6">
+    <div className="overflow-x-auto border border-border rounded-lg shadow-sm my-6">
       <table className="min-w-full text-sm text-left border-collapse">
-        <thead className="bg-gray-100 dark:bg-gray-800 border-b sticky top-0">
+        <thead className="bg-muted border-b border-border sticky top-0">
         <tr>
           {['Category', 'Type', 'Description', 'GCP', 'AWS', 'Azure'].map((h) => (
             <th key={h} className="p-3 font-semibold whitespace-nowrap">
@@ -31,7 +31,7 @@ export default function CloudComparisonTable({ data }: { data: Row[] }) {
         {data.map((row, i) => (
           <tr
             key={i}
-            className="border-t hover:bg-gray-50 dark:hover:bg-gray-900/30"
+            className="border-t border-border hover:bg-muted/50"
           >
             <td className="p-3 align-top">{row.category}</td>
             <td className="p-3 align-top">{row.type}</td>

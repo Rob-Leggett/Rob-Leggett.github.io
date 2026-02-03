@@ -40,9 +40,9 @@ export default function CodeBlock({ language = 'text', value, filename }: Props)
   return (
     <div className="not-prose relative group overflow-hidden rounded-xl">
       {/* Header (filename + copy) */}
-      <div className="absolute top-2 right-2 flex items-center gap-2">
+      <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
         {filename && (
-          <span className="rounded-md bg-gray-800/80 px-2 py-0.5 text-xs text-gray-200">
+          <span className="rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
             {filename}
           </span>
         )}
@@ -52,9 +52,9 @@ export default function CodeBlock({ language = 'text', value, filename }: Props)
           aria-label="Copy code"
           className="
             rounded-md px-2 py-1 text-xs font-medium
-            bg-gray-800/90 text-blue-400 hover:text-blue-300 hover:bg-gray-700
+            bg-secondary text-primary hover:opacity-80
             transition flex items-center gap-1 opacity-0 group-hover:opacity-100
-            focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50
+            focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary/50
           "
         >
           {copied ? <Check size={14} /> : <Copy size={14} />}

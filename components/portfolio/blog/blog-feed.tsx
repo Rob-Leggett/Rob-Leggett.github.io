@@ -66,14 +66,14 @@ export default function BlogFeed() {
 
             <CardContent className="flex flex-col justify-between flex-1">
               {/* Excerpt with fixed height */}
-              <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-4 min-h-[5rem]">
+              <p className="text-sm text-muted-foreground line-clamp-4 min-h-[5rem]">
                 {p.excerpt || ""}
               </p>
 
               {/* Footer aligned bottom */}
-              <div className="mt-4 flex items-center justify-between pt-2 border-t border-gray-100 dark:border-neutral-800">
+              <div className="mt-4 flex items-center justify-between pt-2 border-t border-border">
                 <Badge variant="secondary">MDX</Badge>
-                <time className="text-xs text-gray-500">
+                <time className="text-xs text-muted-foreground">
                   {new Date(p.date).toLocaleDateString(undefined, {
                     year: "numeric",
                     month: "short",

@@ -114,21 +114,19 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
       <article
         className="
           prose prose-neutral dark:prose-invert max-w-none
-          prose-pre:bg-gray-900 prose-pre:text-gray-100
+          prose-pre:bg-card prose-pre:text-card-foreground
           prose-code:before:content-none prose-code:after:content-none
           [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-1.5
           [&_p]:my-4 prose-headings:mt-8 prose-headings:mb-3
 
           /* Always-visible link styling */
-          [&_p>a]:text-blue-600 [&_li>a]:text-blue-600
-          dark:[&_p>a]:text-blue-400 dark:[&_li>a]:text-blue-400
+          [&_p>a]:text-primary [&_li>a]:text-primary
           [&_p>a]:font-medium [&_li>a]:font-medium
           [&_p>a]:underline [&_li>a]:underline
           [&_p>a]:underline-offset-4 [&_li>a]:underline-offset-4
-          [&_p>a]:decoration-blue-500/40 [&_li>a]:decoration-blue-500/40
-          [&_p>a:hover]:decoration-blue-500 [&_li>a:hover]:decoration-blue-500
-          [&_p>a:hover]:text-blue-700 [&_li>a:hover]:text-blue-700
-          dark:[&_p>a:hover]:text-blue-300 dark:[&_li>a:hover]:text-blue-300
+          [&_p>a]:decoration-primary/40 [&_li>a]:decoration-primary/40
+          [&_p>a:hover]:decoration-primary [&_li>a:hover]:decoration-primary
+          [&_p>a:hover]:opacity-80 [&_li>a:hover]:opacity-80
           transition-colors duration-200
         "
       >

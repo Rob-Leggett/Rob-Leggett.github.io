@@ -4,6 +4,8 @@ import React, { Suspense } from 'react';
 import Script from "next/script";
 import UnregisterSW from "@/app/unregister-sw";
 import AnalyticsListener from "@/app/analytics-listener";
+import { ThemeProvider } from "@/components/theme-provider";
+import { themes } from "@/lib/themes";
 
 import "./globals.css";
 
@@ -26,7 +28,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
     <head>
       {/* GA4 – load after hydration */}
       <Script
@@ -47,7 +49,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </Script>
     </head>
     <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-      {children}
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="dark"
+        themes={themes.map((t) => t.value)}
+        enableSystem
+        disableTransitionOnChange
+      >
+        {children}
+      </ThemeProvider>
 
       <UnregisterSW />
       <Suspense fallback={null}>
