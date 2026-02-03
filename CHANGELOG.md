@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.0...v1.0.1) (2026-01-30)
+
+
+### Bug Fixes
+
+* updated so the website renders ([6e737be](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/6e737bed2915ce6fbe43178bfd8221802dfb54dd))
+
 # 1.0.0 (2026-01-30)
 
 
