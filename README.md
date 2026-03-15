@@ -184,7 +184,7 @@ The site supports 15 themes organised in three categories:
 | Category | Themes |
 |----------|--------|
 | **Default** | Light, Dark, System |
-| **Developer** | Matrix, Dracula, Nord, Tokyo Night, Synthwave, Monokai, Cyberpunk |
+| **Developer** | Catppuccin, Gruvbox, Rosé Pine, Solarized, GitHub Dark, One Dark, Everforest |
 | **Professional** | Corporate Blue, Executive, Slate, Ocean, Minimal |
 
 Themes are defined in `lib/themes.ts` with corresponding CSS custom properties in `app/globals.css`.

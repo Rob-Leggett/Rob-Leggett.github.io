@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Mail, FileText, Linkedin } from "lucide-react";
 import { SiGithub } from "@icons-pack/react-simple-icons";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { InteractiveTerminal } from "@/components/interactive-terminal";
 
 export default function Header() {
   return (
@@ -136,19 +137,8 @@ export default function Header() {
             </Button>
           </motion.div>
 
-          {/* Terminal line */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1, duration: 0.25 }}
-            className="mt-3 font-mono text-[12px] sm:text-[13px] text-muted-foreground"
-          >
-            <span className="text-primary">rob@dev</span>:~$
-            <span className="ml-2 text-primary/80">building-next-gen-cloud</span>
-            <span className="ml-1 inline-block animate-[blink_1.2s_steps(2,start)_infinite]">
-              ▌
-            </span>
-          </motion.div>
+          {/* Interactive terminal */}
+          <InteractiveTerminal />
         </div>
       </div>
     </header>
