@@ -1,3 +1,11 @@
+## [1.0.8](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.7...v1.0.8) (2026-03-15)
+
+
+### Bug Fixes
+
+* restore blog post ([31873b2](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/31873b20051335d1774ea2c753d7d590ca5567fb))
+* restore blog post ([e19820e](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/e19820e2278313189dc2c10e4aa9a36f0e5a2564))
+
 ## [1.0.7](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.6...v1.0.7) (2026-03-15)
 
 
