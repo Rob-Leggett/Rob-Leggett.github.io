@@ -1,6 +1,6 @@
 ---
 title: "Secure WebSockets with Spring Boot 3 and Spring Security 6 - Token-Based Authentication"
-date: "2026-02-03"
+date: "2015-05-27"
 slug: "secure-websockets-spring-boot-spring-security"
 status: "publish"
 feature_image: "/blog/secure-websockets-spring-boot-spring-security/feature-image.png"
@@ -42,7 +42,7 @@ This project has been fully modernised from its original AngularJS and Spring 4 
 | **Build (client)** | Gulp 3, Bower | **Angular CLI**, Node.js 20+ |
 | **Build (server)** | Maven, WAR deployment | **Maven**, embedded Tomcat JAR |
 | **Password Encoding** | Plain text / custom | **BCrypt** |
-| **WebSocket Auth** | Custom token interceptor | **WebSocketTokenInterceptor** with JWT validation on CONNECT |
+| **WebSocket Auth** | Custom TokenSecurityChannelInterceptor | **WebSocketTokenInterceptor** with JWT validation on CONNECT |
 
 ---
 
@@ -70,378 +70,218 @@ Now, let's get started.
 
 ## **Spring Security**
 
-In this particular example, I am wanting to perform authentication based on a custom message header that contains a token, the token is then in turn transformed to a User object which is then added to the SecurityContext.
+In this particular example, I am wanting to perform authentication based on a custom message header that contains a JWT token, the token is then in turn validated and transformed to a User object which is then added to the SecurityContext.
 
 ### What is supported out of the box
 
-Spring Security by default has security for WebSockets and can use the message header simpUser to authenticate, but when you want to authenticate on a different identifier in this example a token, then any custom header you attach with come under the message header nativeHeaders which will contain a list of custom headers, the default spring security implementation does not allow us to access the headers under nativeHeaders and therefore cannot perform our authentication.
-
-Spring also does not allow us to extend the default functionality and enhance it to support our requirements and we are required to write our own configuration to support this.
+Spring Security by default has security for WebSockets and can use the message header simpUser to authenticate, but when you want to authenticate on a different identifier in this example a JWT token, then any custom header you attach will come under the message header nativeHeaders which will contain a list of custom headers.
 
 ### What is required
 
-To allow authentication to occur on custom headers we are required to override the Spring Security default behavior, and since it does not support to ability to override parts we would like to enhance we have to create a new AbstractWebSocketMessageBrokerConfigurer.
+To allow JWT authentication to occur on WebSocket connections we need to create a **WebSocketTokenInterceptor** that implements `ChannelInterceptor`. This interceptor hooks into the STOMP CONNECT frame, extracts the JWT token from the native headers, validates it using the **JJWT** library, and establishes the **SecurityContext** for the WebSocket session.
 
-### The three major changes to note are
+### The key aspects of the interceptor are
 
-1.  This class in not marked as final so it can be extended.
-2.  The configureClientInboundChannel is not marked as final so it can be overridden
-3.  securityContextChannelInterceptor is now returning our injected TokenSecurityChannelInterceptor rather than SecurityContextChannelInterceptor
-
-```java
-package your.package.name;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.SmartInitializingSingleton;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.messaging.converter.MessageConverter;
-import org.springframework.messaging.handler.invocation.HandlerMethodArgumentResolver;
-import org.springframework.messaging.simp.config.ChannelRegistration;
-import org.springframework.messaging.simp.config.MessageSecurityMetadataSourceRegistry;
-import org.springframework.messaging.simp.config.StompEndpointRegistry;
-import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
-import org.springframework.messaging.support.ChannelInterceptor;
-import org.springframework.security.access.AccessDecisionManager;
-import org.springframework.security.access.vote.AffirmativeBased;
-import org.springframework.security.messaging.access.intercept.ChannelSecurityInterceptor;
-import org.springframework.security.messaging.access.expression.MessageExpressionVoter;
-import org.springframework.security.messaging.access.intercept.MessageSecurityMetadataSource;
-import org.springframework.web.socket.config.annotation.AbstractWebSocketMessageBrokerConfigurer;
-import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
-import org.springframework.web.socket.handler.WebSocketHandlerDecoratorFactory;
-import org.springframework.web.servlet.handler.SimpleUrlHandlerMapping;
-import org.springframework.web.socket.sockjs.transport.TransportHandlingSockJsService;
-import org.springframework.web.socket.sockjs.support.SockJsHttpRequestHandler;
-import org.springframework.web.socket.server.support.WebSocketHttpRequestHandler;
-
-import java.util.*;
-
-/**
- * Abstract WebSocket Security configuration base class.
- */
-public abstract class AbstractSecurityWebSocketMessageBrokerConfig
-        extends AbstractWebSocketMessageBrokerConfigurer
-        implements SmartInitializingSingleton {
-
-    private final WebSocketMessageSecurityMetadataSourceRegistry inboundRegistry =
-            new WebSocketMessageSecurityMetadataSourceRegistry();
-
-    @Autowired
-    private ApplicationContext context;
-
-    @Autowired
-    private TokenSecurityChannelInterceptor tokenSecurityChannelInterceptor;
-
-    public AbstractSecurityWebSocketMessageBrokerConfig() {
-    }
-
-    @Override
-    public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Implement in subclass
-    }
-
-    @Override
-    public void addArgumentResolvers(List<HandlerMethodArgumentResolver> argumentResolvers) {
-        argumentResolvers.add(new AuthenticationPrincipalArgumentResolver());
-    }
-
-    @Override
-    public void configureClientInboundChannel(ChannelRegistration registration) {
-        ChannelSecurityInterceptor inboundChannelSecurity = this.inboundChannelSecurity();
-
-        registration.interceptors(this.securityContextChannelInterceptor());
-
-        if (!this.sameOriginDisabled()) {
-            registration.interceptors(this.csrfChannelInterceptor());
-        }
-
-        if (this.inboundRegistry.containsMapping()) {
-            registration.interceptors(inboundChannelSecurity);
-        }
-
-        this.customizeClientInboundChannel(registration);
-    }
-
-    protected boolean sameOriginDisabled() {
-        return true;
-    }
-
-    protected void customizeClientInboundChannel(ChannelRegistration registration) {
-        // Extension point for subclasses
-    }
-
-    @Bean
-    public ChannelInterceptor securityContextChannelInterceptor() {
-        return tokenSecurityChannelInterceptor;
-    }
-
-    @Bean
-    public CsrfChannelInterceptor csrfChannelInterceptor() {
-        return new CsrfChannelInterceptor();
-    }
-
-    @Bean
-    public ChannelSecurityInterceptor inboundChannelSecurity() {
-        ChannelSecurityInterceptor channelSecurityInterceptor =
-                new ChannelSecurityInterceptor(this.inboundMessageSecurityMetadataSource());
-
-        List<MessageExpressionVoter<?>> voters = new ArrayList<>();
-        voters.add(new MessageExpressionVoter<>());
-
-        AccessDecisionManager manager = new AffirmativeBased(voters);
-        channelSecurityInterceptor.setAccessDecisionManager(manager);
-        return channelSecurityInterceptor;
-    }
-
-    @Bean
-    public MessageSecurityMetadataSource inboundMessageSecurityMetadataSource() {
-        this.configureInbound(this.inboundRegistry);
-        return this.inboundRegistry.createMetadataSource();
-    }
-
-    protected void configureInbound(MessageSecurityMetadataSourceRegistry messages) {
-        // Implement in subclass
-    }
-
-    @Override
-    public void afterSingletonsInstantiated() {
-        if (!this.sameOriginDisabled()) {
-            String beanName = "stompWebSocketHandlerMapping";
-            SimpleUrlHandlerMapping mapping =
-                    this.context.getBean(beanName, SimpleUrlHandlerMapping.class);
-            Map<?, ?> mappings = mapping.getHandlerMap();
-
-            for (Object object : mappings.values()) {
-                if (object instanceof SockJsHttpRequestHandler handler) {
-                    var service = handler.getSockJsService();
-                    if (!(service instanceof TransportHandlingSockJsService transportService)) {
-                        throw new IllegalStateException("sockJsService must be instance of TransportHandlingSockJsService but got " + service);
-                    }
-
-                    List<?> handshakeInterceptors = transportService.getHandshakeInterceptors();
-                    List<Object> updated = new ArrayList<>(handshakeInterceptors.size() + 1);
-                    updated.add(new CsrfTokenHandshakeInterceptor());
-                    updated.addAll(handshakeInterceptors);
-                    transportService.setHandshakeInterceptors(updated);
-
-                } else if (object instanceof WebSocketHttpRequestHandler handler) {
-                    List<?> handshakeInterceptors = handler.getHandshakeInterceptors();
-                    List<Object> updated = new ArrayList<>(handshakeInterceptors.size() + 1);
-                    updated.add(new CsrfTokenHandshakeInterceptor());
-                    updated.addAll(handshakeInterceptors);
-                    handler.setHandshakeInterceptors(updated);
-
-                } else {
-                    throw new IllegalStateException(
-                            "Bean " + beanName + " is expected to contain mappings to either a SockJsHttpRequestHandler or a WebSocketHttpRequestHandler but got " + object);
-                }
-            }
-        }
-    }
-
-    private class WebSocketMessageSecurityMetadataSourceRegistry extends MessageSecurityMetadataSourceRegistry {
-        private WebSocketMessageSecurityMetadataSourceRegistry() {
-        }
-
-        public MessageSecurityMetadataSource createMetadataSource() {
-            return super.createMetadataSource();
-        }
-
-        protected boolean containsMapping() {
-            return super.containsMapping();
-        }
-    }
-}
-```
-
-To allow authentication to occur on custom headers we are required to override the Spring Security default behavior, and since it does not support to ability to override parts we would like to enhance we have to create a new SecurityContextChannelInterceptor .
-
-### The four major changes to note are
-
-1.  This class in not marked as final so it can be extended.
-2.  The setup method calls our custom authentication method
-3.  We can now access the custom message headers that appear under nativeHeaders
-4.  The class in injectable
+1.  It implements `ChannelInterceptor` (replacing the old `ChannelInterceptorAdapter`)
+2.  On CONNECT frames, it extracts the JWT token from STOMP native headers
+3.  The token is validated using `JwtTokenProvider` backed by JJWT 0.12.6
+4.  A `UsernamePasswordAuthenticationToken` is created and set as the session user
 
 ```java
-package your.package.name;
+package au.com.example.security;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
-import org.springframework.messaging.MessageHandler;
-import org.springframework.messaging.MessageHeaders;
-import org.springframework.messaging.support.ChannelInterceptorAdapter;
-import org.springframework.messaging.support.ExecutorChannelInterceptor;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.AuthorityUtils;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.messaging.simp.stomp.StompCommand;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
+import org.springframework.messaging.support.ChannelInterceptor;
+import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.security.authentication
+    .UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context
+    .SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails
+    .UserDetailsService;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.Stack;
+@Component
+public class WebSocketTokenInterceptor
+    implements ChannelInterceptor {
 
-/**
- * A WebSocket channel interceptor that establishes and restores the SecurityContext
- * for inbound STOMP messages based on the provided authentication token.
- */
-@Component(value = Constants.SECURITY_TOKEN_SECURITY_CHANNEL_INTERCEPTOR)
-public class TokenSecurityChannelInterceptor extends ChannelInterceptorAdapter implements ExecutorChannelInterceptor {
+  private static final Logger logger =
+      LoggerFactory.getLogger(
+          WebSocketTokenInterceptor.class);
 
-    private static final ThreadLocal<Stack<SecurityContext>> ORIGINAL_CONTEXT = new ThreadLocal<>();
+  private final JwtTokenProvider tokenProvider;
+  private final UserDetailsService userDetailsService;
 
-    private final SecurityContext EMPTY_CONTEXT;
-    private final Authentication anonymous;
+  public WebSocketTokenInterceptor(
+      JwtTokenProvider tokenProvider,
+      UserDetailsService userDetailsService) {
+    this.tokenProvider = tokenProvider;
+    this.userDetailsService = userDetailsService;
+  }
 
-    @Autowired
-    private TokenAuthenticationService tokenAuthenticationService;
+  @Override
+  public Message<?> preSend(
+      Message<?> message, MessageChannel channel) {
 
-    public TokenSecurityChannelInterceptor() {
-        this.EMPTY_CONTEXT = SecurityContextHolder.createEmptyContext();
-        this.anonymous = new AnonymousAuthenticationToken(
-                "key",
-                "anonymous",
-                AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")
-        );
-    }
+    StompHeaderAccessor accessor =
+        MessageHeaderAccessor.getAccessor(
+            message, StompHeaderAccessor.class);
 
-    @Override
-    public Message<?> preSend(Message<?> message, MessageChannel channel) {
-        setup(message);
-        return message;
-    }
+    if (accessor != null
+        && StompCommand.CONNECT.equals(
+            accessor.getCommand())) {
 
-    @Override
-    public void afterSendCompletion(Message<?> message, MessageChannel channel, boolean sent, Exception ex) {
-        cleanup();
-    }
+      String token = accessor.getFirstNativeHeader(
+          JwtTokenProvider.TOKEN_HEADER);
 
-    @Override
-    public Message<?> beforeHandle(Message<?> message, MessageChannel channel, MessageHandler handler) {
-        setup(message);
-        return message;
-    }
+      if (StringUtils.hasText(token)) {
+        logger.debug(
+            "WebSocket CONNECT: Validating token");
 
-    @Override
-    public void afterMessageHandled(Message<?> message, MessageChannel channel, MessageHandler handler, Exception ex) {
-        cleanup();
-    }
+        if (tokenProvider.validateToken(token)) {
+          String username =
+              tokenProvider.getUsernameFromToken(token);
+          UserDetails userDetails =
+              userDetailsService
+                  .loadUserByUsername(username);
 
-    /**
-     * Establishes a new SecurityContext for the current thread based on the incoming message headers.
-     */
-    private void setup(Message<?> message) {
-        SecurityContext currentContext = SecurityContextHolder.getContext();
-        Stack<SecurityContext> contextStack = ORIGINAL_CONTEXT.get();
+          UsernamePasswordAuthenticationToken auth =
+              new UsernamePasswordAuthenticationToken(
+                  userDetails,
+                  null,
+                  userDetails.getAuthorities());
 
-        if (contextStack == null) {
-            contextStack = new Stack<>();
-            ORIGINAL_CONTEXT.set(contextStack);
-        }
+          accessor.setUser(auth);
 
-        contextStack.push(currentContext);
+          SecurityContextHolder
+              .getContext()
+              .setAuthentication(auth);
 
-        SecurityContext newContext = SecurityContextHolder.createEmptyContext();
-        newContext.setAuthentication(getAuthentication(message.getHeaders()));
-        SecurityContextHolder.setContext(newContext);
-    }
-
-    /**
-     * Retrieves the authentication object from the STOMP message headers.
-     */
-    private Authentication getAuthentication(MessageHeaders headers) {
-        Authentication authentication = this.anonymous;
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> nativeHeaders = (Map<String, Object>) headers.get("nativeHeaders");
-
-        if (nativeHeaders != null) {
-            @SuppressWarnings("unchecked")
-            LinkedList<String> tokens = (LinkedList<String>) nativeHeaders.get(Constants.HEADER_X_AUTH_TOKEN);
-
-            if (tokens != null && !tokens.isEmpty()) {
-                Authentication tokenAuth = tokenAuthenticationService.getAuthentication(tokens.getFirst());
-                if (tokenAuth != null) {
-                    authentication = tokenAuth;
-                }
-            }
-        }
-
-        return authentication;
-    }
-
-    /**
-     * Restores the previous SecurityContext after message handling completes.
-     */
-    private void cleanup() {
-        Stack<SecurityContext> contextStack = ORIGINAL_CONTEXT.get();
-
-        if (contextStack != null && !contextStack.isEmpty()) {
-            SecurityContext originalContext = contextStack.pop();
-
-            try {
-                if (EMPTY_CONTEXT.equals(originalContext)) {
-                    SecurityContextHolder.clearContext();
-                    ORIGINAL_CONTEXT.remove();
-                } else {
-                    SecurityContextHolder.setContext(originalContext);
-                }
-            } catch (Throwable ex) {
-                SecurityContextHolder.clearContext();
-            }
+          logger.debug(
+              "WebSocket authenticated user: {}",
+              username);
         } else {
-            SecurityContextHolder.clearContext();
-            ORIGINAL_CONTEXT.remove();
+          logger.warn(
+              "WebSocket CONNECT: Invalid token");
         }
+      } else {
+        logger.warn(
+            "WebSocket CONNECT: No token provided");
+      }
     }
+
+    return message;
+  }
 }
 ```
 
-This is the web socket configuration that sets the rules on what requires authentication and what doesn't.
-
-For this we can expect that any CONNECT, SUBSCRIBE or MESSAGE will require the custom token to be passed as part of the message header otherwise the response will be AccessDenied, we cannot pass headers to the UNSUBSCRIBE and DISCONNECT so we have set them to allow all to action.
+The **WebSocketConfig** registers this interceptor on the inbound channel so it processes every incoming STOMP frame. It also configures the STOMP endpoint with SockJS fallback and the message broker destinations.
 
 ```java
-package au.com.example.security.config;
+package au.com.example.config;
 
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.PropertySource;
-import org.springframework.messaging.simp.SimpMessageType;
-import org.springframework.security.config.annotation.web.socket.AbstractSecurityWebSocketMessageBrokerConfigurer;
-import org.springframework.security.messaging.access.intercept.MessageSecurityMetadataSourceRegistry;
+import au.com.example.security
+    .WebSocketTokenInterceptor;
+import org.springframework.context.annotation
+    .Configuration;
+import org.springframework.messaging.simp.config
+    .ChannelRegistration;
+import org.springframework.messaging.simp.config
+    .MessageBrokerRegistry;
+import org.springframework.web.socket.config.annotation
+    .EnableWebSocketMessageBroker;
+import org.springframework.web.socket.config.annotation
+    .StompEndpointRegistry;
+import org.springframework.web.socket.config.annotation
+    .WebSocketMessageBrokerConfigurer;
 
-/**
- * WebSocket security configuration.
- *
- * Defines inbound message security rules for STOMP endpoints.
- */
 @Configuration
-@ComponentScan(basePackages = {
-        "au.com.example.security.service",
-        "au.com.example.security.spring.security"
-})
-@PropertySource("classpath:properties/security.properties")
-public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBrokerConfigurer {
+@EnableWebSocketMessageBroker
+public class WebSocketConfig
+    implements WebSocketMessageBrokerConfigurer {
 
-    @Override
-    protected void configureInbound(MessageSecurityMetadataSourceRegistry messages) {
-        messages
-            .simpTypeMatchers(
-                    SimpMessageType.CONNECT,
-                    SimpMessageType.MESSAGE,
-                    SimpMessageType.SUBSCRIBE
-            ).authenticated()
-            .simpTypeMatchers(
-                    SimpMessageType.UNSUBSCRIBE,
-                    SimpMessageType.DISCONNECT
-            ).permitAll()
-            .anyMessage().denyAll();
-    }
+  private final WebSocketTokenInterceptor
+      tokenInterceptor;
+
+  public WebSocketConfig(
+      WebSocketTokenInterceptor tokenInterceptor) {
+    this.tokenInterceptor = tokenInterceptor;
+  }
+
+  @Override
+  public void configureMessageBroker(
+      MessageBrokerRegistry config) {
+    config.enableSimpleBroker("/topic", "/queue");
+    config.setApplicationDestinationPrefixes("/app");
+    config.setUserDestinationPrefix("/user");
+  }
+
+  @Override
+  public void registerStompEndpoints(
+      StompEndpointRegistry registry) {
+    registry.addEndpoint("/stomp")
+        .setAllowedOriginPatterns("*")
+        .withSockJS();
+  }
+
+  @Override
+  public void configureClientInboundChannel(
+      ChannelRegistration registration) {
+    registration.interceptors(tokenInterceptor);
+  }
+}
+```
+
+This is the WebSocket security configuration that sets the rules on what requires authentication and what doesn't.
+
+For this we can expect that any CONNECT, SUBSCRIBE or MESSAGE will require a valid JWT token to be passed as part of the STOMP message header otherwise the response will be AccessDenied, we cannot pass headers to the UNSUBSCRIBE and DISCONNECT so we have set them to allow all to action.
+
+```java
+package au.com.example.config;
+
+import org.springframework.context.annotation
+    .Configuration;
+import org.springframework.messaging.simp
+    .SimpMessageType;
+import org.springframework.security.config.annotation
+    .web.messaging
+    .MessageSecurityMetadataSourceRegistry;
+import org.springframework.security.config.annotation
+    .web.socket
+    .AbstractSecurityWebSocketMessageBrokerConfigurer;
+
+@Configuration
+public class WebSocketSecurityConfig
+    extends
+    AbstractSecurityWebSocketMessageBrokerConfigurer {
+
+  @Override
+  protected void configureInbound(
+      MessageSecurityMetadataSourceRegistry messages) {
+    messages
+        .simpTypeMatchers(
+            SimpMessageType.CONNECT,
+            SimpMessageType.MESSAGE,
+            SimpMessageType.SUBSCRIBE
+        ).authenticated()
+        .simpTypeMatchers(
+            SimpMessageType.UNSUBSCRIBE,
+            SimpMessageType.DISCONNECT
+        ).permitAll()
+        .anyMessage().denyAll();
+  }
+
+  @Override
+  protected boolean sameOriginDisabled() {
+    return true;
+  }
 }
 ```
 
@@ -449,65 +289,92 @@ public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBro
 
 ## **Client**
 
-The client is using Angular JS with SocksJS and STOMP.
+The client is built with **Angular 19** using standalone components and **RxStomp** for WebSocket communication. The JWT token is passed in the STOMP CONNECT headers for server-side validation by the `WebSocketTokenInterceptor`.
 
-```javascript
-'use strict';
+```typescript
+import { Injectable } from '@angular/core';
+import { RxStomp, RxStompConfig } from '@stomp/rx-stomp';
+import { BehaviorSubject } from 'rxjs';
+import { environment } from
+    '../../../environments/environment';
 
-angular
-  .module('app.services')
-  .service('socketService', [
-    '$rootScope',
-    '$stomp',
-    'storageService',
-    'storageConstant',
-    'propertiesConstant',
-    function ($rootScope, $stomp, storageService, storageConstant, propertiesConstant) {
-      let connection;
-      let subscriptions = {};
+export interface Notification {
+  id: number;
+  userId: number;
+  message: string;
+  createdAt: string;
+  read: boolean;
+}
 
-      this.subscribe = function subscribe() {
-        const authToken = storageService.getSessionItem(storageConstant.AUTH_TOKEN);
-        const headers = authToken ? { 'X-AUTH-TOKEN': authToken } : {};
+@Injectable({ providedIn: 'root' })
+export class WebSocketService {
+  private rxStomp: RxStomp | null = null;
+  private notificationsSubject =
+      new BehaviorSubject<Notification[]>([]);
 
-        connect(headers);
+  notifications$ =
+      this.notificationsSubject.asObservable();
 
-        connection.then(function (frame) {
-          if (!subscriptions.articles) {
-            subscriptions.articles = $stomp.subscribe(
-              '/api/user/articles',
-              function (payload, headers, res) {
-                $rootScope.$apply(function () {
-                  $rootScope.articleCount = payload.length;
-                });
-              },
-              headers
-            );
-          }
-        });
-      };
+  connect(token: string): void {
+    if (this.rxStomp?.connected()) {
+      return;
+    }
 
-      this.unsubscribe = function unsubscribe() {
-        if (subscriptions.articles) {
-          subscriptions.articles.unsubscribe();
-        }
+    this.rxStomp = new RxStomp();
 
-        if (connection) {
-          $stomp.disconnect(function () {
-            delete $rootScope.articleCount;
-          });
-        }
-
-        subscriptions = {};
-      };
-
-      function connect(headers) {
-        if (!connection) {
-          connection = $stomp.connect(propertiesConstant.WEBSOCKET_API_URL + '/stomp', headers);
+    const config: RxStompConfig = {
+      brokerURL: this.getWebSocketUrl(),
+      connectHeaders: {
+        'X-AUTH-TOKEN': token
+      },
+      heartbeatIncoming: 4000,
+      heartbeatOutgoing: 4000,
+      reconnectDelay: 5000,
+      debug: (msg: string) => {
+        if (!environment.production) {
+          console.log('STOMP:', msg);
         }
       }
+    };
+
+    this.rxStomp.configure(config);
+    this.rxStomp.activate();
+
+    this.rxStomp.connected$.subscribe(() => {
+      console.log('WebSocket connected');
+      this.subscribeToNotifications();
+    });
+  }
+
+  private subscribeToNotifications(): void {
+    if (!this.rxStomp) return;
+
+    this.rxStomp
+        .watch('/user/queue/notifications')
+        .subscribe(message => {
+          const notifications =
+              JSON.parse(message.body);
+          this.notificationsSubject
+              .next(notifications);
+        });
+  }
+
+  disconnect(): void {
+    if (this.rxStomp) {
+      this.rxStomp.deactivate();
+      this.rxStomp = null;
     }
-  ]);
+    this.notificationsSubject.next([]);
+  }
+
+  private getWebSocketUrl(): string {
+    const protocol =
+        window.location.protocol === 'https:'
+            ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    return `${protocol}//${host}${environment.wsUrl}`;
+  }
+}
 ```
 
 ---
@@ -517,29 +384,25 @@ angular
 You can check out the project from the following location below:
 
 **Project URL**: [https://github.com/Rob-Leggett/angular_websockets_security](https://github.com/Rob-Leggett/angular_websockets_security)
+
 What you can learn:
 
-*   Maven Modules
-*   Gulp JS
-*   ES6
-*   SockJS / STOMP
-*   Basic directives
-*   Multiple views
-*   Security
-*   Filtering and sorting lists
-*   Data Binding
-*   Data retrieval via AJAX
-*   Integration of client side MVC with server side MVC
-*   Stateless API
+*   Maven multi-module project structure
+*   Angular 19 standalone components
+*   RxStomp / SockJS WebSocket communication
+*   **JWT token-based authentication** with JJWT 0.12.6
+*   **WebSocketTokenInterceptor** for JWT validation on CONNECT
+*   STOMP message-level security
+*   Spring Boot 3.4.1 with embedded Tomcat
+*   Spring Security 6.4 with SecurityFilterChain
+*   **BCrypt** password encoding
+*   **CORS configuration** for Angular dev server
+*   H2 in-memory database with Spring Data JPA
 *   RESTful entry points
-*   Websocket entry points
-*   Basic Authentication
-*   Token Authentication
-*   Data operations using JPA
-*   In Memory Databases
-*   Unit Tests
-*   Integration Tests
-*   Jasmine Tests
+*   WebSocket entry points
+*   Stateless API design
+*   Integration of Angular front-end with Spring Boot back-end
+*   Unit tests and integration tests
 
 ---
 
