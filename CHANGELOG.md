@@ -1,3 +1,10 @@
+## [1.0.6](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.5...v1.0.6) (2026-03-15)
+
+
+### Bug Fixes
+
+* updated components ([5b3ef31](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/5b3ef3128aa478bfed9d17dd94ebbc4c5f754933))
+
 ## [1.0.5](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.4...v1.0.5) (2026-03-15)
 
 
