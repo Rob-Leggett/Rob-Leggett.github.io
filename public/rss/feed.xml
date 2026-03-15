@@ -5,7 +5,7 @@
     <link>https://robertleggett.com.au/blog</link>
     <description><![CDATA[Technology strategy, engineering, and AI platform insights.]]></description>
     <language>en</language>
-    <lastBuildDate>Sun, 15 Mar 2026 13:45:27 GMT</lastBuildDate>
+    <lastBuildDate>Sun, 15 Mar 2026 13:48:57 GMT</lastBuildDate>
     
     <item>
       <title><![CDATA[Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI]]></title>
@@ -54,30 +54,6 @@
       <pubDate>Sun, 08 Feb 2026 00:00:00 GMT</pubDate>
       <description><![CDATA[For those who know me, you will know that I have always been fascinated by the intersection of cloud computing and real-world problem-solving. Over recent years, one of the most exciting shifts I have witnessed is the movement of artificial intelligence away from centralised data centres and closer ]]></description>
       <enclosure url="https://robertleggett.com.au/blog/ai-at-the-edge-bringing-intelligence-closer/feature-image.png" type="image/png" />
-    </item>
-    <item>
-      <title><![CDATA[Angular 19 and Bootstrap 5 with Spring Boot 3 and Spring Security 6]]></title>
-      <link>https://robertleggett.com.au/blog/angular-bootstrap-spring-boot-security/</link>
-      <guid>https://robertleggett.com.au/blog/angular-bootstrap-spring-boot-security/</guid>
-      <pubDate>Wed, 04 Feb 2026 00:00:00 GMT</pubDate>
-      <description><![CDATA[Folks have been asking me if I knew of any good examples of a modern full-stack web application that utilises the following technologies: Angular 19, Bootstrap 5.3, Spring Boot 3.3, Spring Security 6, HSQLDB, and JWT stateless authentication, and after searching around I decided that it would be bes]]></description>
-      <enclosure url="https://robertleggett.com.au/blog/angular-bootstrap-spring-boot-security/feature-image.png" type="image/png" />
-    </item>
-    <item>
-      <title><![CDATA[Jersey 4 RESTful Web Service - Modern Jakarta EE with JPA and Derby]]></title>
-      <link>https://robertleggett.com.au/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/</link>
-      <guid>https://robertleggett.com.au/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/</guid>
-      <pubDate>Tue, 03 Feb 2026 00:00:00 GMT</pubDate>
-      <description><![CDATA[RESTful is a key term that remains central to modern API development. Previous services used to be created implementing JAX-WS with the communication protocol being SOAP, various implementations were and are still used but from my own experience they all have fallen short especially in the area of c]]></description>
-      <enclosure url="https://robertleggett.com.au/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/feature-image.png" type="image/png" />
-    </item>
-    <item>
-      <title><![CDATA[Secure WebSockets with Spring Boot 3 and Spring Security 6 - Token-Based Authentication]]></title>
-      <link>https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/</link>
-      <guid>https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/</guid>
-      <pubDate>Tue, 03 Feb 2026 00:00:00 GMT</pubDate>
-      <description><![CDATA[WebSockets with custom message security is not a topic that appears widely online, let alone example on how to make it happen, therefore I decided to present on web sockets and in particular allowing custom security on the socket level. This project has been fully modernised from its original Angula]]></description>
-      <enclosure url="https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/feature-image.png" type="image/png" />
     </item>
     <item>
       <title><![CDATA[Prompt Engineering - The Art and Science of Communicating with AI]]></title>
@@ -296,12 +272,36 @@
       <enclosure url="https://robertleggett.com.au/blog/agile-high-performing-team/feature-image.png" type="image/png" />
     </item>
     <item>
+      <title><![CDATA[Secure WebSockets with Spring Boot 3 and Spring Security 6 - Token-Based Authentication]]></title>
+      <link>https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/</link>
+      <guid>https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/</guid>
+      <pubDate>Wed, 27 May 2015 00:00:00 GMT</pubDate>
+      <description><![CDATA[WebSockets with custom message security is not a topic that appears widely online, let alone example on how to make it happen, therefore I decided to present on web sockets and in particular allowing custom security on the socket level. This project has been fully modernised from its original Angula]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Jersey 4 RESTful Web Service - Modern Jakarta EE with JPA and Derby]]></title>
+      <link>https://robertleggett.com.au/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/</link>
+      <guid>https://robertleggett.com.au/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/</guid>
+      <pubDate>Wed, 29 Jan 2014 00:00:00 GMT</pubDate>
+      <description><![CDATA[RESTful is a key term that remains central to modern API development. Previous services used to be created implementing JAX-WS with the communication protocol being SOAP, various implementations were and are still used but from my own experience they all have fallen short especially in the area of c]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/feature-image.png" type="image/png" />
+    </item>
+    <item>
       <title><![CDATA[Agile Empowerment - Realizing the Benefits of Agile in Information Technology]]></title>
       <link>https://robertleggett.com.au/blog/agile-in-the-industry/</link>
       <guid>https://robertleggett.com.au/blog/agile-in-the-industry/</guid>
       <pubDate>Mon, 20 Jan 2014 00:00:00 GMT</pubDate>
       <description><![CDATA[In today's post, we will explore the remarkable success of Agile methodology in the realm of Information Technology and Business. Since its introduction, Agile has revolutionized the way projects are executed, delivering tremendous benefits to all parties involved. From stakeholders to developers, t]]></description>
       <enclosure url="https://robertleggett.com.au/blog/agile-in-the-industry/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Angular 19 and Bootstrap 5 with Spring Boot 3 and Spring Security 6]]></title>
+      <link>https://robertleggett.com.au/blog/angular-bootstrap-spring-boot-security/</link>
+      <guid>https://robertleggett.com.au/blog/angular-bootstrap-spring-boot-security/</guid>
+      <pubDate>Fri, 20 Dec 2013 00:00:00 GMT</pubDate>
+      <description><![CDATA[Folks have been asking me if I knew of any good examples of a modern full-stack web application that utilises the following technologies: Angular 19, Bootstrap 5.3, Spring Boot 3.3.7, Spring Security 6, HSQLDB, and JWT stateless authentication, and after searching around I decided that it would be b]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/angular-bootstrap-spring-boot-security/feature-image.png" type="image/png" />
     </item>
   </channel>
 </rss>

@@ -42,27 +42,6 @@
     "feature_image": "/blog/ai-at-the-edge-bringing-intelligence-closer/feature-image.png"
   },
   {
-    "slug": "angular-bootstrap-spring-boot-security",
-    "title": "Angular 19 and Bootstrap 5 with Spring Boot 3 and Spring Security 6",
-    "date": "2026-02-04",
-    "excerpt": "Folks have been asking me if I knew of any good examples of a modern full-stack web application that utilises the following technologies: **Angular 19**, **Bootstrap 5.3**, **Spring Boot 3.3**, **Spring Security 6**, **HSQLDB**, and **JWT stateless authentication**, and after sea…",
-    "feature_image": "/blog/angular-bootstrap-spring-boot-security/feature-image.png"
-  },
-  {
-    "slug": "secure-websockets-spring-boot-spring-security",
-    "title": "Secure WebSockets with Spring Boot 3 and Spring Security 6 - Token-Based Authentication",
-    "date": "2026-02-03",
-    "excerpt": "WebSockets with custom message security is not a topic that appears widely online, let alone example on how to make it happen, therefore I decided to present on web sockets and in particular allowing custom security on the socket level. This project has been fully modernised from…",
-    "feature_image": "/blog/secure-websockets-spring-boot-spring-security/feature-image.png"
-  },
-  {
-    "slug": "jersey-restful-webservice-jakarta-ee-jpa-derby",
-    "title": "Jersey 4 RESTful Web Service - Modern Jakarta EE with JPA and Derby",
-    "date": "2026-02-03",
-    "excerpt": "RESTful is a key term that remains central to modern API development. Previous services used to be created implementing JAX-WS with the communication protocol being SOAP, various implementations were and are still used but from my own experience they all have fallen short especia…",
-    "feature_image": "/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/feature-image.png"
-  },
-  {
     "slug": "prompt-engineering-art-and-science-of-communicating-with-ai",
     "title": "Prompt Engineering - The Art and Science of Communicating with AI",
     "date": "2026-02-01",
@@ -252,10 +231,31 @@
     "feature_image": "/blog/agile-high-performing-team/feature-image.png"
   },
   {
+    "slug": "secure-websockets-spring-boot-spring-security",
+    "title": "Secure WebSockets with Spring Boot 3 and Spring Security 6 - Token-Based Authentication",
+    "date": "2015-05-27",
+    "excerpt": "WebSockets with custom message security is not a topic that appears widely online, let alone example on how to make it happen, therefore I decided to present on web sockets and in particular allowing custom security on the socket level. This project has been fully modernised from…",
+    "feature_image": "/blog/secure-websockets-spring-boot-spring-security/feature-image.png"
+  },
+  {
+    "slug": "jersey-restful-webservice-jakarta-ee-jpa-derby",
+    "title": "Jersey 4 RESTful Web Service - Modern Jakarta EE with JPA and Derby",
+    "date": "2014-01-29",
+    "excerpt": "RESTful is a key term that remains central to modern API development. Previous services used to be created implementing JAX-WS with the communication protocol being SOAP, various implementations were and are still used but from my own experience they all have fallen short especia…",
+    "feature_image": "/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/feature-image.png"
+  },
+  {
     "slug": "agile-in-the-industry",
     "title": "Agile Empowerment - Realizing the Benefits of Agile in Information Technology",
     "date": "2014-01-20",
     "excerpt": "In today's post, we will explore the remarkable success of Agile methodology in the realm of Information Technology and Business. Since its introduction, Agile has revolutionized the way projects are executed, delivering tremendous benefits to all parties involved. From stakehold…",
     "feature_image": "/blog/agile-in-the-industry/feature-image.png"
+  },
+  {
+    "slug": "angular-bootstrap-spring-boot-security",
+    "title": "Angular 19 and Bootstrap 5 with Spring Boot 3 and Spring Security 6",
+    "date": "2013-12-20",
+    "excerpt": "Folks have been asking me if I knew of any good examples of a modern full-stack web application that utilises the following technologies: **Angular 19**, **Bootstrap 5.3**, **Spring Boot 3.3.7**, **Spring Security 6**, **HSQLDB**, and **JWT stateless authentication**, and after s…",
+    "feature_image": "/blog/angular-bootstrap-spring-boot-security/feature-image.png"
   }
 ]
