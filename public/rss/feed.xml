@@ -5,7 +5,7 @@
     <link>https://robertleggett.com.au/blog</link>
     <description><![CDATA[Technology strategy, engineering, and AI platform insights.]]></description>
     <language>en</language>
-    <lastBuildDate>Sun, 15 Mar 2026 12:54:47 GMT</lastBuildDate>
+    <lastBuildDate>Sun, 15 Mar 2026 13:34:23 GMT</lastBuildDate>
     
     <item>
       <title><![CDATA[Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI]]></title>
@@ -76,7 +76,7 @@
       <link>https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/</link>
       <guid>https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/</guid>
       <pubDate>Tue, 03 Feb 2026 00:00:00 GMT</pubDate>
-      <description><![CDATA[WebSockets with custom message security is not a topic that appears widely online, let alone examples on how to make it happen, therefore I decided to present on WebSockets and in particular allowing custom security on the socket level. This project has been fully modernised from its original Angula]]></description>
+      <description><![CDATA[WebSockets with custom message security is not a topic that appears widely online, let alone example on how to make it happen, therefore I decided to present on web sockets and in particular allowing custom security on the socket level. This project has been fully modernised from its original Angula]]></description>
       <enclosure url="https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/feature-image.png" type="image/png" />
     </item>
     <item>
