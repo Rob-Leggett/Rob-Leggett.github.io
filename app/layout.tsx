@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import React, { Suspense } from 'react';
-import Script from "next/script";
 import UnregisterSW from "@/components/providers/unregister-sw";
 import AnalyticsListener from "@/components/providers/analytics-listener";
 import { ThemeProvider } from "@/components/providers/theme-provider";
@@ -30,23 +29,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
     <head>
-      {/* GA4 – load after hydration */}
-      <Script
-        id="ga-src"
-        strategy="afterInteractive"
+      {/* GA4 — raw script tags so they render in static HTML, not behind hydration */}
+      <script
+        async
         src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
       />
-      <Script id="ga-init" strategy="afterInteractive">
-        {`
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
-            if (!window.gtagInitialized) {
-              gtag('js', new Date());
-              gtag('config', '${GA_ID}', { send_page_view: false });
-              window.gtagInitialized = true;
-            }
-          `}
-      </Script>
+            gtag('js', new Date());
+            gtag('config', '${GA_ID}', { send_page_view: false });
+          `,
+        }}
+      />
     </head>
     <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
       <ThemeProvider
