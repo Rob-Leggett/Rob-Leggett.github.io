@@ -4,7 +4,6 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "script:convert-wp": "node scripts/convert-wp.js",
     "script:generate-post-index": "node scripts/generate-post-index.js",
     "script:generate-rss": "node scripts/generate-rss.js",
     "script:generate-sitemap": "node scripts/generate-sitemap.js",
