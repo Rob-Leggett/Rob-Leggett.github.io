@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, GitFork, ArrowUpRight, RefreshCw } from "lucide-react";
+import { Star, GitFork, RefreshCw } from "lucide-react";
 
 type Repo = {
   id: number;
@@ -20,7 +20,7 @@ type Repo = {
 
 export default function GitHubProjects({
                                          username,
-                                         perPage = 9,
+                                         perPage = 12,
                                          hideForks = true,
                                        }: {
   username: string;
@@ -90,22 +90,7 @@ export default function GitHubProjects({
     );
 
   return (
-    <section>
-      <header className="mb-5 flex items-center justify-between">
-        <h3 className="text-base font-semibold tracking-tight text-foreground">
-          GitHub Projects
-        </h3>
-        <Link
-          href={`https://github.com/${encodeURIComponent(username)}?tab=repositories`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-        >
-          View all <ArrowUpRight className="h-4 w-4" />
-        </Link>
-      </header>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {repos.map((r) => (
           <Card
             key={r.id}
@@ -152,8 +137,7 @@ export default function GitHubProjects({
             </CardContent>
           </Card>
         ))}
-      </div>
-    </section>
+    </div>
   );
 }
 
@@ -161,8 +145,8 @@ export default function GitHubProjects({
 
 function SkeletonGrid() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {Array.from({ length: 6 }).map((_, i) => (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {Array.from({ length: 8 }).map((_, i) => (
         <div
           key={i}
           className="h-40 animate-pulse rounded-lg bg-muted/30 dark:bg-muted/10"

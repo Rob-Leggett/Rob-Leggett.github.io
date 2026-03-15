@@ -6,13 +6,10 @@ import remarkGfm from "remark-gfm";
 import rehypeSlug from "rehype-slug";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import { MDXRemote } from "next-mdx-remote/rsc";
-import BlogLayout from "@/components/portfolio/blog/[slug]/blog-layout";
-import CodeBlock from "@/components/common/code-block";
-import CloudComparisonTable from "@/components/common/cloud-comparison-table";
-import cloudData from "@/content/data/cloud-services.json";
+import BlogLayout from "@/components/blog/blog-layout";
+import { mdxComponents } from "@/lib/mdx-components";
 import { notFound } from "next/navigation";
 import { Metadata } from 'next';
-import { ComponentPropsWithoutRef } from "react";
 
 const PUBLISH_DIR = path.join(process.cwd(), "content/publish");
 
@@ -56,36 +53,6 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     },
   };
 }
-
-const mdxComponents = {
-  h1: (p: ComponentPropsWithoutRef<"h1">) => <h1 {...p} className="mt-10 mb-4 text-3xl font-extrabold leading-tight" />,
-  h2: (p: ComponentPropsWithoutRef<"h2">) => <h2 {...p} className="mt-8 mb-3 text-2xl font-bold leading-snug" />,
-  h3: (p: ComponentPropsWithoutRef<"h3">) => <h3 {...p} className="mt-6 mb-2 text-xl font-semibold" />,
-  code: (p: ComponentPropsWithoutRef<"code">) => <code {...p} />,
-  pre: (p: ComponentPropsWithoutRef<"pre"> & { children?: React.ReactElement<{ className?: string; children?: React.ReactNode }> }) => {
-    // Defensive extraction
-    const child = p?.children?.props ?? {};
-    const rawLang = child.className || "";
-    const lang = rawLang.startsWith("language-")
-      ? rawLang.replace("language-", "")
-      : "plaintext";
-
-    const rawCode = child.children;
-    const code =
-      typeof rawCode === "string"
-        ? rawCode
-        : Array.isArray(rawCode)
-          ? rawCode.join("")
-          : typeof rawCode === "number"
-            ? String(rawCode)
-            : "";
-
-    // Safety: return a React element explicitly
-    return <CodeBlock key={lang + code.slice(0, 20)} language={lang} value={code || ""} />;
-  },
-  // expose your table to MDX
-  CloudComparisonTable: () => <CloudComparisonTable data={cloudData} />,
-};
 
 function readPostFile(slug: string) {
   const mdx = path.join(PUBLISH_DIR, `${slug}.mdx`);

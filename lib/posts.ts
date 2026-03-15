@@ -4,7 +4,7 @@ import matter from 'gray-matter';
 
 const PUBLISH_DIR = path.join(process.cwd(), "content/publish");
 
-export type PostMeta = { slug: string; title: string; date: string; excerpt?: string; };
+export type PostMeta = { slug: string; title: string; date: string; excerpt?: string; feature_image?: string | null; };
 
 export function getAllPostSlugs(): string[] {
   if (!fs.existsSync(PUBLISH_DIR)) return [];
@@ -28,6 +28,7 @@ export function getAllPosts(): PostMeta[] {
         title: data.title || "Untitled",
         date: data.date || "",
         excerpt,
+        feature_image: data.feature_image || null,
       };
     })
     .sort((a, b) => (a.date < b.date ? 1 : -1));

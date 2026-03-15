@@ -44,7 +44,8 @@
     "tailwind-merge": "^3.5.0",
     "tailwind-variants": "^3.2.2",
     "tailwindcss-animate": "^1.0.7",
-    "turndown": "^7.2.2"
+    "turndown": "^7.2.2",
+    "web-vitals": "^5.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",

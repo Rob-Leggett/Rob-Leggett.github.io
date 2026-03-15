@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import React, { Suspense } from 'react';
 import Script from "next/script";
-import UnregisterSW from "@/app/unregister-sw";
-import AnalyticsListener from "@/app/analytics-listener";
-import { ThemeProvider } from "@/components/common/theme-provider";
+import UnregisterSW from "@/components/providers/unregister-sw";
+import AnalyticsListener from "@/components/providers/analytics-listener";
+import { ThemeProvider } from "@/components/providers/theme-provider";
 import { themes } from "@/lib/themes";
 
 import "./globals.css";
@@ -42,7 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             function gtag(){dataLayer.push(arguments);}
             if (!window.gtagInitialized) {
               gtag('js', new Date());
-              gtag('config', '${GA_ID}', { page_path: window.location.pathname });
+              gtag('config', '${GA_ID}', { send_page_view: false });
               window.gtagInitialized = true;
             }
           `}
