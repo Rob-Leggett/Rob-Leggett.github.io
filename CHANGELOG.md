@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.3...v1.0.4) (2026-03-15)
+
+
+### Bug Fixes
+
+* updated feature images and added interactive terminal ([e42c48d](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/e42c48d241196cd68c23fce94673f2a4fa68f4a9))
+
 ## [1.0.3](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.2...v1.0.3) (2026-03-15)
 
 
