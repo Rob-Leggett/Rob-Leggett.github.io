@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.1...v1.0.2) (2026-02-03)
+
+
+### Bug Fixes
+
+* added theme selector ([d81eac0](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/d81eac0287218f688fb86fdee078b134faee63d7))
+
 ## [1.0.1](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.0...v1.0.1) (2026-01-30)
 
 
