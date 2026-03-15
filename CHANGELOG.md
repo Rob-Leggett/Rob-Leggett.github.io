@@ -1,3 +1,10 @@
+## [1.0.7](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.6...v1.0.7) (2026-03-15)
+
+
+### Bug Fixes
+
+* restore blog post ([29b17b0](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/29b17b0091b4a2b3c5bd588f39721964e6278b1f))
+
 ## [1.0.6](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.5...v1.0.6) (2026-03-15)
 
 
