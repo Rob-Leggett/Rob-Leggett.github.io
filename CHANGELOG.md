@@ -1,3 +1,10 @@
+## [1.0.9](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.8...v1.0.9) (2026-03-15)
+
+
+### Bug Fixes
+
+* updated resume ([dc6e225](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/dc6e22548982b5c428234f8741c7d63a8411549b))
+
 ## [1.0.8](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.7...v1.0.8) (2026-03-15)
 
 
