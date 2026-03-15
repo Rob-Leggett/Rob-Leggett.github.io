@@ -53,11 +53,11 @@ const COMMANDS: Record<string, (args: string[]) => string[]> = {
   whoami: () => [
     "Robert Leggett",
     "Senior Engineering Manager & Cloud Architect",
-    "Brisbane, Australia",
+    "Melbourne, Australia",
   ],
 
   about: () => [
-    "Hands-on technology and strategy leader with 15+ years experience",
+    "Hands-on technology and strategy leader with 20+ years experience",
     "building cloud-native platforms, leading high-performing engineering",
     "teams, and driving AI/ML adoption across enterprise organisations.",
     "",
@@ -152,7 +152,7 @@ const COMMANDS: Record<string, (args: string[]) => string[]> = {
     "",
     "  rob@dev",
     "  ─────────────────────────────",
-    "  Role      Senior Engineering Manager",
+    "  Role      Technology Leader",
     "  Cloud     AWS · Azure · GCP",
     "  Stack     TypeScript · Java · Python · Go",
     "  AI/ML     LLMs · RAG · Agents · Edge AI",
