@@ -1,0 +1,646 @@
+---
+title: "Deep Dive - Multi-Cloud Networking"
+date: "2025-07-09"
+slug: "deep-dive-multi-cloud-networking"
+status: "publish"
+feature_image: "/blog/deep-dive-multi-cloud-networking/feature-image.png"
+tags: ["Multi-Cloud", "Networking", "Transit Gateway", "VPN", "Direct Connect", "BGP", "DNS", "SD-WAN", "Cloud Architecture", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Multi-Cloud Networking | Robert Leggett"
+  description: "A comprehensive deep dive into multi-cloud networking — covering interconnect options, transit architectures, DNS resolution, BGP routing, IP address management, and security across AWS, GCP, and Azure."
+  keywords: ["Multi-Cloud Networking", "Transit Gateway", "VPN", "Direct Connect", "ExpressRoute", "Cloud Interconnect", "BGP", "Cross-Cloud DNS", "SD-WAN", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-multi-cloud-networking"
+  image: "https://robertleggett.com.au/blog/deep-dive-multi-cloud-networking/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Multi-Cloud Networking"
+  description: "A comprehensive deep dive into multi-cloud networking — from VPN tunnels and direct interconnects to BGP routing, DNS resolution, and security across providers."
+  image: "https://robertleggett.com.au/blog/deep-dive-multi-cloud-networking/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-multi-cloud-networking"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Multi-Cloud Networking"
+  description: "From Transit Gateway to BGP — a complete technical reference for connecting workloads across AWS, GCP, and Azure."
+  image: "https://robertleggett.com.au/blog/deep-dive-multi-cloud-networking/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of multi-cloud networking, unravelling its inner workings to shed light on one of the most complex challenges facing modern organisations. Whether you're a cloud architect designing cross-provider connectivity or an engineer tasked with keeping packets flowing between AWS, GCP, and Azure, our goal is to provide clear and detailed explanations that will deepen your understanding of how multi-cloud networking operates at every layer. Join us on this in-depth journey as we demystify transit architectures, BGP routing, DNS resolution across cloud boundaries, and much more. Let's dive in and connect the dots together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of multi-cloud networking — interconnect options, transit architectures, DNS resolution, BGP routing, IP address management, security, and operational patterns across AWS, GCP, and Azure
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why do organisations adopt multi-cloud?
+
+Before diving into the networking specifics, it is worth understanding why organisations choose to operate across multiple cloud providers in the first place. There are several compelling reasons:
+
+*   **Avoiding vendor lock-in** — Distributing workloads across providers reduces dependency on any single vendor's pricing, roadmap, or service availability. If one provider changes terms or experiences prolonged outages, the organisation has alternatives already in place.
+*   **Best-of-breed services** — Each cloud provider excels in different areas. An organisation might leverage AWS for its mature ecosystem of managed services, GCP for its data analytics and machine learning capabilities, and Azure for its deep integration with Microsoft enterprise products.
+*   **Regulatory and data sovereignty requirements** — Certain jurisdictions mandate that data must reside within specific geographic boundaries. A multi-cloud approach can help satisfy these requirements when a single provider lacks presence in a required region.
+*   **Disaster recovery and resilience** — Operating across multiple providers creates a natural disaster recovery posture. If an entire cloud provider experiences a regional failure, workloads can failover to another provider entirely.
+*   **Mergers and acquisitions** — When organisations merge, they often inherit different cloud environments and must integrate them rather than immediately migrating everything onto a single platform.
+
+While the benefits are significant, multi-cloud introduces substantial networking complexity. Each provider has its own networking model, terminology, security constructs, and operational tooling. Connecting them reliably, securely, and with acceptable performance is the challenge we will address throughout this post.
+
+---
+
+## Why is multi-cloud networking complex?
+
+Each cloud provider designed its networking stack independently, resulting in fundamentally different models that must be bridged together. The key areas of complexity include:
+
+*   **Different networking models** — AWS uses a regional VPC model with explicit subnet and route table management. GCP employs a global VPC model where subnets span regions automatically. Azure uses VNets that are regional but integrate with global services like Virtual WAN. These differences affect how routes propagate, how traffic flows, and how security is enforced.
+*   **Overlapping IP address spaces** — Without careful planning, organisations frequently end up with overlapping RFC 1918 CIDR ranges across providers. When two networks share the same IP range (for example, both using 10.0.0.0/16), routing between them becomes impossible without network address translation (NAT).
+*   **Inconsistent security models** — AWS uses Security Groups and Network ACLs. GCP uses firewall rules attached to VPC networks with target tags and service accounts. Azure uses Network Security Groups (NSGs) and Azure Firewall. Maintaining consistent security policy across all three requires careful abstraction and automation.
+*   **DNS resolution challenges** — Each provider has its own private DNS system. Resolving a private hostname in AWS from a workload running in GCP requires cross-cloud DNS forwarding, resolver endpoints, and conditional forwarding zones.
+*   **Latency management** — Traffic between clouds traverses either the public internet (via VPN) or dedicated interconnects. Understanding and optimising latency requires careful selection of interconnect locations, traffic engineering with BGP, and monitoring.
+*   **Operational complexity** — Each cloud has its own CLI, API, Terraform providers, and monitoring tools. Operating a multi-cloud network means teams must be proficient across all three platforms simultaneously.
+
+---
+
+## What are the interconnect options?
+
+When connecting workloads across cloud providers, there are three primary categories of interconnect to consider. Each comes with its own trade-offs in terms of cost, performance, complexity, and time to deploy.
+
+![Multi-cloud topology overview showing AWS, GCP, and Azure interconnected through transit hubs](/blog/deep-dive-multi-cloud-networking/inline-1.png)
+
+*Multi-Cloud Topology Overview*
+
+### Site-to-Site VPN
+
+A **Site-to-Site VPN** establishes encrypted IPSec tunnels between cloud providers over the public internet. This is the most common starting point for multi-cloud connectivity due to its simplicity and low barrier to entry.
+
+*   **How it works** — Each cloud provider exposes a VPN gateway with a public IP address. IPSec tunnels are established between these gateways, encrypting all traffic in transit. Most implementations use IKEv2 for key exchange and support both policy-based and route-based configurations.
+*   **Advantages** — Quick to set up (often within hours), no physical infrastructure required, encrypted by default, available in every cloud region.
+*   **Limitations** — Bandwidth is constrained by the internet path (typically 1.25 Gbps per tunnel on AWS, up to 3 Gbps on GCP). Latency is variable and unpredictable because traffic traverses the public internet. Performance can degrade during internet congestion events.
+*   **Best suited for** — Development and testing environments, low-throughput production workloads, or as a backup path alongside dedicated interconnects.
+
+### Dedicated interconnects
+
+**Dedicated interconnects** provide private, physical connections between your network and a cloud provider's network. These bypass the public internet entirely, offering consistent bandwidth and lower latency.
+
+*   **AWS Direct Connect** — Provides dedicated 1 Gbps, 10 Gbps, or 100 Gbps connections at AWS Direct Connect locations worldwide. Supports both dedicated connections (physical cross-connect) and hosted connections (via a partner).
+*   **Azure ExpressRoute** — Offers private connectivity to Azure through connectivity providers at peering locations. Available in bandwidths from 50 Mbps to 100 Gbps. Supports Microsoft peering (for Microsoft 365 and Azure public services) and private peering (for VNets).
+*   **GCP Cloud Interconnect** — Available as Dedicated Interconnect (10 Gbps or 100 Gbps physical connections) or Partner Interconnect (50 Mbps to 50 Gbps through a supported service provider).
+*   **Advantages** — Consistent bandwidth and latency, SLA-backed performance, no encryption overhead (traffic stays on private networks), higher throughput than VPN.
+*   **Limitations** — Requires physical infrastructure at colocation facilities, longer lead times to provision (weeks to months), higher cost, less flexible for rapid changes.
+
+### Network-as-a-Service (NaaS)
+
+**Network-as-a-Service** providers offer software-defined interconnection platforms that allow you to connect to multiple cloud providers from a single fabric, dramatically simplifying multi-cloud connectivity.
+
+*   **Megaport** — A global software-defined network platform with points of presence in data centres worldwide. Create virtual cross-connects to AWS, GCP, Azure, and other providers through a single portal or API.
+*   **Equinix Fabric** — Provides on-demand, software-defined interconnection between clouds, networks, and digital infrastructure across Equinix's global footprint.
+*   **PacketFabric** — Offers automated, high-capacity network-as-a-service with cloud on-ramps to all major providers.
+*   **Advantages** — Single platform for multi-cloud connectivity, rapid provisioning (minutes instead of weeks), flexible bandwidth scaling, simplified billing.
+*   **Limitations** — Adds another vendor dependency, costs can be higher than direct interconnects for sustained high-throughput use cases, availability depends on the NaaS provider's footprint.
+
+### Comparison summary
+
+| Aspect | Site-to-Site VPN | Dedicated Interconnect | Network-as-a-Service |
+|---|---|---|---|
+| **Setup time** | Hours | Weeks to months | Minutes to hours |
+| **Bandwidth** | Up to ~3 Gbps per tunnel | 1–100 Gbps | Flexible, up to 100 Gbps |
+| **Latency** | Variable (internet) | Low and consistent | Low and consistent |
+| **Cost** | Low (per-hour + data transfer) | High (port + data transfer) | Medium (port + data transfer) |
+| **Encryption** | Built-in (IPSec) | Optional (MACsec) | Optional |
+| **Complexity** | Low | High | Medium |
+
+---
+
+## What are the transit architecture patterns?
+
+Once you have chosen your interconnect type, you need to decide how your cloud networks are logically connected. There are three primary transit architecture patterns.
+
+![Transit Gateway hub-spoke architecture showing central transit hub with connected VPCs](/blog/deep-dive-multi-cloud-networking/inline-2.png)
+
+*Transit Gateway Hub-Spoke Architecture*
+
+### Hub-spoke (star) topology
+
+In a **hub-spoke** topology, a central hub network acts as the transit point for all traffic between spoke networks. Each spoke connects only to the hub, and the hub routes traffic between spokes.
+
+*   **How it works** — A central VPC, VNet, or virtual router serves as the hub. Spoke networks (workload VPCs/VNets) attach to the hub via peering connections or transit gateway attachments. All inter-spoke traffic flows through the hub.
+*   **Advantages** — Centralised control and visibility, simplified route management, natural point for inserting firewalls and inspection appliances, scales well as new spokes are added.
+*   **Disadvantages** — The hub becomes a potential bottleneck and single point of failure, inter-spoke traffic takes an extra hop through the hub, hub capacity must be sized appropriately.
+*   **Cloud implementations** — AWS Transit Gateway, Azure Virtual WAN hub, GCP Network Connectivity Center (NCC).
+
+### Full mesh topology
+
+In a **full mesh** topology, every network is directly connected to every other network, eliminating the need for a central transit point.
+
+*   **How it works** — VPC/VNet peering connections are established between every pair of networks. Traffic flows directly between any two networks without traversing an intermediate hub.
+*   **Advantages** — Lowest possible latency (direct path), no central bottleneck, no single point of failure.
+*   **Disadvantages** — The number of connections grows quadratically (n × (n-1) / 2). For 10 networks, that is 45 peering connections. Route management becomes extremely complex. Inserting centralised security inspection is difficult.
+*   **Best suited for** — Small environments with a limited number of networks that require ultra-low latency between all pairs.
+
+### Transit gateway / Virtual WAN
+
+Cloud-native transit services provide a managed hub that combines the benefits of hub-spoke topology with the scalability and resilience of a managed service.
+
+*   **AWS Transit Gateway** — A regional service that acts as a cloud router, supporting up to 5,000 attachments (VPCs, VPN connections, Direct Connect gateways). Supports route tables, route propagation, and inter-region peering.
+*   **Azure Virtual WAN** — A globally distributed managed hub service. Supports VNet connections, site-to-site VPN, point-to-site VPN, and ExpressRoute. Hubs can be deployed in multiple regions with automatic full mesh connectivity between them.
+*   **GCP Network Connectivity Center (NCC)** — A hub-and-spoke model that centralises connectivity management. Supports Cloud VPN spokes, Cloud Interconnect spokes, and Router appliance spokes.
+
+---
+
+## How does AWS networking work for multi-cloud?
+
+AWS provides a comprehensive set of networking services that form the foundation for multi-cloud connectivity.
+
+![VPN vs Direct Connect comparison showing path, performance, and cost differences](/blog/deep-dive-multi-cloud-networking/inline-3.png)
+
+*VPN vs Direct Connect Comparison*
+
+### Core components
+
+*   **VPC (Virtual Private Cloud)** — The fundamental networking construct in AWS. Each VPC is regional and contains subnets, route tables, and internet/NAT gateways. VPCs are isolated by default and must be explicitly connected.
+*   **Transit Gateway** — A managed, highly available cloud router that connects VPCs, VPN connections, and Direct Connect gateways. It supports multiple route tables for network segmentation and route propagation for dynamic routing.
+*   **Direct Connect** — A dedicated network connection from your premises or colocation facility to AWS. Supports BGP for dynamic route exchange and can be connected to Transit Gateway via a Direct Connect gateway.
+*   **VPN Gateway** — Provides encrypted IPSec connectivity to AWS. Can terminate on a Transit Gateway or directly on a VPC (Virtual Private Gateway). Supports both static and dynamic (BGP) routing.
+*   **Route 53 Resolver** — Enables DNS resolution between on-premises networks, other clouds, and AWS VPCs. Inbound endpoints allow external networks to resolve AWS private DNS names. Outbound endpoints allow AWS workloads to resolve external private DNS names.
+
+### AWS CLI commands
+
+Creating a Transit Gateway for multi-cloud connectivity:
+
+```bash
+aws ec2 create-transit-gateway --description "Multi-cloud transit hub" --options "AmazonSideAsn=64512,AutoAcceptSharedAttachments=enable"
+```
+
+Establishing a VPN connection to another cloud provider:
+
+```bash
+aws ec2 create-vpn-connection --customer-gateway-id cgw-0123456789abcdef0 --transit-gateway-id tgw-0123456789abcdef0 --type ipsec.1
+```
+
+Inspecting Transit Gateway attachments:
+
+```bash
+aws ec2 describe-transit-gateway-attachments --transit-gateway-id tgw-0123456789abcdef0
+```
+
+Reviewing Direct Connect connections:
+
+```bash
+aws directconnect describe-connections
+```
+
+Creating a Route 53 Resolver outbound endpoint for cross-cloud DNS:
+
+```bash
+aws route53resolver create-resolver-endpoint --creator-request-id "multi-cloud-outbound" --security-group-ids sg-0123456789abcdef0 --direction OUTBOUND --ip-addresses SubnetId=subnet-0123456789abcdef0
+```
+
+### Terraform example — Transit Gateway
+
+```hcl
+resource "aws_ec2_transit_gateway" "multi_cloud" {
+  description                     = "Multi-cloud transit hub"
+  amazon_side_asn                 = 64512
+  auto_accept_shared_attachments  = "enable"
+  default_route_table_association = "enable"
+  default_route_table_propagation = "enable"
+  dns_support                     = "enable"
+  vpn_ecmp_support                = "enable"
+
+  tags = {
+    Name        = "multi-cloud-tgw"
+    Environment = "production"
+  }
+}
+
+resource "aws_ec2_transit_gateway_vpc_attachment" "workload" {
+  subnet_ids         = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+  transit_gateway_id = aws_ec2_transit_gateway.multi_cloud.id
+  vpc_id             = aws_vpc.workload.id
+
+  tags = {
+    Name = "workload-vpc-attachment"
+  }
+}
+
+resource "aws_customer_gateway" "gcp" {
+  bgp_asn    = 65001
+  ip_address = "203.0.113.1"
+  type       = "ipsec.1"
+
+  tags = {
+    Name = "gcp-customer-gateway"
+  }
+}
+
+resource "aws_vpn_connection" "to_gcp" {
+  customer_gateway_id = aws_customer_gateway.gcp.id
+  transit_gateway_id  = aws_ec2_transit_gateway.multi_cloud.id
+  type                = "ipsec.1"
+  static_routes_only  = false
+
+  tags = {
+    Name = "aws-to-gcp-vpn"
+  }
+}
+```
+
+---
+
+## How does GCP networking work for multi-cloud?
+
+GCP takes a different approach to networking compared to AWS, with a globally distributed VPC model that simplifies some aspects of multi-cloud connectivity while introducing its own nuances.
+
+### Core components
+
+*   **VPC (Global)** — Unlike AWS, a GCP VPC is a global resource. Subnets are regional, but they all belong to the same VPC. This means workloads in different regions can communicate without peering, and firewall rules apply globally across the VPC.
+*   **Cloud Router** — A fully distributed, software-defined router that provides dynamic routing using BGP. Cloud Routers exchange routes with VPN tunnels and Cloud Interconnect attachments, enabling automatic failover and load balancing.
+*   **Network Connectivity Center (NCC)** — A centralised hub for managing connectivity across hybrid and multi-cloud environments. NCC supports spokes for Cloud VPN, Cloud Interconnect, and third-party router appliances.
+*   **Cloud Interconnect** — Dedicated Interconnect provides physical 10 Gbps or 100 Gbps connections. Partner Interconnect provides connectivity through a supported service provider for lower bandwidth requirements.
+*   **Cloud VPN** — Provides encrypted IPSec connectivity. HA VPN provides an SLA of 99.99% availability with two tunnels and supports dynamic routing via BGP.
+
+### gcloud CLI commands
+
+Creating a VPN tunnel to AWS:
+
+```bash
+gcloud compute vpn-tunnels create aws-tunnel-1 --peer-address 203.0.113.1 --shared-secret "MySharedSecret" --ike-version 2 --local-traffic-selector 0.0.0.0/0 --remote-traffic-selector 0.0.0.0/0 --target-vpn-gateway gcp-vpn-gw --region australia-southeast1
+```
+
+Creating a Cloud Router with a custom ASN for BGP peering:
+
+```bash
+gcloud compute routers create multi-cloud-router --network default --asn 65001 --region australia-southeast1
+```
+
+Inspecting the VPC routing mode:
+
+```bash
+gcloud compute networks describe default --format="get(routingConfig.routingMode)"
+```
+
+Adding a BGP peer on the Cloud Router:
+
+```bash
+gcloud compute routers add-bgp-peer multi-cloud-router --peer-name aws-bgp-peer --peer-asn 64512 --interface multi-cloud-if --peer-ip-address 169.254.10.1 --region australia-southeast1
+```
+
+---
+
+## How does Azure networking work for multi-cloud?
+
+Azure provides a comprehensive networking stack with strong support for hybrid and multi-cloud architectures, particularly through its Virtual WAN service.
+
+### Core components
+
+*   **VNet (Virtual Network)** — The fundamental networking construct in Azure. VNets are regional and contain subnets, route tables, and network security groups. VNets can be peered within and across regions.
+*   **Virtual WAN** — A managed, globally distributed hub-and-spoke service. Virtual WAN hubs provide automated routing between VNets, site-to-site VPN, point-to-site VPN, and ExpressRoute connections. Multiple hubs form a full mesh automatically.
+*   **ExpressRoute** — Provides private connectivity to Azure through connectivity providers. Supports private peering for VNet connectivity and Microsoft peering for Azure public services. Global Reach enables connectivity between ExpressRoute circuits in different locations.
+*   **VPN Gateway** — Provides encrypted site-to-site and point-to-site connectivity. Supports IKEv2, OpenVPN, and SSTP protocols. Can be deployed in a Virtual WAN hub or standalone in a VNet.
+*   **Azure DNS Private Resolver** — Enables conditional DNS forwarding between Azure and external networks. Inbound endpoints allow external queries to resolve Azure private DNS zones. Outbound endpoints allow Azure workloads to forward queries to external DNS servers.
+
+### az CLI commands
+
+Creating a Virtual WAN for multi-cloud transit:
+
+```bash
+az network vwan create --name multi-cloud-wan --resource-group networking-rg --type Standard --location australiaeast
+```
+
+Creating a regional hub within the Virtual WAN:
+
+```bash
+az network vhub create --name hub-australia --resource-group networking-rg --vwan multi-cloud-wan --address-prefix 10.100.0.0/16 --location australiaeast
+```
+
+Deploying a VPN gateway within the hub:
+
+```bash
+az network vpn-gateway create --name vpn-gw-australia --resource-group networking-rg --vhub hub-australia --location australiaeast
+```
+
+Creating a VPN site representing the AWS endpoint:
+
+```bash
+az network vpn-site create --name aws-vpn-site --resource-group networking-rg --location australiaeast --virtual-wan multi-cloud-wan --ip-address 203.0.113.1 --address-prefixes 10.0.0.0/8 --device-vendor AWS --device-model TransitGateway --link-speed-in-mbps 1000
+```
+
+---
+
+## How does cross-cloud DNS resolution work?
+
+One of the most overlooked challenges in multi-cloud networking is DNS resolution. Each cloud provider maintains its own private DNS system, and by default, workloads in one cloud cannot resolve private hostnames in another. Bridging this gap requires careful configuration of resolver endpoints and conditional forwarding zones.
+
+![Cross-cloud DNS resolution flow showing conditional forwarding between AWS Route 53, GCP Cloud DNS, and Azure DNS](/blog/deep-dive-multi-cloud-networking/inline-4.png)
+
+*Cross-Cloud DNS Resolution Flow*
+
+### The challenge
+
+Consider a microservice running in AWS that needs to connect to a database in GCP using the private hostname `db.internal.gcp.example.com`. By default:
+
+1.  The AWS workload queries the Amazon-provided DNS resolver (the VPC +2 address).
+2.  The Amazon DNS resolver has no knowledge of the `internal.gcp.example.com` zone.
+3.  The query fails, and the application cannot connect.
+
+### The solution — Conditional forwarding
+
+To resolve this, you configure conditional forwarding rules that direct DNS queries for specific domains to the appropriate cloud's DNS resolver.
+
+**Step-by-step cross-cloud DNS resolution flow:**
+
+1.  A workload in AWS queries `db.internal.gcp.example.com`.
+2.  The query reaches the Amazon-provided DNS resolver in the VPC.
+3.  A Route 53 Resolver **forwarding rule** matches the domain `internal.gcp.example.com` and directs the query to a Route 53 **outbound endpoint**.
+4.  The outbound endpoint forwards the query over the VPN or Direct Connect to GCP's Cloud DNS **inbound forwarding** address.
+5.  GCP Cloud DNS resolves the query against the `internal.gcp.example.com` private zone.
+6.  The response (containing the private IP address) is returned back through the same path to the AWS workload.
+
+### Configuration across providers
+
+**AWS Route 53 Resolver** — Create outbound endpoints in subnets with connectivity to other clouds. Define forwarding rules that specify which domains should be forwarded and to which target IP addresses.
+
+**GCP Cloud DNS** — Enable inbound forwarding on the VPC network to allow external queries. Create forwarding zones for AWS and Azure private domains, specifying the target resolver IP addresses.
+
+**Azure DNS Private Resolver** — Deploy inbound endpoints to accept queries from other clouds. Configure DNS forwarding rulesets with outbound endpoints to forward queries for AWS and GCP domains.
+
+### DNS configuration example
+
+```yaml
+# Route 53 Resolver forwarding rule (conceptual)
+- domain: internal.gcp.example.com
+  target: 172.16.0.2  # GCP Cloud DNS inbound forwarding IP
+  protocol: Do53
+  via: outbound-endpoint (10.0.1.10, 10.0.2.10)
+
+- domain: internal.azure.example.com
+  target: 192.168.0.4  # Azure DNS Private Resolver inbound IP
+  protocol: Do53
+  via: outbound-endpoint (10.0.1.10, 10.0.2.10)
+```
+
+---
+
+## What is BGP and why does it matter for multi-cloud?
+
+**BGP (Border Gateway Protocol)** is the routing protocol that underpins the entire internet, and it is equally critical for multi-cloud networking. BGP enables dynamic route exchange between autonomous systems, allowing cloud networks to automatically learn about each other's routes and select optimal paths.
+
+![BGP routing between clouds showing autonomous systems, route advertisement, and path selection](/blog/deep-dive-multi-cloud-networking/inline-5.png)
+
+*BGP Routing Between Clouds*
+
+### BGP fundamentals
+
+*   **Autonomous System (AS)** — A collection of IP networks under the control of a single entity that presents a common routing policy. Each cloud provider and customer network has its own AS number (ASN).
+*   **Route advertisement** — BGP routers advertise the IP prefixes they can reach to their peers. When AWS advertises 10.0.0.0/16, it tells its BGP peers "I can reach this network — send traffic for it to me."
+*   **Path attributes** — BGP uses attributes like AS_PATH (the sequence of autonomous systems a route has traversed), LOCAL_PREF (local preference for outbound path selection), and MED (Multi-Exit Discriminator for influencing inbound path selection) to determine the best path.
+*   **BGP peering** — Two BGP routers establish a TCP session (port 179) to exchange routing information. Peering can be eBGP (between different autonomous systems) or iBGP (within the same autonomous system).
+
+### BGP in multi-cloud
+
+When connecting clouds, BGP sessions are established between:
+
+*   AWS Transit Gateway (ASN 64512) and GCP Cloud Router (ASN 65001)
+*   AWS Transit Gateway (ASN 64512) and Azure VPN Gateway (ASN 65002)
+*   GCP Cloud Router (ASN 65001) and Azure VPN Gateway (ASN 65002)
+
+Each router advertises the prefixes of its local networks. AWS advertises 10.0.0.0/8, GCP advertises 172.16.0.0/12, and Azure advertises 192.168.0.0/16. When a workload in AWS needs to reach a workload in GCP (172.16.1.10), the AWS Transit Gateway knows to forward the traffic to the GCP Cloud Router because it learned the 172.16.0.0/12 route via BGP.
+
+### Traffic engineering with AS path prepending
+
+**AS path prepending** is a technique used to influence which path traffic takes. By artificially lengthening the AS path for a route, you make that path less preferred.
+
+```text
+# Normal route advertisement from GCP
+AS_PATH: 65001
+PREFIX: 172.16.0.0/12
+
+# Prepended route advertisement (less preferred backup path)
+AS_PATH: 65001 65001 65001
+PREFIX: 172.16.0.0/12
+```
+
+This is useful when you have both a Direct Connect and a VPN connection to the same cloud. You can prepend the AS path on the VPN advertisement so that traffic prefers the Direct Connect path, with the VPN serving as an automatic failover.
+
+### Route filtering
+
+It is essential to implement **route filtering** to prevent unintended route leaks between clouds. Accept only the specific prefixes you expect from each peer and reject everything else.
+
+```text
+# BGP route filter example (Cisco IOS style)
+ip prefix-list AWS-PREFIXES permit 10.0.0.0/8
+ip prefix-list GCP-PREFIXES permit 172.16.0.0/12
+ip prefix-list AZURE-PREFIXES permit 192.168.0.0/16
+
+route-map FROM-AWS permit 10
+  match ip address prefix-list AWS-PREFIXES
+route-map FROM-AWS deny 20
+```
+
+### BGP communities
+
+**BGP communities** are tags attached to routes that signal intent to receiving routers. Cloud providers use communities to indicate route characteristics:
+
+*   AWS Direct Connect uses communities to control route scope (e.g., 7224:8100 for routes to be advertised to specific Direct Connect peers).
+*   GCP uses communities to control regional route preference.
+*   Azure ExpressRoute uses communities to tag routes with their region of origin.
+
+---
+
+## How do you manage IP addresses across clouds?
+
+IP address management (IPAM) is one of the most critical — and frequently underestimated — aspects of multi-cloud networking. Overlapping IP address ranges are the single most common source of multi-cloud connectivity failures.
+
+### The challenge
+
+Each cloud provider defaults to commonly used RFC 1918 ranges. Without coordination, it is easy to end up with AWS VPCs using 10.0.0.0/16, GCP VPCs also using 10.0.0.0/16, and Azure VNets using 10.0.0.0/16. When two networks share the same CIDR range, routing between them is impossible without NAT.
+
+### IP allocation strategy
+
+The most effective approach is to allocate distinct, non-overlapping address ranges to each cloud provider upfront:
+
+```text
+AWS:     10.0.0.0/8    (10.0.0.0 – 10.255.255.255)
+GCP:     172.16.0.0/12 (172.16.0.0 – 172.31.255.255)
+Azure:   192.168.0.0/16 (192.168.0.0 – 192.168.255.255)
+```
+
+Within each provider allocation, further subdivide by environment, region, and workload:
+
+```text
+AWS Production (ap-southeast-2):  10.1.0.0/16
+AWS Staging (ap-southeast-2):     10.2.0.0/16
+AWS Production (us-east-1):       10.3.0.0/16
+
+GCP Production (australia-southeast1): 172.16.0.0/16
+GCP Staging (australia-southeast1):    172.17.0.0/16
+
+Azure Production (australiaeast):  192.168.1.0/24
+Azure Staging (australiaeast):     192.168.2.0/24
+```
+
+### Centralised IPAM tools
+
+For organisations managing dozens or hundreds of cloud networks, manual IP tracking in spreadsheets quickly becomes untenable. Centralised IPAM tools include:
+
+*   **AWS VPC IPAM** — A native AWS service that manages IP address allocation across AWS accounts and regions. Can be extended with custom integrations for GCP and Azure.
+*   **Infoblox** — An enterprise IPAM solution that integrates with all major cloud providers via APIs.
+*   **NetBox** — An open-source infrastructure resource modelling tool that includes comprehensive IPAM functionality.
+*   **HashiCorp Consul** — While primarily a service mesh tool, Consul's catalogue can be used alongside Terraform to enforce IP allocation policies across providers.
+
+### Address translation (NAT)
+
+When overlapping address ranges cannot be avoided (common in merger and acquisition scenarios), NAT can be used at the boundary between clouds. This adds operational complexity and can break applications that embed IP addresses in payloads, so it should be treated as a temporary measure while networks are re-addressed.
+
+---
+
+## How do you secure multi-cloud networks?
+
+Security in a multi-cloud network requires a layered approach that accounts for the different security primitives available in each cloud provider.
+
+![Network security zones across multiple clouds showing firewall rules, NACLs, and security groups](/blog/deep-dive-multi-cloud-networking/inline-6.png)
+
+*Network Security Zones Across Clouds*
+
+### Security primitives by provider
+
+**AWS:**
+*   **Security Groups** — Stateful, instance-level firewall rules. Allow rules only (implicit deny).
+*   **Network ACLs** — Stateless, subnet-level rules. Support both allow and deny rules.
+*   **AWS Network Firewall** — Managed firewall service for VPC-level traffic inspection with Suricata-compatible rules.
+
+**GCP:**
+*   **VPC Firewall Rules** — Stateful rules applied to instances via target tags or service accounts. Support both allow and deny rules. Applied globally across the VPC.
+*   **Hierarchical Firewall Policies** — Organisation or folder-level policies that apply across multiple VPCs.
+*   **Cloud Armor** — Web application firewall and DDoS protection for external-facing workloads.
+
+**Azure:**
+*   **Network Security Groups (NSGs)** — Stateful, subnet or NIC-level rules. Support both allow and deny rules with priority-based evaluation.
+*   **Azure Firewall** — Managed, stateful firewall with application-level filtering, threat intelligence, and FQDN-based rules.
+*   **Azure DDoS Protection** — DDoS mitigation for Azure resources.
+
+### Consistent policy enforcement
+
+To maintain consistent security across clouds, organisations should:
+
+*   Define a **security baseline** in a provider-agnostic format (e.g., YAML or JSON policy definitions) and translate it to each provider's native constructs using Infrastructure as Code (Terraform, Pulumi).
+*   Implement **network segmentation** using separate VPCs/VNets for different trust zones (public, private, restricted) and control traffic between them with transit gateway route tables or firewall rules.
+*   Enable **east-west traffic inspection** at the transit layer. Route inter-VPC and inter-cloud traffic through a centralised firewall appliance or cloud-native firewall service for deep packet inspection.
+
+### Centralised logging
+
+Visibility into network traffic across all clouds is essential for security monitoring and incident response:
+
+*   **AWS VPC Flow Logs** — Capture metadata about IP traffic flowing through VPC network interfaces. Can be sent to CloudWatch Logs, S3, or a SIEM.
+*   **GCP VPC Flow Logs** — Capture samples of network flows at the subnet level. Exported via Cloud Logging.
+*   **Azure NSG Flow Logs** — Capture information about IP traffic flowing through NSGs. Stored in Azure Storage and analysable with Traffic Analytics.
+
+Aggregating these logs into a centralised SIEM (such as Splunk, Elastic, or a cloud-native solution like Google Chronicle) provides unified visibility across all three providers.
+
+---
+
+## What about latency and performance?
+
+Cross-cloud latency is one of the most important factors in multi-cloud architecture decisions. Understanding where latency comes from and how to optimise it is critical for application performance.
+
+### Measuring cross-cloud latency
+
+Typical cross-cloud latency depends on the interconnect type and geographic distance:
+
+*   **VPN over internet (same region)** — 5–20 ms, highly variable
+*   **Dedicated interconnect (same metro)** — 1–3 ms, consistent
+*   **NaaS provider (same metro)** — 1–5 ms, consistent
+*   **Cross-region (e.g., Sydney to US East)** — 150–200 ms regardless of interconnect type (limited by speed of light)
+
+### Optimisation strategies
+
+*   **Co-locate interconnects** — Establish Direct Connect, ExpressRoute, and Cloud Interconnect in the same colocation facility (e.g., Equinix SY4 in Sydney) to minimise cross-cloud latency within a metro area.
+*   **Traffic engineering with BGP** — Use BGP attributes (LOCAL_PREF, MED, AS path prepending) to influence traffic paths and ensure traffic uses the lowest-latency interconnect.
+*   **Caching layers** — Deploy caching services (Redis, Memcached) to reduce the frequency of cross-cloud API calls.
+*   **CDN integration** — Use CDNs (CloudFront, Cloud CDN, Azure CDN) to serve static content from edge locations, reducing the need for cross-cloud data transfers for end users.
+*   **Data locality** — Where possible, keep frequently communicating services within the same cloud provider and region. Reserve cross-cloud communication for asynchronous workflows or data replication.
+
+---
+
+## What is SD-WAN and how does it help?
+
+**SD-WAN (Software-Defined Wide Area Network)** extends the principles of software-defined networking to WAN connectivity. In a multi-cloud context, SD-WAN provides intelligent, application-aware routing across multiple transport paths (MPLS, broadband, LTE, cloud interconnects).
+
+### How SD-WAN fits into multi-cloud
+
+*   **Cloud-aware routing** — SD-WAN appliances (physical or virtual) can be deployed in cloud VPCs/VNets as well as on-premises. They maintain encrypted tunnels to each cloud and dynamically route traffic based on application requirements, link health, and cost.
+*   **Application-level SLAs** — Unlike traditional routing that operates at the network layer, SD-WAN can enforce application-level policies. For example, route real-time video traffic over the lowest-latency path and bulk data transfers over the cheapest path.
+*   **Integration with cloud transit** — Major SD-WAN vendors (Cisco Viptela, Palo Alto Prisma SD-WAN, VMware VeloCloud, Fortinet) integrate with AWS Transit Gateway, Azure Virtual WAN, and GCP NCC, allowing SD-WAN to serve as the overlay fabric connecting all cloud and on-premises locations.
+*   **Simplified operations** — A single SD-WAN controller provides centralised visibility and policy management across all interconnects, replacing the need to manage individual VPN tunnels, BGP sessions, and route tables manually.
+
+---
+
+## How does a cross-cloud service mesh work?
+
+For organisations running microservices across multiple clouds, a **service mesh** provides consistent service-to-service communication, observability, and security regardless of where each service runs.
+
+### Istio multi-cluster
+
+**Istio** is the most widely adopted service mesh for multi-cloud. In a multi-cluster configuration:
+
+1.  Each cloud runs its own Kubernetes cluster with Istio's data plane (Envoy sidecar proxies).
+2.  A shared control plane (or federated control planes) distributes service discovery information and traffic policies across clusters.
+3.  Services in AWS can discover and communicate with services in GCP and Azure using consistent DNS names (e.g., `service.namespace.svc.cluster.local`).
+4.  All cross-cluster traffic is automatically encrypted with **mTLS** (mutual TLS), regardless of whether the underlying network transport is encrypted.
+
+### Key benefits
+
+*   **Consistent service discovery** — Services register themselves in the mesh, and other services can find them regardless of which cloud they run in.
+*   **Traffic management** — Fine-grained traffic routing, load balancing, retries, circuit breaking, and canary deployments across clouds.
+*   **Observability** — Distributed tracing (Jaeger, Zipkin), metrics (Prometheus), and logging provide end-to-end visibility into cross-cloud request flows.
+*   **Security** — mTLS encryption and identity-based authorisation policies ensure that only authorised services can communicate, even across cloud boundaries.
+
+---
+
+## Okay, what terminology do I need to understand?
+
+*   **VPN (Virtual Private Network)** — An encrypted tunnel over a public or private network that provides secure connectivity between two endpoints.
+*   **Direct Connect** — AWS's dedicated network connection service, bypassing the public internet.
+*   **ExpressRoute** — Azure's dedicated network connection service, providing private connectivity through partner providers.
+*   **Cloud Interconnect** — GCP's dedicated network connection service, available as Dedicated or Partner Interconnect.
+*   **Transit Gateway** — AWS's managed cloud router that connects VPCs, VPNs, and Direct Connect gateways.
+*   **Virtual WAN** — Azure's managed, globally distributed hub-and-spoke networking service.
+*   **BGP (Border Gateway Protocol)** — The routing protocol used to exchange routing information between autonomous systems on the internet and in cloud networks.
+*   **ASN (Autonomous System Number)** — A unique identifier assigned to an autonomous system for use in BGP routing.
+*   **CIDR (Classless Inter-Domain Routing)** — A method for allocating IP addresses and defining IP routing using variable-length subnet masking (e.g., 10.0.0.0/16).
+*   **IPAM (IP Address Management)** — The administration of DNS and DHCP, and the planning, tracking, and management of IP address spaces.
+*   **NCC (Network Connectivity Center)** — GCP's centralised hub for managing hybrid and multi-cloud connectivity.
+*   **Hub-spoke** — A network topology where a central hub connects to multiple spokes, with all inter-spoke traffic flowing through the hub.
+*   **Full mesh** — A network topology where every node is directly connected to every other node.
+*   **Peering** — A direct connection between two networks that allows them to exchange traffic without traversing an intermediate network.
+*   **Route advertisement** — The process by which a BGP router announces the IP prefixes it can reach to its peers.
+*   **SD-WAN (Software-Defined Wide Area Network)** — A technology that uses software-defined networking principles to manage and optimise WAN connectivity.
+*   **Flow logs** — Records of network traffic metadata captured at the VPC, subnet, or interface level for security monitoring and troubleshooting.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

@@ -1,0 +1,732 @@
+---
+title: "Deep Dive - Vector Databases and Embeddings"
+date: "2025-07-11"
+slug: "deep-dive-vector-databases"
+status: "publish"
+feature_image: "/blog/deep-dive-vector-databases/feature-image.png"
+tags: ["Vector Databases", "Embeddings", "AI Search", "Similarity Search", "RAG", "Machine Learning", "HNSW", "pgvector", "Natural Language Processing", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Vector Databases and Embeddings | Robert Leggett"
+  description: "A comprehensive deep dive into vector databases and embeddings — from mathematical foundations to production architectures. Learn about similarity search, indexing algorithms, RAG pipelines, and real-world implementations."
+  keywords: ["Vector Databases", "Embeddings", "Similarity Search", "HNSW", "Cosine Similarity", "RAG", "Retrieval Augmented Generation", "pgvector", "ChromaDB", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-vector-databases"
+  image: "https://robertleggett.com.au/blog/deep-dive-vector-databases/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Vector Databases and Embeddings"
+  description: "A comprehensive deep dive into vector databases and embeddings — from mathematical foundations to production architectures including similarity search, indexing algorithms, and RAG pipelines."
+  image: "https://robertleggett.com.au/blog/deep-dive-vector-databases/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-vector-databases"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Vector Databases and Embeddings"
+  description: "A comprehensive deep dive into vector databases and embeddings — from mathematical foundations to production architectures including similarity search, indexing algorithms, and RAG pipelines."
+  image: "https://robertleggett.com.au/blog/deep-dive-vector-databases/feature-image.png"
+---
+
+Welcome to the "Deep Dive" series! In this comprehensive exploration, we will immerse ourselves in the world of vector databases and embeddings — the foundational technology powering modern AI search, recommendation systems, and Retrieval Augmented Generation (RAG). Whether you are an experienced engineer building production AI systems or someone just beginning to explore how machines understand language and meaning, our goal is to provide clear and thorough explanations that will deepen your understanding of how unstructured data is transformed into searchable, high-dimensional vector representations. We will journey from the mathematical foundations of vectors and embeddings, through the clever indexing algorithms that make similarity search fast at scale, all the way to production-ready architectures and real-world code examples. Join us on this enlightening journey as we bridge the gap between traditional databases and the new paradigm of semantic search, empowering you to build intelligent systems that truly understand the meaning behind your data. Let's dive in and demystify the world of vector databases together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of vectors, embeddings, and how machines represent meaning
+*   Deep knowledge of similarity metrics, indexing algorithms, and how vector search works under the hood
+*   Practical experience with real code examples using ChromaDB, pgvector, and Python
+*   An understanding of RAG architectures, hybrid search, and production scaling strategies
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What are Vectors and Embeddings?
+
+Before we can understand vector databases, we need to establish a solid foundation in two core concepts: **vectors** and **embeddings**. These are the building blocks upon which the entire ecosystem of semantic search and AI-powered retrieval is constructed.
+
+### Vectors — The Mathematical Foundation
+
+A **vector** is, at its simplest, an ordered array of numbers. In mathematics, a vector represents a point or direction in multi-dimensional space. You are likely already familiar with 2D vectors from school — a coordinate like `[3, 4]` represents a point on a flat plane. A 3D vector like `[3, 4, 5]` adds a third axis, representing a point in three-dimensional space.
+
+In the context of AI and machine learning, vectors extend far beyond three dimensions. We work with vectors that have **hundreds or even thousands of dimensions**. A vector with 384 dimensions is a list of 384 floating-point numbers. A vector with 1536 dimensions is a list of 1536 floating-point numbers. While we cannot visualise these high-dimensional spaces directly, the mathematical operations that work in 2D and 3D — such as measuring distances and angles — extend perfectly into these higher dimensions.
+
+For example, a simple 5-dimensional vector might look like this:
+
+```
+[0.0234, -0.1567, 0.8921, 0.0045, -0.3412]
+```
+
+Each number in the array is a **component** of the vector, and together they define a unique point in a 384-dimensional, 768-dimensional, or 1536-dimensional space, depending on the model that produced them.
+
+### Embeddings — Capturing Semantic Meaning
+
+An **embedding** is a special kind of vector — one that has been produced by a machine learning model trained to capture the **semantic meaning** of the input data. When we say "semantic meaning," we mean that the numerical representation encodes the concepts, relationships, and context of the original data, not just its surface-level characters or pixels.
+
+Consider these two sentences:
+
+1. "The cat sat on the mat"
+2. "A feline rested on the rug"
+
+These sentences use completely different words, yet they express nearly identical meaning. A well-trained embedding model will produce vectors for these two sentences that are **very close together** in the high-dimensional space. Conversely, the sentence "The stock market crashed yesterday" would produce a vector that is **far away** from both of them, because its meaning is entirely different.
+
+This is what makes embeddings so powerful: they transform the problem of understanding meaning into a problem of measuring geometric distance. Two pieces of content are semantically similar if and only if their embedding vectors are close together in space.
+
+### What Can Be Embedded?
+
+Embeddings are not limited to text. Modern models can produce embeddings for:
+
+*   **Text** — sentences, paragraphs, entire documents
+*   **Images** — photographs, diagrams, screenshots
+*   **Audio** — speech recordings, music clips
+*   **Code** — source code snippets, functions
+*   **Multi-modal** — models like CLIP embed both text and images into the same vector space, enabling cross-modal search (e.g., searching images with text queries)
+
+### Dimensionality
+
+The **dimensionality** of an embedding refers to the number of components in the vector. Common dimensionalities include:
+
+*   **384 dimensions** — lightweight models like `all-MiniLM-L6-v2`, suitable for fast, resource-constrained applications
+*   **768 dimensions** — standard models like `all-mpnet-base-v2` and many BERT-based models
+*   **1024 dimensions** — models like Cohere's `embed-english-v3.0`
+*   **1536 dimensions** — OpenAI's `text-embedding-ada-002`
+*   **3072 dimensions** — OpenAI's `text-embedding-3-large`
+
+Higher dimensionality generally means the model can capture more nuanced semantic distinctions, but it comes at the cost of increased storage, memory usage, and slower similarity computations. Choosing the right dimensionality is a tradeoff between **accuracy** and **efficiency** — a theme we will return to throughout this post.
+
+---
+
+## Embedding Models Explained
+
+The quality of your vector search is fundamentally determined by the quality of your embeddings. Garbage in, garbage out — if your embedding model does not capture the semantic nuances of your data, no amount of clever indexing or database optimisation will save you. Let's walk through the evolution of embedding models and understand what is available today.
+
+### Early Approaches — word2vec and GloVe
+
+**word2vec**, introduced by Google in 2013, was one of the first models to demonstrate that words could be meaningfully represented as dense vectors. It came in two variants:
+
+*   **CBOW (Continuous Bag of Words)** — predicts a target word from its surrounding context words. Given "The ___ sat on the mat," it learns to predict "cat."
+*   **Skip-gram** — the reverse: given a target word, it predicts the surrounding context. Given "cat," it learns to predict "The," "sat," "on," "the," "mat."
+
+word2vec produced **word-level** embeddings, meaning each word got a single fixed vector regardless of context. The word "bank" would have the same vector whether it meant a river bank or a financial institution.
+
+**GloVe (Global Vectors for Word Representation)**, developed at Stanford, took a different approach by leveraging global co-occurrence statistics from the entire corpus. Rather than learning from local context windows like word2vec, GloVe factorised the word-word co-occurrence matrix to produce vectors that captured both local and global statistical information. GloVe embeddings became widely adopted and demonstrated strong performance on word analogy tasks (e.g., "king - man + woman ≈ queen").
+
+### The Transformer Revolution — BERT and Beyond
+
+The critical limitation of word2vec and GloVe was the lack of **contextual understanding**. The transformer architecture, introduced in the landmark 2017 paper "Attention Is All You Need," changed everything.
+
+**BERT (Bidirectional Encoder Representations from Transformers)**, released by Google in 2018, produced contextual embeddings — the vector for "bank" would differ depending on whether the surrounding text discussed finance or rivers. BERT processes text bidirectionally, considering both left and right context simultaneously, producing rich token-level representations.
+
+However, raw BERT embeddings are not ideal for sentence-level similarity. The vectors from BERT's `[CLS]` token or from mean-pooling all tokens do not naturally cluster by semantic similarity without fine-tuning.
+
+### Sentence Transformers — Purpose-Built for Similarity
+
+**Sentence Transformers** solved this problem by fine-tuning transformer models specifically for producing high-quality sentence embeddings. Using a Siamese network architecture and contrastive learning objectives, these models are trained so that semantically similar sentences produce vectors that are close together.
+
+The most popular sentence transformer models include:
+
+*   **all-MiniLM-L6-v2** — 384 dimensions, extremely fast, excellent quality-to-speed ratio. Ideal for applications where latency matters.
+*   **all-mpnet-base-v2** — 768 dimensions, higher quality than MiniLM but slower. Best general-purpose open-source embedding model.
+*   **multilingual-e5-large** — 1024 dimensions, strong multilingual support across 100+ languages.
+
+Here is a practical example of generating embeddings with sentence transformers:
+
+```python
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+sentences = [
+    "Vector databases store high-dimensional embeddings",
+    "Similarity search finds semantically related content",
+    "Traditional databases use exact keyword matching"
+]
+
+embeddings = model.encode(sentences)
+print(f"Embedding shape: {embeddings.shape}")
+print(f"Dimensions per vector: {embeddings.shape[1]}")
+```
+
+Running this code produces output like:
+
+```
+Embedding shape: (3, 384)
+Dimensions per vector: 384
+```
+
+Each sentence has been transformed into a 384-dimensional vector that captures its semantic meaning.
+
+### Commercial Embedding APIs
+
+Several providers offer hosted embedding models via API:
+
+*   **OpenAI** — `text-embedding-ada-002` (1536 dimensions, legacy), `text-embedding-3-small` (1536 dimensions, newer and cheaper), `text-embedding-3-large` (3072 dimensions, highest quality). The v3 models support **Matryoshka representation learning**, allowing you to truncate vectors to lower dimensions (e.g., 256 or 512) with graceful quality degradation.
+*   **Cohere** — `embed-english-v3.0` and `embed-multilingual-v3.0` (1024 dimensions). Cohere's models support separate `search_document` and `search_query` input types, optimising embeddings for retrieval.
+*   **Google** — `text-embedding-004` (768 dimensions) via the Vertex AI platform.
+*   **Voyage AI** — specialised models for code (`voyage-code-2`) and domain-specific text.
+
+### Dimensionality Tradeoffs
+
+Choosing an embedding model involves balancing several factors:
+
+*   **Higher dimensions** → more semantic nuance, better recall, but more storage and slower search
+*   **Lower dimensions** → faster search, less memory, but potentially losing fine-grained distinctions
+*   **Open-source models** → no API costs, full control, can run on-premise, but require infrastructure
+*   **Commercial APIs** → easy to integrate, continuously improved, but introduce latency, cost, and vendor dependency
+
+For most production applications, starting with `all-MiniLM-L6-v2` (384d) for prototyping and moving to `text-embedding-3-small` or `all-mpnet-base-v2` for production is a pragmatic approach.
+
+---
+
+## Vector Similarity Metrics
+
+Once you have embedding vectors, you need a way to measure how "close" or "similar" two vectors are. This is the heart of vector search — the metric you choose determines what "similarity" means mathematically. Let's explore the four most important distance and similarity metrics.
+
+### Cosine Similarity
+
+**Cosine similarity** measures the cosine of the angle between two vectors, ignoring their magnitude (length). It ranges from -1 (opposite directions) to +1 (same direction), with 0 indicating orthogonality (no similarity).
+
+The formula is:
+
+```
+cosine_similarity(A, B) = (A · B) / (||A|| × ||B||)
+```
+
+Where `A · B` is the dot product of the two vectors, and `||A||` and `||B||` are their magnitudes (L2 norms).
+
+**When to use cosine similarity:** This is the **most commonly used metric** for text embeddings. Because it ignores vector magnitude, it is robust to differences in document length — a short sentence and a long paragraph about the same topic will have similar cosine similarity even if their vectors have different magnitudes. Most embedding models are trained with cosine similarity as the objective, making it the default choice.
+
+### Euclidean Distance (L2)
+
+**Euclidean distance** measures the straight-line distance between two points in the vector space. It is the generalisation of the familiar distance formula from geometry to N dimensions.
+
+The formula is:
+
+```
+euclidean_distance(A, B) = √(Σ(Aᵢ - Bᵢ)²)
+```
+
+**When to use Euclidean distance:** Use L2 distance when the magnitude of the vectors carries meaningful information — for example, when vectors represent physical measurements or when you have explicitly normalised your vectors. Note that for normalised vectors (magnitude = 1), Euclidean distance and cosine similarity produce equivalent rankings. Many embedding models output normalised vectors by default.
+
+### Dot Product (Inner Product)
+
+The **dot product** is simply the sum of the element-wise products of two vectors:
+
+```
+dot_product(A, B) = Σ(Aᵢ × Bᵢ)
+```
+
+Unlike cosine similarity, the dot product is sensitive to both the angle and the magnitude of the vectors. A vector with larger magnitude will produce a larger dot product.
+
+**When to use dot product:** Use it when vector magnitude encodes importance or relevance — for example, in Maximum Inner Product Search (MIPS) scenarios where longer vectors should be preferred. Some recommendation systems use dot product because the magnitude can represent item popularity or confidence.
+
+### Manhattan Distance (L1)
+
+**Manhattan distance** (also called taxicab distance) measures the sum of absolute differences between vector components:
+
+```
+manhattan_distance(A, B) = Σ|Aᵢ - Bᵢ|
+```
+
+**When to use Manhattan distance:** L1 distance is less commonly used for embeddings but can be useful when working with sparse vectors or when you want a distance metric that is less sensitive to outliers than L2 distance. It is computationally cheaper than Euclidean distance since it avoids the square root operation.
+
+![Vector similarity in 2D/3D space](/blog/deep-dive-vector-databases/inline-2.png)
+
+Vector Similarity — Cosine vs Euclidean distance in vector space
+
+The diagram above illustrates the key difference: cosine similarity measures the **angle** between vectors (direction), while Euclidean distance measures the **straight-line gap** between their endpoints (position). Two vectors can be close in cosine similarity (small angle) but far apart in Euclidean distance (different magnitudes), or vice versa. Understanding this distinction is critical for choosing the right metric for your use case.
+
+---
+
+## How Text Becomes a Vector
+
+Now that we understand what embeddings are and how similarity is measured, let's trace the complete journey of a piece of text as it is transformed into a vector. This process is fundamental to every vector database operation — whether you are inserting a new document or querying for similar content.
+
+![Text to embedding vector transformation](/blog/deep-dive-vector-databases/inline-1.png)
+
+Text to Embedding Vector Transformation
+
+The transformation follows these steps:
+
+1.  **Input Text** — The process begins with raw text input. This could be a sentence, a paragraph, an entire document, or even a short query like "How do vector databases work?" The text is in its natural, human-readable form.
+
+2.  **Tokenisation** — The text is broken down into **tokens** — the fundamental units that the model understands. Tokenisation is model-specific. A word like "embeddings" might become a single token, while an uncommon word like "vectorisation" might be split into sub-word tokens like `["vector", "##isation"]`. Most modern models use **WordPiece**, **Byte-Pair Encoding (BPE)**, or **SentencePiece** tokenisation. The tokeniser also adds special tokens — `[CLS]` at the beginning and `[SEP]` at the end for BERT-based models. Each token is mapped to an integer ID from the model's vocabulary.
+
+3.  **Token Embedding Lookup** — Each token ID is mapped to an initial dense vector through an embedding lookup table. These initial vectors are learned during pre-training and represent the base semantic content of each token in isolation.
+
+4.  **Positional Encoding** — Because transformers process all tokens simultaneously (not sequentially like RNNs), positional information is injected to indicate the order of tokens. Positional encodings are added to the token embeddings so the model knows that "the cat chased the dog" is different from "the dog chased the cat."
+
+5.  **Transformer Layers** — The combined embeddings pass through multiple transformer encoder layers. Each layer applies **multi-head self-attention** — the mechanism that allows every token to attend to every other token, capturing relationships and context. A 6-layer model (like MiniLM-L6) runs the input through six successive transformer blocks, each refining the representation. The output is a sequence of contextualised token vectors where each vector now encodes not just the token itself but its meaning in the context of the entire input.
+
+6.  **Pooling** — The transformer produces one vector per token, but we need a single vector for the entire input. **Pooling** reduces the sequence of token vectors to one fixed-size vector. Common strategies include **mean pooling** (averaging all token vectors, the most common approach), **CLS token pooling** (using the `[CLS]` token's vector), and **max pooling** (taking the element-wise maximum across all tokens).
+
+7.  **Normalisation** — The final pooled vector is typically L2-normalised so that its magnitude is exactly 1. This ensures that cosine similarity can be computed efficiently as a simple dot product between normalised vectors.
+
+8.  **Output Embedding** — The result is a fixed-size dense vector — for example, 384 floating-point numbers for `all-MiniLM-L6-v2`. This vector is the embedding, and it captures the semantic essence of the original input text. It is this vector that gets stored in the vector database and used for similarity search.
+
+This entire pipeline executes in milliseconds on modern hardware, and the resulting embedding can be stored, indexed, and searched against millions or billions of other embeddings.
+
+---
+
+## Indexing Algorithms
+
+Storing vectors is easy — the hard part is searching them efficiently. A naive approach would compare a query vector against every single stored vector (a **brute-force linear scan**), but this becomes prohibitively slow as the dataset grows beyond a few hundred thousand vectors. This is where **indexing algorithms** come in. They create data structures that enable fast **Approximate Nearest Neighbour (ANN)** search, trading a small amount of accuracy for enormous speed gains.
+
+### Flat Index (Brute Force)
+
+The **flat index** is the simplest approach: store all vectors in a flat array and compare the query against every single one. This guarantees **exact** results — you will always find the true nearest neighbours.
+
+*   **Time complexity:** O(n × d) where n is the number of vectors and d is the dimensionality
+*   **Space complexity:** O(n × d)
+*   **Pros:** Perfect recall, no index build time, simple implementation
+*   **Cons:** Linear scan time, impractical for datasets over ~100,000 vectors
+
+Flat indexes are useful as baselines for measuring the recall of approximate methods and for small datasets where build-time simplicity outweighs search-time cost.
+
+### IVF (Inverted File Index)
+
+**IVF** partitions the vector space into clusters using k-means clustering. At query time, instead of searching all vectors, you only search the vectors in the closest cluster(s).
+
+The process works as follows:
+
+1.  **Build time** — Run k-means on the dataset to create `nlist` cluster centroids (e.g., 100 or 1024 centroids). Assign each vector to its nearest centroid.
+2.  **Query time** — Compare the query vector to all centroids, select the `nprobe` closest centroids (e.g., 10), and perform a brute-force search only within those clusters.
+
+*   **Time complexity:** O(nlist × d + nprobe × (n/nlist) × d)
+*   **Pros:** Significant speedup over flat search, tuneable accuracy via `nprobe`
+*   **Cons:** Cluster boundaries can cause misses (a nearest neighbour might be in an adjacent cluster), requires training step
+
+Increasing `nprobe` improves recall but slows search. The tradeoff is configurable at query time.
+
+### HNSW (Hierarchical Navigable Small World)
+
+**HNSW** is the **most widely adopted** indexing algorithm in production vector databases. It is a graph-based approach that builds a multi-layer navigable graph where each node is a vector and edges connect nearby vectors.
+
+![HNSW graph structure](/blog/deep-dive-vector-databases/inline-3.png)
+
+HNSW Graph Structure — Navigable Small World Layers
+
+The HNSW structure consists of multiple layers, with each layer being a navigable small world graph:
+
+1.  **Layer 0 (Bottom Layer)** — Contains **all** vectors. Each vector is connected to its nearest neighbours. This is the densest layer with the most connections.
+
+2.  **Layer 1** — Contains a **random subset** of vectors from Layer 0 (typically determined by an exponentially decaying probability). Connections in this layer span longer distances, allowing faster traversal across the graph.
+
+3.  **Layer 2** — Contains an even sparser subset of vectors from Layer 1. Connections span even longer distances.
+
+4.  **Layer L (Top Layer)** — Contains very few vectors. The entry point for all searches is a single node at the top layer.
+
+**Search works via greedy traversal:**
+
+1.  Start at the entry point in the top layer.
+2.  Greedily move to the neighbour closest to the query vector at the current layer.
+3.  When no closer neighbour exists at the current layer, drop down to the next layer and continue the greedy search from the same node.
+4.  At Layer 0, perform a more thorough local search using a priority queue to explore multiple candidates (controlled by the `ef` parameter).
+5.  Return the top-k nearest neighbours found.
+
+**Key parameters:**
+
+*   **M** — Maximum number of connections per node per layer. Higher M means better recall but more memory and slower insertion. Typical values: 16–64.
+*   **ef_construction** — Size of the dynamic candidate list during index building. Higher values produce a better-quality graph but slower build time. Typical values: 100–400.
+*   **ef_search** — Size of the dynamic candidate list during querying. Higher values mean better recall but slower search. This is tuneable at query time.
+
+*   **Pros:** Excellent recall (>95% at reasonable speeds), sub-millisecond search on million-scale datasets, no training step required, supports incremental insertion
+*   **Cons:** High memory usage (graph structure overhead), slow delete operations in some implementations
+
+HNSW is the default index in Qdrant, Weaviate, ChromaDB, and pgvector (via `hnsw`), and is available in virtually every vector database.
+
+### PQ (Product Quantisation)
+
+**Product Quantisation** is a compression technique that reduces the memory footprint of vectors by dividing each vector into sub-vectors and quantising each sub-vector independently.
+
+The process works as follows:
+
+1.  **Divide** each d-dimensional vector into m sub-vectors of d/m dimensions each.
+2.  **Train** a k-means codebook for each sub-vector space (typically with 256 centroids, representable as a single byte).
+3.  **Encode** each sub-vector as the index of its nearest centroid.
+
+The result: a 384-dimensional float32 vector (1536 bytes) can be compressed to just 48 bytes (with m=48 sub-vectors × 1 byte per centroid index) — a **32× reduction** in memory.
+
+*   **Pros:** Dramatic memory savings, enables billion-scale datasets to fit in RAM
+*   **Cons:** Lossy compression reduces recall, requires training, adds decoding overhead
+
+PQ is often combined with IVF (as **IVF-PQ**) or HNSW (as **HNSW-PQ**) to get both fast search and low memory usage.
+
+### ScaNN (Scalable Nearest Neighbours)
+
+**ScaNN**, developed by Google Research, introduces **asymmetric hashing** — a technique where the query vector is kept at full precision while the database vectors are quantised. This asymmetry provides better accuracy than symmetric quantisation methods like PQ, because the query representation remains exact.
+
+ScaNN combines anisotropic vector quantisation with efficient partitioning and rescoring to achieve state-of-the-art recall-speed tradeoffs on standard benchmarks.
+
+*   **Pros:** Excellent accuracy-speed tradeoff, well-optimised implementation, open-source
+*   **Cons:** Primarily a library (not a database), Google-centric ecosystem
+
+---
+
+## Vector Database Comparison
+
+The vector database landscape has exploded, with options ranging from purpose-built cloud services to extensions for existing databases. Let's compare the major players across key dimensions.
+
+![Vector database architecture](/blog/deep-dive-vector-databases/inline-6.png)
+
+Vector Database Architecture — Indexing, Storage, and Query Engine
+
+The diagram above shows the general architecture shared by most vector databases: an **ingestion layer** that accepts vectors and metadata, an **indexing engine** that builds the search structure (HNSW, IVF, etc.), a **storage layer** for persistence, and a **query engine** that processes similarity search requests with optional metadata filtering.
+
+### Pinecone
+
+*   **Hosting model:** Fully managed cloud service (serverless or pod-based)
+*   **Indexing:** Proprietary (based on IVF and graph-based approaches)
+*   **Metadata filtering:** Yes, with rich filtering syntax
+*   **Scalability:** Excellent — designed for billions of vectors, automatic sharding
+*   **Pricing:** Pay-per-use (serverless) or provisioned pods
+*   **Best for:** Teams wanting a fully managed solution with zero infrastructure overhead
+
+### Weaviate
+
+*   **Hosting model:** Open-source (self-hosted) or Weaviate Cloud Services (managed)
+*   **Indexing:** HNSW with product quantisation, flat index
+*   **Metadata filtering:** Yes, with GraphQL-based query language and hybrid search built-in
+*   **Scalability:** Good — supports horizontal scaling and multi-tenancy
+*   **Pricing:** Free (self-hosted), usage-based (cloud)
+*   **Best for:** Organisations wanting an open-source database with built-in hybrid search and a rich query language
+
+### Milvus
+
+*   **Hosting model:** Open-source (self-hosted) or Zilliz Cloud (managed)
+*   **Indexing:** IVF-FLAT, IVF-PQ, HNSW, ScaNN, DiskANN, and more
+*   **Metadata filtering:** Yes, with attribute filtering and partitioning
+*   **Scalability:** Excellent — cloud-native, disaggregated storage and compute, built for billions of vectors
+*   **Pricing:** Free (self-hosted), usage-based (Zilliz Cloud)
+*   **Best for:** Large-scale production deployments requiring maximum indexing flexibility
+
+### Qdrant
+
+*   **Hosting model:** Open-source (self-hosted) or Qdrant Cloud (managed)
+*   **Indexing:** HNSW with payload indexing, scalar and product quantisation
+*   **Metadata filtering:** Yes, with highly optimised filtered search (filtering during graph traversal, not after)
+*   **Scalability:** Good — supports sharding, replication, and distributed deployment
+*   **Pricing:** Free (self-hosted), usage-based (cloud)
+*   **Best for:** Applications requiring fast filtered search and a Rust-based, performance-optimised engine
+
+### ChromaDB
+
+*   **Hosting model:** Open-source (embedded or client-server), Chroma Cloud (managed, in development)
+*   **Indexing:** HNSW (via hnswlib)
+*   **Metadata filtering:** Yes, with where and where_document clauses
+*   **Scalability:** Limited — primarily designed for single-node use and prototyping
+*   **Pricing:** Free (open-source)
+*   **Best for:** Rapid prototyping, local development, small-to-medium datasets, and educational use
+
+### pgvector
+
+*   **Hosting model:** PostgreSQL extension (self-hosted or any managed PostgreSQL provider)
+*   **Indexing:** IVFFlat, HNSW
+*   **Metadata filtering:** Yes — full SQL with JSONB, JOINs, and all PostgreSQL capabilities
+*   **Scalability:** Good — inherits PostgreSQL's mature replication, partitioning, and ecosystem
+*   **Pricing:** Free (extension), pay for PostgreSQL hosting
+*   **Best for:** Teams already using PostgreSQL who want to add vector search without introducing a new database. Excellent for hybrid relational + vector workloads.
+
+### Choosing the Right Database
+
+There is no single "best" vector database. Your choice depends on:
+
+*   **Scale** — For billions of vectors, consider Milvus or Pinecone. For millions, any option works.
+*   **Infrastructure preference** — Want managed? Pinecone. Want open-source? Qdrant, Weaviate, or Milvus. Already on PostgreSQL? pgvector.
+*   **Query complexity** — Need full SQL joins and transactions alongside vector search? pgvector. Need GraphQL? Weaviate.
+*   **Prototyping speed** — ChromaDB gets you from zero to working demo in minutes.
+
+---
+
+## Practical Examples
+
+Theory is essential, but nothing solidifies understanding like working code. Let's walk through complete, practical examples using two popular approaches: **ChromaDB** for a Python-native experience and **pgvector** for a SQL-native approach.
+
+### ChromaDB — Python-Native Vector Search
+
+ChromaDB is designed for simplicity. It handles embedding generation, storage, indexing, and querying in a unified Python API. Here is a complete working example:
+
+```python
+import chromadb
+
+client = chromadb.PersistentClient(path="./chroma_db")
+collection = client.get_or_create_collection(
+    name="documents",
+    metadata={"hnsw:space": "cosine"}
+)
+
+collection.add(
+    documents=[
+        "Vector databases enable semantic search",
+        "Traditional SQL databases use exact matching",
+        "Embeddings capture semantic meaning of text"
+    ],
+    ids=["doc1", "doc2", "doc3"],
+    metadatas=[
+        {"source": "blog", "topic": "vector-db"},
+        {"source": "blog", "topic": "sql"},
+        {"source": "blog", "topic": "embeddings"}
+    ]
+)
+
+results = collection.query(
+    query_texts=["How do semantic searches work?"],
+    n_results=2,
+    where={"source": "blog"}
+)
+```
+
+Let's break down what is happening:
+
+1.  **PersistentClient** — Creates a ChromaDB client that persists data to disk at `./chroma_db`. Data survives process restarts.
+2.  **get_or_create_collection** — Creates (or retrieves) a named collection with HNSW indexing using cosine similarity as the distance metric.
+3.  **collection.add** — Adds three documents with their IDs and metadata. ChromaDB automatically generates embeddings using its default model (`all-MiniLM-L6-v2`). You can also supply pre-computed embeddings via the `embeddings` parameter.
+4.  **collection.query** — Searches for documents similar to "How do semantic searches work?" Note that the query uses completely different words than the stored documents, yet the semantic search will correctly return "Vector databases enable semantic search" and "Embeddings capture semantic meaning of text" as the top results because they are semantically related. The `where` filter restricts results to documents with `source: "blog"`.
+
+### pgvector — SQL-Native Vector Search
+
+For teams already invested in the PostgreSQL ecosystem, **pgvector** adds vector operations as a native extension. This means you get vector search alongside full SQL, transactions, JOINs, and the entire PostgreSQL toolbox.
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    embedding vector(384),
+    metadata JSONB DEFAULT '{}'
+);
+
+CREATE INDEX ON documents
+USING ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100);
+
+INSERT INTO documents (content, embedding, metadata)
+VALUES (
+    'Vector databases enable semantic search',
+    '[0.1, 0.2, ...]'::vector,
+    '{"source": "blog"}'
+);
+
+SELECT content, 1 - (embedding <=> '[0.05, 0.15, ...]'::vector) AS similarity
+FROM documents
+ORDER BY embedding <=> '[0.05, 0.15, ...]'::vector
+LIMIT 5;
+```
+
+Let's walk through each statement:
+
+1.  **CREATE EXTENSION** — Enables the pgvector extension in your PostgreSQL database. This adds the `vector` data type and associated operators.
+2.  **CREATE TABLE** — Defines a table with a `vector(384)` column. The `384` specifies the dimensionality — this must match your embedding model's output dimensions.
+3.  **CREATE INDEX** — Builds an IVFFlat index for fast approximate search. The `vector_cosine_ops` operator class specifies cosine distance. The `lists = 100` parameter controls the number of IVF clusters. For HNSW indexing, you would use `USING hnsw` instead.
+4.  **INSERT** — Stores a document with its content, pre-computed embedding vector, and JSON metadata.
+5.  **SELECT with `<=>`** — The `<=>` operator computes cosine distance (not similarity). We compute `1 - distance` to get cosine similarity. The `ORDER BY` clause uses the index for fast retrieval, and `LIMIT 5` returns the top 5 most similar results.
+
+**pgvector also supports HNSW indexing:**
+
+```sql
+CREATE INDEX ON documents
+USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 200);
+```
+
+The HNSW index is generally recommended over IVFFlat for most workloads because it offers better recall, supports incremental inserts without re-indexing, and performs well across a wider range of dataset sizes.
+
+---
+
+## Hybrid Search
+
+Pure vector search excels at finding semantically similar content, but it has a weakness: it can miss results that contain **exact keyword matches** that users explicitly search for. Conversely, traditional keyword search (BM25) finds exact matches but misses semantically related content. **Hybrid search** combines both approaches to deliver the best of both worlds.
+
+### The Problem with Pure Approaches
+
+Consider a user searching for "PostgreSQL vector extension pgvector":
+
+*   **Pure vector search** might return results about "database vector capabilities" and "SQL similarity search" — semantically relevant but missing the specific keyword "pgvector."
+*   **Pure keyword search** would find documents containing "pgvector" exactly but miss articles about "adding vector operations to Postgres" that do not use the exact term.
+
+Hybrid search finds **both** types of results and ranks them together.
+
+### BM25 + Vector Fusion
+
+The most common hybrid approach combines:
+
+*   **BM25 (Best Matching 25)** — A probabilistic keyword ranking algorithm that scores documents based on term frequency, inverse document frequency, and document length normalisation. It is the standard algorithm behind Elasticsearch, Solr, and most full-text search engines.
+*   **Vector similarity** — Cosine similarity (or another metric) between the query embedding and document embeddings.
+
+Each approach produces its own ranked list of results. The challenge is **fusing** these two lists into a single ranked result set.
+
+### Reciprocal Rank Fusion (RRF)
+
+**Reciprocal Rank Fusion** is the most widely used fusion algorithm. It combines ranked lists by summing the reciprocal of each result's rank across all lists:
+
+```
+RRF_score(d) = Σ 1 / (k + rank_i(d))
+```
+
+Where `k` is a constant (typically 60) that prevents high scores for items that appear at the top of only one list, and `rank_i(d)` is the rank of document `d` in the i-th result list.
+
+RRF is elegant because it does not require normalising scores across different ranking systems — it works purely on rank positions. A document that appears in the top 5 of both the keyword and vector lists will score higher than a document that appears at rank 1 in one list but is absent from the other.
+
+### When to Use Hybrid vs Pure Vector Search
+
+*   **Use pure vector search** when your users search with natural language queries, when exact keyword matching is not important, or when your content is homogeneous (e.g., all product descriptions in the same domain).
+*   **Use hybrid search** when users might search for specific terms, identifiers, or proper nouns (e.g., "pgvector," "HNSW," "ChromaDB"), when your corpus spans diverse topics, or when you need to maximise recall across different query styles.
+*   **Use pure keyword search** when queries are always exact identifiers (e.g., product SKUs, error codes) or when your content is highly structured.
+
+![Hybrid search flow](/blog/deep-dive-vector-databases/inline-7.png)
+
+Hybrid Search Flow — Vector + Keyword Fusion
+
+The diagram illustrates the hybrid search pipeline: a user query is simultaneously processed by both a **vector search engine** (embedding the query and finding nearest neighbours) and a **keyword search engine** (BM25 scoring against an inverted index). The two result sets are then combined using **Reciprocal Rank Fusion** to produce a single, unified ranking that captures both semantic relevance and keyword precision.
+
+---
+
+## RAG Architecture in Detail
+
+**Retrieval Augmented Generation (RAG)** is arguably the most important application of vector databases today. RAG addresses a fundamental limitation of Large Language Models (LLMs): they can only generate responses based on their training data, which has a knowledge cutoff date and does not include your organisation's private documents, recent events, or domain-specific knowledge.
+
+RAG solves this by **retrieving** relevant context from a vector database and **augmenting** the LLM's prompt with that context before **generating** a response. The result is an LLM that can answer questions about your specific data with grounded, accurate, and up-to-date information.
+
+![RAG architecture flow](/blog/deep-dive-vector-databases/inline-4.png)
+
+RAG Architecture Flow — Query → Embed → Search → Retrieve → Augment → Generate
+
+The complete RAG pipeline consists of two phases: an **offline ingestion phase** and an **online query phase**.
+
+### Offline Ingestion Phase
+
+1.  **Document Collection** — Gather source documents: PDFs, web pages, Markdown files, database records, API responses, internal wikis, support tickets, or any text-based content your system needs to reference.
+
+2.  **Chunking** — Split documents into smaller, semantically coherent **chunks**. This is critical because embedding models have token limits (typically 256–512 tokens) and because smaller chunks produce more focused embeddings. Chunking strategy has an enormous impact on retrieval quality.
+
+3.  **Embedding** — Pass each chunk through the embedding model to produce a vector representation.
+
+4.  **Storage** — Store the vector alongside the original chunk text and metadata (source document, page number, section title, date, etc.) in the vector database.
+
+### Online Query Phase
+
+5.  **User Query** — A user asks a question in natural language: "What are the key parameters for configuring HNSW?"
+
+6.  **Query Embedding** — The query is passed through the **same embedding model** used during ingestion to produce a query vector. Using the same model is essential — different models produce incompatible vector spaces.
+
+7.  **Similarity Search** — The query vector is compared against all stored vectors using the vector database's index. The top-k most similar chunks are retrieved (typically k=3 to k=10).
+
+8.  **Context Augmentation** — The retrieved chunks are formatted and inserted into the LLM's prompt as context. A typical prompt template might look like: "Given the following context, answer the user's question. Context: {retrieved_chunks}. Question: {user_query}."
+
+9.  **LLM Generation** — The LLM generates a response grounded in the retrieved context. Because the relevant information is directly in the prompt, the model can provide accurate, specific answers rather than relying on potentially outdated or hallucinated knowledge.
+
+10. **Response Delivery** — The generated response is returned to the user, often with citations or source references pointing back to the original documents.
+
+### Chunking Strategies
+
+Chunking is one of the most impactful — and often underestimated — decisions in a RAG pipeline. How you split your documents directly affects what your vector search retrieves and, consequently, the quality of the generated answers.
+
+![Chunking strategies comparison](/blog/deep-dive-vector-databases/inline-5.png)
+
+Chunking Strategies Comparison
+
+#### Fixed-Size Chunking
+
+The simplest approach: split text into chunks of a fixed number of characters or tokens (e.g., 500 tokens per chunk).
+
+*   **Pros:** Simple to implement, predictable chunk sizes
+*   **Cons:** Can split sentences mid-thought, breaks semantic boundaries, may separate a question from its answer
+
+#### Recursive Character Splitting
+
+Split on a hierarchy of separators: first try paragraph breaks (`\n\n`), then sentence breaks (`. `), then word breaks (` `), then character breaks. This approach, popularised by LangChain's `RecursiveCharacterTextSplitter`, respects natural text boundaries.
+
+*   **Pros:** Preserves sentence and paragraph boundaries, good default choice
+*   **Cons:** Chunk sizes can vary, still somewhat arbitrary
+
+#### Semantic Chunking
+
+Group consecutive sentences into chunks based on their **embedding similarity**. When the similarity between consecutive sentences drops below a threshold, a chunk boundary is created. This produces chunks that are genuinely about the same topic.
+
+*   **Pros:** Chunks are semantically coherent, ideal for diverse or multi-topic documents
+*   **Cons:** Requires embedding computation during chunking (slower), more complex implementation
+
+#### Token-Based Chunking
+
+Split text based on the exact token count of the target embedding model. This ensures each chunk maximally utilises the model's context window without exceeding it.
+
+*   **Pros:** Optimal use of model capacity, no wasted tokens
+*   **Cons:** Requires a tokeniser, splits may not align with semantic boundaries
+
+### Overlap — Why It Matters
+
+Regardless of chunking strategy, using **chunk overlap** is critical. Overlap means that consecutive chunks share some text at their boundaries — typically 10–20% of the chunk size.
+
+Without overlap, if a key concept spans a chunk boundary, it will be split across two chunks, and neither chunk will contain the complete information. With overlap, the concept appears in full in at least one chunk. For example, with 500-token chunks and 100-token overlap, chunk 1 covers tokens 1–500, chunk 2 covers tokens 401–900, chunk 3 covers tokens 801–1300, and so on. The overlapping regions ensure continuity.
+
+---
+
+## Scaling Vector Search
+
+As your dataset grows from thousands to millions to billions of vectors, new challenges emerge. The indexing algorithms we discussed provide fast search at moderate scale, but true production systems require additional strategies to handle massive datasets, high query throughput, and stringent latency requirements.
+
+### Sharding Strategies
+
+**Sharding** distributes vectors across multiple nodes. Common strategies include:
+
+*   **Hash-based sharding** — Assign vectors to shards based on a hash of their ID. Simple and balanced, but queries must fan out to all shards because similar vectors may end up on different nodes.
+*   **Partition-based sharding** — Use clustering (similar to IVF) to assign vectors to shards based on their position in the vector space. Queries can target specific shards, reducing fan-out, but can lead to imbalanced shards if the data distribution is uneven.
+*   **Metadata-based sharding** — Partition by a metadata attribute (e.g., tenant ID, language, document type). Ideal for multi-tenant applications where queries are scoped to a specific tenant.
+
+### Replication
+
+**Replication** creates copies of data across multiple nodes for both **high availability** (surviving node failures) and **read scalability** (distributing query load). Most production vector databases support:
+
+*   **Leader-follower replication** — Writes go to a leader node, reads are distributed across followers.
+*   **Multi-region replication** — Copies data to geographically distributed regions for low-latency global access.
+
+### Dimensionality Reduction
+
+Reducing the number of dimensions in your vectors decreases storage, memory, and computation costs. Techniques include:
+
+*   **PCA (Principal Component Analysis)** — Projects vectors onto their highest-variance components. Simple and effective but can discard meaningful information.
+*   **Matryoshka Representation Learning** — Models like OpenAI's `text-embedding-3-small` are trained to front-load the most important information into the first N dimensions, allowing you to truncate vectors (e.g., from 1536 to 512 dimensions) with minimal quality loss.
+*   **Autoencoders** — Neural networks trained to compress and reconstruct vectors. More flexible than PCA but require training.
+
+### Quantisation Tradeoffs
+
+Beyond PQ, there are several quantisation approaches for reducing memory:
+
+*   **Scalar quantisation** — Convert float32 values to int8 (4× reduction) or binary (32× reduction). Simple, fast, and effective for moderate accuracy requirements.
+*   **Binary quantisation** — Reduce each dimension to a single bit (positive → 1, negative → 0). Extremely compact but significant accuracy loss. Often used as a first-pass filter before rescoring with full-precision vectors.
+*   **Product quantisation** — As discussed earlier, divides vectors into sub-vectors and quantises each independently. Offers the best compression-accuracy tradeoff for large-scale deployments.
+
+### Approximate vs Exact Search
+
+The fundamental tradeoff in scaling vector search is **recall vs speed**. Exact search (flat index) guarantees finding the true nearest neighbours but scales linearly. Approximate search (HNSW, IVF) is orders of magnitude faster but may miss some true neighbours.
+
+In practice, well-tuned HNSW achieves **>99% recall** while being **100–1000× faster** than brute force. For most applications, this tradeoff is overwhelmingly worthwhile. The key is to:
+
+1.  **Benchmark on your data** — Recall depends on the data distribution. Test with your actual embeddings.
+2.  **Tune at query time** — Parameters like `ef_search` (HNSW) and `nprobe` (IVF) allow you to adjust the recall-speed tradeoff per query.
+3.  **Use rescoring** — Retrieve a larger candidate set with approximate search, then rescore the candidates with exact distance computation for precise final ranking.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

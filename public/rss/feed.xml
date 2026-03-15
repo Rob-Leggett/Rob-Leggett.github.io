@@ -5,7 +5,7 @@
     <link>https://robertleggett.com.au/blog</link>
     <description><![CDATA[Technology strategy, engineering, and AI platform insights.]]></description>
     <language>en</language>
-    <lastBuildDate>Sun, 15 Mar 2026 16:33:32 GMT</lastBuildDate>
+    <lastBuildDate>Sun, 15 Mar 2026 17:32:43 GMT</lastBuildDate>
     
     <item>
       <title><![CDATA[Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI]]></title>
@@ -14,6 +14,46 @@
       <pubDate>Sun, 15 Mar 2026 00:00:00 GMT</pubDate>
       <description><![CDATA[It feels like almost overnight, Large Language Models went from a niche topic in machine learning research to something your parents are asking about at the dinner table. Whether it is ChatGPT drafting an email, Copilot helping you write code, or a chatbot resolving your query, LLMs have woven thems]]></description>
       <enclosure url="https://robertleggett.com.au/blog/demystifying-large-language-models/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Building a Local AI Playground - Classical ML Meets Modern LLMs]]></title>
+      <link>https://robertleggett.com.au/blog/building-a-local-ai-playground-classical-ml-meets-modern-llms/</link>
+      <guid>https://robertleggett.com.au/blog/building-a-local-ai-playground-classical-ml-meets-modern-llms/</guid>
+      <pubDate>Thu, 12 Mar 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[If I'm to be perfectly honest, the best way I have found to genuinely understand a technology is to build something end-to-end with it — not a toy example from a tutorial, but a project that forces you to make real architectural decisions and deal with the friction that only surfaces when you integr]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/building-a-local-ai-playground-classical-ml-meets-modern-llms/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Azure Multi-Subscription Architecture - Enterprise Landing Zones]]></title>
+      <link>https://robertleggett.com.au/blog/azure-multi-subscription-architecture-enterprise-landing-zones/</link>
+      <guid>https://robertleggett.com.au/blog/azure-multi-subscription-architecture-enterprise-landing-zones/</guid>
+      <pubDate>Wed, 11 Mar 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[If I'm to be perfectly honest, Azure's approach to enterprise-scale cloud architecture is the most prescriptive of the three major cloud providers — and I mean that as a compliment. Where AWS and GCP give you the building blocks and leave you to design the structure, Microsoft has invested heavily i]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/azure-multi-subscription-architecture-enterprise-landing-zones/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Infrastructure as Code with AWS CDK - Building Reusable Constructs at Scale]]></title>
+      <link>https://robertleggett.com.au/blog/infrastructure-as-code-with-aws-cdk-reusable-constructs/</link>
+      <guid>https://robertleggett.com.au/blog/infrastructure-as-code-with-aws-cdk-reusable-constructs/</guid>
+      <pubDate>Tue, 10 Mar 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[For those who know me, you will know that I have strong opinions about infrastructure. I have always believed that if you cannot reproduce your entire cloud environment from a single command, you do not truly own it. Over the years I have worked with CloudFormation templates that stretched into thou]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/infrastructure-as-code-with-aws-cdk-reusable-constructs/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[GCP Multi-Project Architecture - Organising Cloud at Scale]]></title>
+      <link>https://robertleggett.com.au/blog/gcp-multi-project-architecture-organising-cloud-at-scale/</link>
+      <guid>https://robertleggett.com.au/blog/gcp-multi-project-architecture-organising-cloud-at-scale/</guid>
+      <pubDate>Mon, 09 Mar 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[It feels like every conversation I have about cloud architecture eventually arrives at the same fundamental question — how do you organise things at scale? Whether you are managing ten projects or ten thousand, the answer is never "just create another project and figure it out later." If you have wo]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/gcp-multi-project-architecture-organising-cloud-at-scale/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[AWS Multi-Account Architecture - Scaling Cloud with Account Isolation]]></title>
+      <link>https://robertleggett.com.au/blog/aws-multi-account-architecture-scaling-with-isolation/</link>
+      <guid>https://robertleggett.com.au/blog/aws-multi-account-architecture-scaling-with-isolation/</guid>
+      <pubDate>Sun, 08 Mar 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[For those who know me, you will know that I have spent a significant amount of time working with AWS across large enterprise environments. One of the most impactful architectural decisions I have been involved in is the migration from shared AWS accounts to a proper multi-account model. It sounds st]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/aws-multi-account-architecture-scaling-with-isolation/feature-image.png" type="image/png" />
     </item>
     <item>
       <title><![CDATA[Building AI-Powered Applications in the Cloud - A Practical Guide for Engineers]]></title>
@@ -86,6 +126,86 @@
       <pubDate>Sun, 11 Jan 2026 00:00:00 GMT</pubDate>
       <description><![CDATA[For those who know me, you will know that I have always been passionate about developer experience and the tools that make engineering teams more productive. Throughout my career, I have seen paradigm shifts — from manual deployments to CI/CD, from monoliths to microservices, from on-premises to clo]]></description>
       <enclosure url="https://robertleggett.com.au/blog/ai-powered-developer-tools-transforming-software-development/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Data Mesh Architecture]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-data-mesh/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-data-mesh/</guid>
+      <pubDate>Sat, 19 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the "Data Mesh Deep Dive" series! In this comprehensive exploration, we will immerse ourselves in one of the most significant paradigm shifts in how organisations think about data architecture. Data mesh challenges the deeply entrenched assumption that data must be owned, managed, and ser]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-data-mesh/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Serverless at Scale]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-serverless-at-scale/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-serverless-at-scale/</guid>
+      <pubDate>Thu, 17 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the world of serverless computing and event-driven architecture at scale. Serverless has fundamentally changed how we build and operate software — shifting our focus from managing infrastructure to deliv]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-serverless-at-scale/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - AI-Powered Cloud Security]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-ai-cloud-security/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-ai-cloud-security/</guid>
+      <pubDate>Tue, 15 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the "AI-Powered Cloud Security Deep Dive" series! In this comprehensive exploration, we will immerse ourselves in the rapidly evolving world of artificial intelligence and machine learning as applied to cloud security. The traditional approach of writing static rules and waiting for known]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-ai-cloud-security/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Platform Engineering]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-platform-engineering/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-platform-engineering/</guid>
+      <pubDate>Sun, 13 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the "Deep Dive" series! In this comprehensive exploration, we will immerse ourselves in the world of Platform Engineering — a discipline that has rapidly emerged as the next evolution beyond DevOps. As organisations scale their engineering teams and adopt cloud-native technologies, the co]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-platform-engineering/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Vector Databases and Embeddings]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-vector-databases/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-vector-databases/</guid>
+      <pubDate>Fri, 11 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the "Deep Dive" series! In this comprehensive exploration, we will immerse ourselves in the world of vector databases and embeddings — the foundational technology powering modern AI search, recommendation systems, and Retrieval Augmented Generation (RAG). Whether you are an experienced en]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-vector-databases/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Multi-Cloud Networking]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-multi-cloud-networking/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-multi-cloud-networking/</guid>
+      <pubDate>Wed, 09 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of multi-cloud networking, unravelling its inner workings to shed light on one of the most complex challenges facing modern organisations. Whether you're a cloud architect designing cross]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-multi-cloud-networking/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - MLOps]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-mlops/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-mlops/</guid>
+      <pubDate>Mon, 07 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of MLOps (Machine Learning Operations), unravelling its inner workings to shed light on the discipline of operationalising machine learning at scale. Whether you are a data scientist look]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-mlops/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Kubernetes Cost Optimisation]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-kubernetes-cost-optimisation/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-kubernetes-cost-optimisation/</guid>
+      <pubDate>Sat, 05 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Kubernetes cost optimisation, unraveling the strategies, tools, and architectural patterns that enable organisations to dramatically reduce their cloud spend without sacrificing perfor]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-kubernetes-cost-optimisation/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Infrastructure as Code at Scale]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-infrastructure-as-code-at-scale/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-infrastructure-as-code-at-scale/</guid>
+      <pubDate>Thu, 03 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Infrastructure as Code (IaC), unravelling its evolution, tooling, patterns, and the operational challenges that emerge when you move beyond a handful of resources to managing hundreds ]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-infrastructure-as-code-at-scale/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Zero Trust Architecture]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-zero-trust-architecture/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-zero-trust-architecture/</guid>
+      <pubDate>Tue, 01 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Zero Trust Architecture (ZTA), unravelling its core principles, technical components, and real-world implementation across major cloud providers. Whether you are a security engineer ha]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-zero-trust-architecture/feature-image.png" type="image/png" />
     </item>
     <item>
       <title><![CDATA[Seizing the Future - An Eager Approach to Digital Identity Migration Strategies]]></title>

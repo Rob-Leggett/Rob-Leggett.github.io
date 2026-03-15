@@ -1,0 +1,875 @@
+---
+title: "Deep Dive - MLOps"
+date: "2025-07-07"
+slug: "deep-dive-mlops"
+status: "publish"
+feature_image: "/blog/deep-dive-mlops/feature-image.png"
+tags: ["MLOps", "Machine Learning", "ML Pipelines", "Feature Store", "Model Serving", "Experiment Tracking", "Data Drift", "Kubeflow", "MLflow", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - MLOps | Robert Leggett"
+  description: "A comprehensive deep dive into MLOps — covering the ML lifecycle, experiment tracking, feature stores, model serving patterns, drift detection, and CI/CD/CT pipelines for machine learning."
+  keywords: ["MLOps", "Machine Learning Operations", "ML Pipelines", "Feature Store", "Model Serving", "Experiment Tracking", "Data Drift", "Concept Drift", "Kubeflow", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-mlops"
+  image: "https://robertleggett.com.au/blog/deep-dive-mlops/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - MLOps"
+  description: "A comprehensive deep dive into MLOps — from experiment tracking and feature stores to model serving, drift detection, and continuous training pipelines."
+  image: "https://robertleggett.com.au/blog/deep-dive-mlops/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-mlops"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - MLOps"
+  description: "From experiment tracking to continuous training — a complete technical reference for operationalising machine learning at scale."
+  image: "https://robertleggett.com.au/blog/deep-dive-mlops/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of MLOps (Machine Learning Operations), unravelling its inner workings to shed light on the discipline of operationalising machine learning at scale. Whether you are a data scientist looking to ship models to production, a platform engineer building ML infrastructure, or a technical leader evaluating MLOps strategy, our goal is to provide clear and thorough explanations that will enhance your understanding of MLOps. Join us on this enlightening journey as we bridge the gap between data science experimentation and reliable production systems, empowering you to grasp the key concepts behind operationalising machine learning with ease. Let's dive in and demystify the world of MLOps together.
+
+Here is a sobering reality: according to Gartner, approximately 87% of machine learning models never make it to production. Organisations invest heavily in data science teams, build impressive proof-of-concept models in Jupyter notebooks, yet struggle to translate that work into reliable, maintainable production systems. The gap between "it works on my laptop" and "it runs reliably in production" is vast — and that is precisely the gap MLOps is designed to bridge.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of all parts MLOps — from the ML lifecycle and experiment tracking to feature stores, model serving, drift detection, and CI/CD/CT pipelines
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is MLOps?
+
+MLOps stands for **Machine Learning Operations**. It is a set of practices, principles, and tools that unify ML system development (Dev) with ML system operations (Ops). The goal of MLOps is to streamline the end-to-end machine learning lifecycle — from data collection and model training through to deployment, monitoring, and retraining — in a reliable, reproducible, and automated fashion.
+
+You can think of MLOps as the application of DevOps principles to the machine learning domain, but with additional complexity. In traditional software engineering, your code is the primary artefact. In ML systems, you have three intertwined artefacts: **code**, **data**, and **models**. Each of these can change independently, and each introduces its own versioning, testing, and deployment challenges.
+
+### MLOps vs DevOps vs DataOps
+
+It is helpful to understand how MLOps relates to its sibling disciplines:
+
+*   **DevOps** focuses on the lifecycle of software applications — continuous integration, continuous delivery, infrastructure as code, monitoring, and incident response. The primary artefact is code.
+*   **DataOps** focuses on the lifecycle of data pipelines — data quality, data cataloguing, data lineage, and data governance. The primary artefact is data.
+*   **MLOps** sits at the intersection of both. It inherits the CI/CD practices of DevOps and the data management practices of DataOps, then extends them with ML-specific concerns: experiment tracking, model versioning, feature engineering, training-serving skew, model decay, and continuous training.
+
+### What makes ML systems uniquely challenging?
+
+ML systems introduce several challenges that traditional software systems do not face:
+
+*   **Data dependencies**: Models are only as good as the data they are trained on. Data can drift, become stale, or be corrupted silently.
+*   **Model decay**: Unlike traditional software that behaves consistently once deployed, model performance degrades over time as the real-world data distribution changes.
+*   **Reproducibility**: Reproducing a model training run requires not just the code, but also the exact dataset, hyperparameters, random seeds, and environment configuration.
+*   **Experiment tracking**: Data scientists run hundreds of experiments. Without systematic tracking, it is impossible to know which combination of parameters, features, and data produced the best result.
+*   **Training-serving skew**: The feature engineering logic used during training can diverge from the logic used during inference, leading to silent prediction errors.
+
+---
+
+## What are the MLOps maturity levels?
+
+Organisations do not adopt MLOps overnight. The journey is incremental, progressing through distinct maturity levels. Understanding where your organisation sits on this spectrum helps you prioritise the right investments.
+
+![MLOps maturity model showing levels 0 through 4 with increasing automation](/blog/deep-dive-mlops/inline-1.png)
+
+MLOps Maturity Model
+
+### Level 0 — Manual Process
+
+At Level 0, everything is manual. Data scientists work in Jupyter notebooks, training models interactively. There is no pipeline automation, no version control for data or models, and deployment (if it happens at all) is a manual handoff to an engineering team. This is where most organisations start.
+
+*   Models are trained manually in notebooks
+*   No experiment tracking beyond notebook cells
+*   Deployment is ad hoc — often a pickled model handed to an engineer
+*   No monitoring of model performance in production
+*   Retraining is triggered by someone noticing performance has degraded
+
+### Level 1 — ML Pipeline Automation
+
+At Level 1, the training process is automated into a reproducible pipeline. Data scientists define a pipeline that ingests data, engineers features, trains a model, and evaluates it. Continuous training is introduced — the pipeline can be triggered automatically when new data arrives or on a schedule.
+
+*   Automated training pipelines replace manual notebook execution
+*   Pipelines are versioned and reproducible
+*   Continuous training triggers are introduced (schedule-based or data-arrival-based)
+*   Experiment tracking is formalised
+*   However, deployment and testing are still largely manual
+
+### Level 2 — CI/CD Pipeline Automation
+
+At Level 2, the CI/CD practices from DevOps are applied to the ML pipeline itself. Changes to training code, feature engineering logic, or pipeline configurations go through automated testing and deployment. Model validation gates ensure that only models meeting predefined quality thresholds are promoted.
+
+*   Automated testing of pipeline components (unit tests, integration tests)
+*   Automated model validation with quality gates
+*   Model registry with stage transitions (Staging → Production)
+*   Automated deployment to serving infrastructure
+*   Basic model monitoring in production
+
+### Level 3 — Full CI/CD/CT
+
+At Level 3, the three loops are fully automated and integrated: **Continuous Integration** (code and data validation), **Continuous Delivery** (model deployment), and **Continuous Training** (automated retraining). The system can detect when model performance degrades and automatically trigger a retraining pipeline.
+
+*   Drift detection triggers automatic retraining
+*   A/B testing and canary deployments for model rollouts
+*   Automated rollback when model performance drops below thresholds
+*   Full model lineage and audit trail
+*   Feature stores ensure consistency between training and serving
+
+### Level 4 — Advanced Automation
+
+At Level 4, organisations push beyond standard automation into self-healing systems, automated feature engineering, and multi-model orchestration. This is the frontier of MLOps maturity.
+
+*   Self-healing pipelines that automatically recover from failures
+*   Automated feature engineering and feature selection
+*   Multi-model orchestration (ensembles, model chains, routing)
+*   Automated hyperparameter optimisation integrated into the pipeline
+*   Cost-aware model serving (dynamically scaling inference infrastructure)
+
+---
+
+## What does the ML lifecycle look like?
+
+The ML lifecycle is the end-to-end flow from raw data to production predictions and back again. Each stage has its own tools, challenges, and best practices.
+
+![ML lifecycle pipeline showing data, features, training, validation, deployment, monitoring, and retraining stages](/blog/deep-dive-mlops/inline-2.png)
+
+ML Lifecycle Pipeline
+
+1.  **Data Collection** — Raw data is ingested from various sources: databases, APIs, event streams, data lakes. Data versioning tools like DVC or LakeFS track changes to datasets over time.
+2.  **Data Validation** — The ingested data is validated for quality, schema conformance, and statistical properties. Tools like Great Expectations or TensorFlow Data Validation (TFDV) catch data quality issues before they propagate downstream.
+3.  **Feature Engineering** — Raw data is transformed into features suitable for model training. This includes encoding categorical variables, normalising numerical features, creating aggregations, and handling missing values. Feature stores centralise this logic to ensure consistency.
+4.  **Model Training** — One or more algorithms are trained on the prepared features. Hyperparameter tuning (grid search, random search, Bayesian optimisation) is used to find optimal configurations. Distributed training may be employed for large models.
+5.  **Model Validation** — The trained model is evaluated against holdout test data, validated against business metrics, and checked for fairness and bias. Quality gates determine whether the model is promoted or rejected.
+6.  **Model Deployment** — The validated model is packaged and deployed to a serving environment. This could be a REST API, a batch scoring job, or a streaming inference pipeline.
+7.  **Model Monitoring** — Once in production, the model's predictions, latency, throughput, and input data distributions are monitored continuously. Alerts fire when anomalies are detected.
+8.  **Retraining** — When monitoring detects performance degradation (data drift, concept drift, or accuracy decay), the pipeline is triggered to retrain the model on fresh data, completing the cycle.
+
+---
+
+## How does experiment tracking work?
+
+When a team of data scientists is working on the same problem, they may collectively run hundreds or thousands of experiments — varying algorithms, hyperparameters, feature sets, and data preprocessing steps. Without systematic experiment tracking, it becomes impossible to answer basic questions: "Which experiment produced our best model?", "What hyperparameters did we use?", "Can we reproduce that result?"
+
+Experiment tracking solves this by logging every run with its parameters, metrics, artefacts, and environment metadata.
+
+![Experiment tracking flow from code through run execution to metrics comparison and model promotion](/blog/deep-dive-mlops/inline-3.png)
+
+Experiment Tracking Flow
+
+1.  A data scientist writes training code and instruments it with tracking calls.
+2.  When the code executes, the tracking library logs parameters, metrics, and artefacts to a centralised tracking server.
+3.  The tracking server stores all run metadata, making it searchable and comparable.
+4.  Data scientists compare runs across experiments, visualise metric trends, and identify the best-performing model.
+5.  The best model is promoted to a model registry for deployment.
+
+### Popular experiment tracking tools
+
+*   **MLflow** — Open-source, widely adopted, supports tracking, model registry, and model serving. Self-hosted or managed via Databricks.
+*   **Weights & Biases (W&B)** — Cloud-native experiment tracking with rich visualisation, hyperparameter sweep support, and team collaboration features.
+*   **Neptune.ai** — Metadata management for ML experiments with strong comparison and collaboration capabilities.
+
+### MLflow tracking example
+
+Below is a practical example of tracking an experiment with MLflow:
+
+```python
+import mlflow
+
+mlflow.set_tracking_uri("http://mlflow.internal:5000")
+mlflow.set_experiment("fraud-detection-v2")
+
+with mlflow.start_run(run_name="xgboost-baseline"):
+    mlflow.log_param("n_estimators", 100)
+    mlflow.log_param("max_depth", 6)
+    mlflow.log_param("learning_rate", 0.1)
+    
+    # Train model
+    model = train_model(X_train, y_train)
+    
+    # Log metrics
+    mlflow.log_metric("accuracy", 0.94)
+    mlflow.log_metric("f1_score", 0.89)
+    mlflow.log_metric("auc_roc", 0.96)
+    
+    # Log model artifact
+    mlflow.sklearn.log_model(model, "model")
+```
+
+You can also interact with MLflow via the CLI:
+
+```bash
+mlflow experiments list
+mlflow runs list --experiment-id 1
+mlflow models serve -m "models:/fraud-detection/Production" -p 5001
+```
+
+---
+
+## What is a feature store?
+
+A **feature store** is a centralised repository for storing, managing, and serving ML features. It acts as a shared layer between the data engineering and data science teams, ensuring that features used during training are identical to features used during serving.
+
+### Why do feature stores exist?
+
+Feature stores solve several critical problems:
+
+*   **Training-serving skew** — When feature engineering logic is duplicated between training pipelines and serving code, subtle differences can creep in. A feature store provides a single source of truth for feature computation.
+*   **Feature reuse** — Without a feature store, different teams often re-implement the same features independently. A feature store allows teams to discover and reuse existing features.
+*   **Point-in-time correctness** — When training models on historical data, you need features as they existed at that point in time, not their current values. Feature stores handle this temporal join correctly.
+
+### Offline vs online stores
+
+Feature stores typically have two components:
+
+*   **Offline store** — A batch-oriented store (e.g., data warehouse, data lake) that serves historical feature values for training. It supports point-in-time joins and handles large-scale feature retrieval.
+*   **Online store** — A low-latency store (e.g., Redis, DynamoDB) that serves the latest feature values for real-time inference. It is optimised for fast lookups on individual entities.
+
+![Feature store architecture showing offline and online stores with feature serving](/blog/deep-dive-mlops/inline-7.png)
+
+Feature Store Architecture
+
+1.  Feature engineering pipelines compute features from raw data sources and write them to both the offline and online stores.
+2.  During training, the ML pipeline reads historical features from the offline store using point-in-time joins with the training labels.
+3.  During inference, the model serving layer retrieves the latest feature values from the online store in real time.
+4.  The feature store maintains a feature registry — a catalogue of all available features with their metadata, owners, and lineage.
+
+### Popular feature store tools
+
+*   **Feast** — Open-source feature store with support for offline and online serving, feature registries, and materialisation pipelines.
+*   **Tecton** — Managed feature platform built by the creators of Uber's Michelangelo.
+*   **SageMaker Feature Store** — AWS-native feature store integrated with the SageMaker ecosystem.
+*   **Vertex AI Feature Store** — Google Cloud-native feature store integrated with the Vertex AI platform.
+
+### Feast example
+
+Below is a practical example of defining and retrieving features with Feast:
+
+```python
+from feast import Entity, Feature, FeatureView, FileSource, ValueType
+from datetime import timedelta
+
+# Define an entity
+customer = Entity(
+    name="customer_id",
+    value_type=ValueType.INT64,
+    description="Unique customer identifier"
+)
+
+# Define a data source
+customer_transactions_source = FileSource(
+    path="data/customer_transactions.parquet",
+    timestamp_field="event_timestamp"
+)
+
+# Define a feature view
+customer_transaction_features = FeatureView(
+    name="customer_transaction_features",
+    entities=["customer_id"],
+    ttl=timedelta(days=90),
+    schema=[
+        Feature(name="transaction_count_7d", dtype=ValueType.INT64),
+        Feature(name="avg_transaction_amount_30d", dtype=ValueType.FLOAT),
+        Feature(name="max_transaction_amount_30d", dtype=ValueType.FLOAT),
+    ],
+    source=customer_transactions_source,
+)
+```
+
+Retrieving features for training and serving:
+
+```python
+from feast import FeatureStore
+
+store = FeatureStore(repo_path="feature_repo/")
+
+# Retrieve historical features for training
+training_df = store.get_historical_features(
+    entity_df=entity_df,
+    features=[
+        "customer_transaction_features:transaction_count_7d",
+        "customer_transaction_features:avg_transaction_amount_30d",
+        "customer_transaction_features:max_transaction_amount_30d",
+    ],
+).to_df()
+
+# Retrieve online features for serving
+online_features = store.get_online_features(
+    features=[
+        "customer_transaction_features:transaction_count_7d",
+        "customer_transaction_features:avg_transaction_amount_30d",
+    ],
+    entity_rows=[{"customer_id": 12345}],
+).to_dict()
+```
+
+---
+
+## What is a model registry?
+
+A **model registry** is a centralised store for managing the lifecycle of trained ML models. It provides model versioning, stage transitions, metadata tracking, and lineage information. Think of it as a package registry (like npm or PyPI) but for machine learning models.
+
+### Model versioning and stage transitions
+
+Every time a model is trained and registered, it receives a new version number. Models then transition through stages:
+
+*   **None** — The model has been registered but not yet evaluated.
+*   **Staging** — The model has passed initial validation and is being tested in a pre-production environment.
+*   **Production** — The model has been approved for production deployment.
+*   **Archived** — The model has been retired and is no longer actively serving.
+
+### Model metadata and lineage
+
+A model registry stores rich metadata for each model version:
+
+*   Training dataset version and hash
+*   Hyperparameters and configuration
+*   Evaluation metrics (accuracy, F1, AUC, etc.)
+*   Training environment (Python version, library versions)
+*   Git commit SHA of the training code
+*   The experiment run ID that produced the model
+
+This metadata creates a complete **lineage trail**, enabling you to answer: "For this model in production, what exact data, code, and parameters were used to produce it?"
+
+### MLflow Model Registry example
+
+```python
+import mlflow
+
+# Register a model from an experiment run
+result = mlflow.register_model(
+    model_uri="runs:/abc123def456/model",
+    name="fraud-detection"
+)
+
+# Transition model to staging
+client = mlflow.tracking.MlflowClient()
+client.transition_model_version_stage(
+    name="fraud-detection",
+    version=3,
+    stage="Staging"
+)
+
+# Promote to production after validation
+client.transition_model_version_stage(
+    name="fraud-detection",
+    version=3,
+    stage="Production"
+)
+```
+
+```bash
+# List registered models via CLI
+mlflow models list
+
+# Serve the production model
+mlflow models serve -m "models:/fraud-detection/Production" -p 5001 --no-conda
+```
+
+---
+
+## What are the different model serving patterns?
+
+Once a model is trained, validated, and registered, it needs to be deployed to serve predictions. There are three primary serving patterns, each suited to different use cases.
+
+![Model serving patterns comparison showing batch, online, and streaming inference](/blog/deep-dive-mlops/inline-4.png)
+
+Model Serving Patterns
+
+### Batch inference
+
+Batch inference processes large volumes of data in scheduled jobs. Predictions are precomputed and stored in a database or data warehouse for later retrieval.
+
+*   **Use cases**: Recommendation systems, credit scoring, churn prediction, report generation
+*   **Latency**: Minutes to hours (latency-tolerant)
+*   **Infrastructure**: Spark, Databricks, AWS Batch, Airflow-orchestrated jobs
+
+```bash
+# Example: Running batch inference with Spark
+spark-submit \
+  --master yarn \
+  --deploy-mode cluster \
+  --num-executors 10 \
+  batch_inference.py \
+  --model-uri "models:/fraud-detection/Production" \
+  --input-path "s3://data-lake/transactions/2025-07-06/" \
+  --output-path "s3://data-lake/predictions/2025-07-06/"
+```
+
+### Online inference
+
+Online inference serves predictions in real time via REST or gRPC endpoints. A model server loads the model into memory and responds to individual prediction requests with low latency.
+
+*   **Use cases**: Fraud detection, search ranking, dynamic pricing, content personalisation
+*   **Latency**: Milliseconds (typically < 100ms p99)
+*   **Infrastructure**: TorchServe, TensorFlow Serving, Triton Inference Server, Seldon Core, KServe
+
+```bash
+# Serving a model with TensorFlow Serving
+docker run -p 8501:8501 \
+  --mount type=bind,source=/models/fraud-detection,target=/models/fraud-detection \
+  -e MODEL_NAME=fraud-detection \
+  tensorflow/serving
+
+# Making a prediction request
+curl -X POST http://localhost:8501/v1/models/fraud-detection:predict \
+  -H "Content-Type: application/json" \
+  -d '{"instances": [{"feature_1": 0.5, "feature_2": 1.2, "feature_3": 0.8}]}'
+```
+
+### Streaming inference
+
+Streaming inference processes events in real time as they arrive on a message stream. The model consumes events from a topic, generates predictions, and publishes results to an output topic.
+
+*   **Use cases**: Anomaly detection on IoT sensor data, real-time fraud scoring, clickstream analysis
+*   **Latency**: Sub-second to seconds
+*   **Infrastructure**: Apache Kafka, Amazon Kinesis, Apache Flink, Kafka Streams
+
+```python
+# Simplified streaming inference with Kafka
+from kafka import KafkaConsumer, KafkaProducer
+import json
+
+consumer = KafkaConsumer("transactions", bootstrap_servers="kafka:9092")
+producer = KafkaProducer(bootstrap_servers="kafka:9092")
+
+for message in consumer:
+    transaction = json.loads(message.value)
+    features = extract_features(transaction)
+    prediction = model.predict(features)
+    
+    result = {"transaction_id": transaction["id"], "fraud_score": prediction}
+    producer.send("fraud-scores", json.dumps(result).encode())
+```
+
+---
+
+## How do you deploy models safely?
+
+Deploying a new model to production carries risk. The model may perform differently on real-world traffic than on holdout test data. Safe deployment strategies mitigate this risk by gradually rolling out new models and monitoring their performance.
+
+### Shadow mode
+
+In shadow mode, the new model receives production traffic but its predictions are **not** returned to the user. Instead, predictions are logged alongside the existing model's predictions for offline comparison.
+
+*   Zero risk to users
+*   Allows side-by-side comparison of old vs new model
+*   Does not validate user-facing impact (e.g., engagement metrics)
+
+### A/B testing
+
+In A/B testing, production traffic is split between the existing model (control) and the new model (treatment). Real user outcomes are measured for both groups to determine if the new model provides a statistically significant improvement.
+
+*   Provides direct measurement of business impact
+*   Requires sufficient traffic volume for statistical significance
+*   Requires proper randomisation and experiment infrastructure
+
+### Canary deployments
+
+In a canary deployment, a small percentage of traffic (e.g., 5%) is routed to the new model. If metrics remain healthy, the traffic percentage is gradually increased until the new model serves 100% of traffic.
+
+### Kubernetes canary deployment with Istio
+
+Below is an example of traffic splitting for a canary model rollout using Istio:
+
+```yaml
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: fraud-detection-vs
+spec:
+  hosts:
+    - fraud-detection.ml.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: fraud-detection.ml.svc.cluster.local
+            subset: stable
+          weight: 95
+        - destination:
+            host: fraud-detection.ml.svc.cluster.local
+            subset: canary
+          weight: 5
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: fraud-detection-dr
+spec:
+  host: fraud-detection.ml.svc.cluster.local
+  subsets:
+    - name: stable
+      labels:
+        model-version: "v2"
+    - name: canary
+      labels:
+        model-version: "v3"
+```
+
+### Blue-green deployments
+
+In blue-green deployments, two identical production environments exist — **blue** (current) and **green** (new). The new model is deployed to the green environment, validated, and then traffic is switched from blue to green atomically. If issues arise, traffic is immediately switched back to blue.
+
+---
+
+## What is data drift and concept drift?
+
+Model performance in production inevitably degrades over time. Understanding **why** it degrades is critical for maintaining reliable ML systems. The two primary causes are data drift and concept drift.
+
+![Data and concept drift detection flow showing monitoring, detection, alerting, and retraining](/blog/deep-dive-mlops/inline-5.png)
+
+Drift Detection Flow
+
+1.  Production inference requests are logged with their input features and predictions.
+2.  A drift detection pipeline periodically compares the distribution of production inputs against the training data distribution.
+3.  Statistical tests (KL divergence, PSI, KS test) quantify the degree of drift.
+4.  If drift exceeds predefined thresholds, alerts are fired and a retraining pipeline may be triggered automatically.
+5.  Model performance metrics (accuracy, F1, latency) are monitored in parallel to detect concept drift.
+
+### Data drift (covariate shift)
+
+**Data drift** occurs when the distribution of input features changes over time, even though the relationship between inputs and outputs remains the same. For example, a fraud detection model trained on transaction data from 2023 may see significantly different transaction amounts, merchant categories, or geographic distributions in 2025.
+
+Detection methods for data drift include:
+
+*   **Population Stability Index (PSI)** — Measures the shift between two distributions. A PSI above 0.2 typically indicates significant drift.
+*   **Kolmogorov-Smirnov (KS) test** — A non-parametric test that compares two distributions and returns a p-value indicating whether they differ significantly.
+*   **KL divergence (Kullback-Leibler)** — Measures how one probability distribution diverges from a reference distribution.
+
+### Concept drift
+
+**Concept drift** occurs when the relationship between input features and the target variable changes. The inputs may look the same, but the correct prediction for those inputs has changed. For example, consumer purchasing behaviour shifted dramatically during the COVID-19 pandemic — the features looked similar, but what constituted "normal" purchasing changed fundamentally.
+
+Detection methods for concept drift include:
+
+*   **Model performance monitoring** — Tracking accuracy, F1, precision, and recall over time. A sustained decline indicates concept drift.
+*   **Window-based comparison** — Comparing model performance on recent data windows against a baseline.
+*   **ADWIN (Adaptive Windowing)** — An algorithm that dynamically adjusts window sizes to detect changes in data streams.
+
+### Evidently AI example
+
+Below is a practical example of drift detection using Evidently AI:
+
+```python
+from evidently.report import Report
+from evidently.metric_preset import DataDriftPreset, TargetDriftPreset
+
+# Create a drift report comparing reference data to current production data
+drift_report = Report(metrics=[
+    DataDriftPreset(),
+    TargetDriftPreset(),
+])
+
+drift_report.run(
+    reference_data=training_df,
+    current_data=production_df,
+)
+
+# Save the report as HTML for review
+drift_report.save_html("drift_report.html")
+
+# Or extract results programmatically
+results = drift_report.as_dict()
+dataset_drift_detected = results["metrics"][0]["result"]["dataset_drift"]
+print(f"Dataset drift detected: {dataset_drift_detected}")
+```
+
+### Popular drift detection tools
+
+*   **Evidently AI** — Open-source ML monitoring with drift detection, data quality checks, and model performance tracking.
+*   **Great Expectations** — Data validation and profiling framework that can detect schema and distribution changes.
+*   **Whylogs** — Lightweight data logging library for profiling datasets and detecting drift.
+*   **NannyML** — Specialised in estimating model performance without ground truth labels.
+
+---
+
+## How do ML pipelines work?
+
+An ML pipeline is a sequence of automated steps that takes raw data and produces a deployed model. Pipelines encode the entire workflow as code, making it reproducible, versionable, and auditable.
+
+### Pipeline orchestration tools
+
+*   **Kubeflow Pipelines** — Kubernetes-native ML pipeline platform with a visual pipeline editor and built-in experiment tracking.
+*   **SageMaker Pipelines** — AWS-native pipeline service integrated with the SageMaker ecosystem.
+*   **Vertex AI Pipelines** — Google Cloud-native pipeline service built on Kubeflow Pipelines.
+*   **Apache Airflow** — General-purpose workflow orchestration tool widely used for data and ML pipelines.
+*   **Prefect** — Modern workflow orchestration with a focus on developer experience and observability.
+
+### Kubeflow Pipelines example
+
+Below is a practical example of defining an ML pipeline using the Kubeflow Pipelines (KFP) SDK:
+
+```python
+from kfp import dsl
+from kfp.dsl import Input, Output, Dataset, Model, Metrics
+
+@dsl.component(base_image="python:3.11")
+def validate_data(
+    input_path: str,
+    output_dataset: Output[Dataset],
+):
+    """Validate incoming data for quality and schema conformance."""
+    import pandas as pd
+    df = pd.read_parquet(input_path)
+    
+    # Schema validation
+    assert "customer_id" in df.columns
+    assert "amount" in df.columns
+    assert df["amount"].notnull().all()
+    
+    df.to_parquet(output_dataset.path)
+
+@dsl.component(base_image="python:3.11")
+def train_model(
+    dataset: Input[Dataset],
+    model_output: Output[Model],
+    metrics_output: Output[Metrics],
+    n_estimators: int = 100,
+    max_depth: int = 6,
+):
+    """Train an XGBoost model on the validated dataset."""
+    import pandas as pd
+    from xgboost import XGBClassifier
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import accuracy_score, f1_score
+    import joblib
+    
+    df = pd.read_parquet(dataset.path)
+    X = df.drop(columns=["label"])
+    y = df["label"]
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    
+    model = XGBClassifier(n_estimators=n_estimators, max_depth=max_depth)
+    model.fit(X_train, y_train)
+    
+    predictions = model.predict(X_test)
+    acc = accuracy_score(y_test, predictions)
+    f1 = f1_score(y_test, predictions)
+    
+    metrics_output.log_metric("accuracy", acc)
+    metrics_output.log_metric("f1_score", f1)
+    
+    joblib.dump(model, model_output.path)
+
+@dsl.component(base_image="python:3.11")
+def evaluate_model(
+    metrics: Input[Metrics],
+    accuracy_threshold: float = 0.90,
+) -> bool:
+    """Gate: only promote models exceeding the accuracy threshold."""
+    accuracy = metrics.metadata["accuracy"]
+    return accuracy >= accuracy_threshold
+
+@dsl.pipeline(name="fraud-detection-pipeline")
+def fraud_detection_pipeline(input_path: str, n_estimators: int = 100):
+    validate_task = validate_data(input_path=input_path)
+    train_task = train_model(
+        dataset=validate_task.outputs["output_dataset"],
+        n_estimators=n_estimators,
+    )
+    evaluate_model(
+        metrics=train_task.outputs["metrics_output"],
+        accuracy_threshold=0.90,
+    )
+```
+
+Compiling and submitting the pipeline:
+
+```bash
+# Compile the pipeline to YAML
+kfp dsl compile --py pipeline.py --output fraud_detection_pipeline.yaml
+
+# Submit to Kubeflow Pipelines
+kfp run submit \
+  --pipeline-name fraud-detection-pipeline \
+  --run-name "training-run-2025-07-07" \
+  --parameter input_path="gs://data-bucket/transactions/latest/"
+```
+
+---
+
+## What is CI/CD/CT for ML?
+
+Traditional software uses CI/CD (Continuous Integration / Continuous Delivery). MLOps extends this with a third loop: **CT (Continuous Training)**. Together, these three loops form the backbone of a mature MLOps practice.
+
+![CI/CD/CT pipeline for machine learning showing code CI, model CD, and continuous training loops](/blog/deep-dive-mlops/inline-6.png)
+
+CI/CD/CT Pipeline for ML
+
+### Continuous Integration (CI)
+
+CI for ML goes beyond code testing. It includes:
+
+*   **Code validation** — Unit tests for feature engineering functions, data processing logic, and model training scripts.
+*   **Data validation** — Schema checks, distribution tests, and data quality assertions on incoming data.
+*   **Pipeline validation** — Verifying that pipeline components connect correctly and produce expected outputs.
+*   **Model validation** — Running the training pipeline on a small dataset to verify it completes successfully and produces reasonable metrics.
+
+### Continuous Delivery (CD)
+
+CD for ML automates the deployment of validated models:
+
+*   **Model packaging** — Wrapping the model with its dependencies and serving code into a deployable artefact (Docker container, model archive).
+*   **Infrastructure provisioning** — Automatically provisioning or updating the serving infrastructure (Kubernetes deployments, serverless functions).
+*   **Deployment strategies** — Implementing canary, blue-green, or shadow deployments as described earlier.
+*   **Smoke testing** — Running a quick health check against the deployed model to verify it serves predictions correctly.
+
+### Continuous Training (CT)
+
+CT is unique to MLOps. It automates the retraining of models based on triggers:
+
+*   **Schedule-based triggers** — Retrain daily, weekly, or monthly regardless of conditions.
+*   **Data-arrival triggers** — Retrain when a new batch of labelled data becomes available.
+*   **Drift-detection triggers** — Retrain when drift monitoring detects significant data or concept drift.
+*   **Performance-based triggers** — Retrain when model performance metrics drop below a defined threshold.
+
+The CT loop ensures models stay current as the world changes, closing the gap between model deployment and model staleness.
+
+---
+
+## How do you monitor models in production?
+
+Deploying a model is not the end of the journey — it is the beginning of an ongoing responsibility. Production model monitoring encompasses three dimensions.
+
+### Model performance monitoring
+
+Track the model's predictive quality over time:
+
+*   **Accuracy decay** — Is accuracy declining compared to the baseline measured at deployment?
+*   **Prediction distribution** — Are predictions shifting? For example, is a fraud model suddenly flagging far more (or fewer) transactions?
+*   **Calibration** — Are predicted probabilities aligned with observed frequencies?
+
+### Data quality monitoring
+
+Track the quality and distribution of input data:
+
+*   **Feature distribution shifts** — Monitor the statistical properties (mean, variance, percentiles) of each input feature.
+*   **Missing values** — Are features arriving with more nulls than expected?
+*   **Schema violations** — Are unexpected fields appearing or expected fields missing?
+
+### Infrastructure monitoring
+
+Track the operational health of the serving infrastructure:
+
+*   **Prediction latency** — Is the model responding within acceptable time bounds (e.g., p50, p95, p99)?
+*   **Throughput** — How many predictions per second is the system handling?
+*   **Error rates** — Are prediction requests failing?
+*   **Resource utilisation** — CPU, memory, and GPU utilisation of the serving instances.
+
+### Monitoring tools
+
+*   **Prometheus + Grafana** — Industry-standard metrics collection and visualisation. Export custom model metrics via a Prometheus exporter.
+*   **Evidently AI** — ML-specific monitoring with drift detection dashboards and alerting.
+*   **Seldon Core** — Kubernetes-native model serving platform with built-in monitoring and explainability.
+*   **Whylogs + WhyLabs** — Lightweight data profiling integrated with a managed monitoring platform.
+
+```yaml
+# Example: Prometheus scrape configuration for a model server
+scrape_configs:
+  - job_name: "fraud-detection-model"
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["fraud-detection-service:8080"]
+    metrics_path: "/metrics"
+```
+
+```bash
+# Example: Querying model latency in Prometheus
+# Average prediction latency over the last 5 minutes
+rate(model_prediction_duration_seconds_sum[5m]) / rate(model_prediction_duration_seconds_count[5m])
+```
+
+---
+
+## Okay, what terminology do I need to understand?
+
+### What is MLOps?
+
+Machine Learning Operations — the discipline of applying DevOps principles to the machine learning lifecycle to automate and streamline model development, deployment, and monitoring.
+
+### What is experiment tracking?
+
+The practice of systematically logging and comparing ML experiment runs, including parameters, metrics, artefacts, and environment metadata.
+
+### What is a feature store?
+
+A centralised repository for storing, managing, and serving ML features with consistency guarantees between training and serving environments.
+
+### What is a model registry?
+
+A versioned repository for managing trained ML models, supporting stage transitions, metadata tracking, and lineage information.
+
+### What is model serving?
+
+The process of deploying a trained model to an environment where it can receive input data and return predictions.
+
+### What is batch inference?
+
+A serving pattern where predictions are computed in bulk over large datasets on a schedule, typically in a batch processing framework.
+
+### What is online inference?
+
+A serving pattern where predictions are computed in real time via REST or gRPC endpoints in response to individual requests.
+
+### What is streaming inference?
+
+A serving pattern where predictions are computed in real time as events flow through a message streaming platform such as Kafka or Kinesis.
+
+### What is data drift?
+
+A change in the statistical distribution of input features between the training data and production data, also known as covariate shift.
+
+### What is concept drift?
+
+A change in the relationship between input features and the target variable, meaning the correct prediction for a given input has changed over time.
+
+### What is continuous training?
+
+The practice of automatically retraining ML models based on triggers such as data arrival, schedule, or drift detection.
+
+### What is feature engineering?
+
+The process of transforming raw data into features that are suitable for training machine learning models.
+
+### What is training-serving skew?
+
+A discrepancy between the feature engineering logic used during training and the logic used during inference, leading to inconsistent model behaviour.
+
+### What is model lineage?
+
+The complete audit trail linking a deployed model back to its training data, code, parameters, and experiment run.
+
+### What is A/B testing?
+
+A deployment strategy where production traffic is split between two or more model variants to measure their relative performance on real users.
+
+### What is a canary deployment?
+
+A deployment strategy where a small percentage of traffic is routed to a new model version, gradually increasing if metrics remain healthy.
+
+### What is shadow mode?
+
+A deployment strategy where a new model receives production traffic but its predictions are not returned to users — they are logged for offline comparison against the existing model.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

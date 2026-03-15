@@ -1,0 +1,351 @@
+---
+title: "Azure Multi-Subscription Architecture - Enterprise Landing Zones"
+date: "2026-03-11"
+slug: "azure-multi-subscription-architecture-enterprise-landing-zones"
+status: "publish"
+feature_image: "/blog/azure-multi-subscription-architecture-enterprise-landing-zones/feature-image.png"
+tags: ["Azure", "Cloud", "Architecture", "Landing Zone", "Security", "Governance", "Azure Policy", "Identity", "Robert Leggett"]
+
+meta:
+  title: "Azure Multi-Subscription Architecture - Enterprise Landing Zones | Robert Leggett"
+  description: "A practical guide to designing Azure multi-subscription architectures using Management Groups, Azure Landing Zones, Azure Policy, and enterprise-scale patterns from the Cloud Adoption Framework."
+  keywords: ["Azure multi-subscription", "Azure Landing Zones", "cloud architecture", "Management Groups", "Azure Policy", "cloud governance", "Cloud Adoption Framework", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/azure-multi-subscription-architecture-enterprise-landing-zones"
+  image: "https://robertleggett.com.au/blog/azure-multi-subscription-architecture-enterprise-landing-zones/feature-image.png"
+
+og:
+  type: "article"
+  title: "Azure Multi-Subscription Architecture - Enterprise Landing Zones"
+  description: "A practical guide to designing Azure multi-subscription architectures using Management Groups, Azure Landing Zones, Azure Policy, and enterprise-scale patterns from the Cloud Adoption Framework."
+  image: "https://robertleggett.com.au/blog/azure-multi-subscription-architecture-enterprise-landing-zones/feature-image.png"
+  url: "https://robertleggett.com.au/blog/azure-multi-subscription-architecture-enterprise-landing-zones"
+
+twitter:
+  card: "summary_large_image"
+  title: "Azure Multi-Subscription Architecture - Enterprise Landing Zones"
+  description: "A practical guide to designing Azure multi-subscription architectures using Management Groups, Azure Landing Zones, Azure Policy, and enterprise-scale patterns from the Cloud Adoption Framework."
+  image: "https://robertleggett.com.au/blog/azure-multi-subscription-architecture-enterprise-landing-zones/feature-image.png"
+---
+
+If I'm to be perfectly honest, Azure's approach to enterprise-scale cloud architecture is the most prescriptive of the three major cloud providers — and I mean that as a compliment. Where AWS and GCP give you the building blocks and leave you to design the structure, Microsoft has invested heavily in defining opinionated reference architectures through the **Cloud Adoption Framework** and **Azure Landing Zones**. For organisations that want a well-lit path rather than a blank canvas, this is enormously valuable.
+
+For those who know me, you will know that I hold certifications across all three major cloud providers and have had the opportunity to work with Azure in enterprise contexts where governance, compliance, and scale are non-negotiable. What strikes me about Azure is how deeply identity and governance are woven into the fabric of the platform. **Microsoft Entra ID** (formerly Azure AD) is not just an add-on — it is the control plane for everything. And **Azure Policy** is not just a nice-to-have — it is the enforcement engine that makes enterprise-scale architecture actually work.
+
+In this article, we will walk through the architecture pattern of designing an Azure multi-subscription model using **Management Groups**, **Azure Landing Zones**, and **Azure Policy**. We will cover the resource hierarchy, the landing zone topology, baseline capabilities, identity and networking patterns, and how Azure's approach compares to AWS and GCP. Join us as we explore what it takes to build enterprise landing zones in Azure.
+
+---
+
+## Before you start
+
+About this post:
+
+*   10 – 16-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   An understanding of Azure's resource hierarchy and how Management Groups enable governance at scale
+*   A reference architecture for Azure Landing Zones following the Cloud Adoption Framework
+*   Knowledge of Azure Policy, identity, and networking patterns for enterprise environments
+*   Baseline capabilities deployed to every landing zone subscription
+*   A comparison of the multi-account/project/subscription pattern across AWS, GCP, and Azure
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## The problem with a single subscription
+
+The story is familiar by now. An organisation begins its Azure journey with a single subscription. It works fine at first — a few resource groups, a handful of VMs, a storage account or two. But as the organisation grows, the cracks appear.
+
+**Resource limits** are the first constraint. Azure subscriptions have hard limits on the number of resources of each type — virtual networks, storage accounts, public IP addresses, and more. While many of these limits can be increased via support requests, the contention itself is a sign that the subscription is being asked to do too much.
+
+**Permission boundaries** become difficult to manage. Azure's **role-based access control (RBAC)** is powerful, but when multiple teams and products share a subscription, role assignments accumulate and become complex. Teams need isolation from each other's resources, but the subscription boundary — Azure's strongest RBAC scope — is shared.
+
+**Cost management** is unreliable. Resource groups and tags help, but they require discipline and do not cover every scenario. When the finance team asks which product is responsible for a cost spike, the answer requires forensic analysis rather than a straightforward report.
+
+**Policy enforcement** is limited. Azure Policy can be applied at the subscription level, but if all workloads share a subscription, you cannot apply different policies to different products or environments. A policy that is appropriate for production may be too restrictive for development.
+
+**Blast radius** is uncontained. A misconfigured network security group, an accidental deletion, or a compromised credential affects everything in the subscription. There is no isolation between workloads beyond what resource groups and RBAC provide — and neither of these is a security boundary.
+
+The multi-subscription model, implemented through Azure Landing Zones, solves these problems by using subscriptions as the primary isolation primitive.
+
+---
+
+## The Azure resource hierarchy
+
+Azure's resource hierarchy is the foundation of its governance model:
+
+```
+Microsoft Entra ID Tenant
+│
+├── Management Group (Root)
+│   ├── Management Group (nested up to 6 levels)
+│   │   ├── Subscription
+│   │   │   ├── Resource Group
+│   │   │   │   └── Resources
+│   │   │   └── Resource Group
+│   │   └── Subscription
+│   └── Management Group
+│       └── Subscription
+│
+└── (All subscriptions ultimately belong to the tenant)
+```
+
+The **Microsoft Entra ID Tenant** is the top-level identity boundary. Every Azure subscription is associated with exactly one tenant, and the tenant provides the identity plane — users, groups, service principals, and managed identities.
+
+**Management Groups** provide a hierarchical container above subscriptions. They can be nested up to six levels deep and serve as the primary mechanism for applying **Azure Policy** and **RBAC** at scale. Management Groups are to Azure what Organisational Units are to AWS and Folders are to GCP.
+
+**Subscriptions** are the fundamental billing and resource boundary. Each subscription has its own resource limits, its own RBAC scope, and its own cost profile. Subscriptions are the isolation primitive — the Azure equivalent of an AWS account or a GCP project.
+
+**Resource Groups** are logical containers within a subscription. They group related resources for lifecycle management — everything in a resource group typically gets deployed, updated, and deleted together. Resource groups are **not** a security boundary.
+
+**Resources** are the actual Azure services — virtual machines, storage accounts, databases, and so on.
+
+The critical insight is that **Azure Policy and RBAC assignments inherit downward** through the Management Group hierarchy. A policy assigned at a Management Group flows down to all child Management Groups, subscriptions, resource groups, and resources beneath it. This inheritance model is what makes the Management Group structure so powerful for governance at scale.
+
+---
+
+## Azure Landing Zones — the reference architecture
+
+Microsoft's **Azure Landing Zones** provide an opinionated, enterprise-scale reference architecture that codifies best practices for multi-subscription design. It is part of the broader **Cloud Adoption Framework (CAF)** and represents years of learning from large enterprise deployments.
+
+The landing zone architecture defines a Management Group hierarchy that looks like this:
+
+```
+Tenant Root Group
+│
+├── Platform
+│   ├── Identity
+│   │   └── identity-prod (subscription)
+│   ├── Management
+│   │   └── management-prod (subscription)
+│   └── Connectivity
+│       └── connectivity-prod (subscription)
+│
+├── Landing Zones
+│   ├── Corp
+│   │   ├── product-a-prod (subscription)
+│   │   ├── product-a-nonprod (subscription)
+│   │   ├── product-b-prod (subscription)
+│   │   └── product-b-nonprod (subscription)
+│   └── Online
+│       ├── public-web-prod (subscription)
+│       └── public-web-nonprod (subscription)
+│
+├── Sandbox
+│   └── developer-sandbox-01 (subscription)
+│
+└── Decommissioned
+    └── (retired subscriptions)
+```
+
+**Platform Management Group** contains the foundational subscriptions that every other subscription depends on:
+
+*   **Identity subscription** — Hosts domain controllers (if extending on-premises Active Directory), Microsoft Entra Connect servers, and identity-related infrastructure
+*   **Management subscription** — Hosts centralised monitoring (Azure Monitor, Log Analytics workspace), automation accounts, and management tooling
+*   **Connectivity subscription** — Hosts the hub network, Azure Firewall, VPN Gateways, ExpressRoute circuits, and DNS infrastructure
+
+**Landing Zones Management Group** is where workload subscriptions live. It is divided into two categories:
+
+*   **Corp** — For workloads that require connectivity to the corporate network (on-premises, other subscriptions, private endpoints). These subscriptions connect to the hub network via virtual network peering
+*   **Online** — For workloads that are internet-facing and do not require corporate network connectivity. These may have their own internet egress and are typically more isolated
+
+**Sandbox Management Group** provides developer playground subscriptions with relaxed policies and aggressive budget controls. These subscriptions are intentionally isolated from the Platform and Landing Zone networks.
+
+**Decommissioned Management Group** is where retired subscriptions are moved. Subscriptions in this group have highly restrictive policies that prevent any new resource creation while allowing existing resources to be inventoried and cleaned up.
+
+This hierarchy is not arbitrary — each Management Group serves as a **policy assignment point**. Different policies are applied at each level, creating a layered governance model that scales with the organisation.
+
+---
+
+## Subscription per workload per environment
+
+The core principle mirrors what we have seen in AWS and GCP: **one subscription per workload per environment**. A product with development and production environments gets two subscriptions. Each subscription provides:
+
+*   **Resource limit isolation** — Each subscription has its own limits, eliminating contention
+*   **RBAC boundary** — Permissions are scoped to the subscription, making access management clean and auditable
+*   **Cost isolation** — Each subscription maps directly to a cost profile, enabling straightforward chargeback
+*   **Policy scope** — Different policies can be applied to different subscriptions (stricter for production, relaxed for development)
+*   **Blast radius containment** — A problem in one subscription cannot affect resources in another
+
+Subscriptions are placed into the appropriate Management Group based on their connectivity and governance requirements. A corporate-connected production workload goes into **Landing Zones → Corp**. An internet-facing web application goes into **Landing Zones → Online**. A developer sandbox goes into **Sandbox**.
+
+---
+
+## Azure Policy — the governance engine
+
+**Azure Policy** is the enforcement mechanism that makes the landing zone architecture work at scale. It allows you to define rules about what is and is not allowed in your Azure environment, and it enforces those rules automatically.
+
+Policies are defined as **policy definitions** (individual rules) and grouped into **policy initiatives** (collections of related rules). They are assigned at Management Group, subscription, or resource group scope and inherit downward.
+
+Common policy assignments in an enterprise landing zone include:
+
+**Region restrictions** — Ensure resources can only be created in approved regions. For an Australian organisation, this might restrict deployments to `australiaeast` and `australiasoutheast` to meet data sovereignty requirements.
+
+**Required tags** — Enforce that all resources must have specific tags (product, environment, cost centre, owner). Resources created without these tags are denied or flagged as non-compliant.
+
+**Allowed VM SKUs** — Restrict which virtual machine sizes can be deployed. This prevents teams from accidentally provisioning expensive GPU instances or oversized VMs in development environments.
+
+**Encryption enforcement** — Ensure that storage accounts require HTTPS, disks are encrypted with customer-managed keys, and SQL databases use transparent data encryption.
+
+**Network security** — Deny public IP addresses on virtual machines, require network security groups on all subnets, and enforce private endpoints for PaaS services.
+
+**Diagnostic settings** — Automatically deploy diagnostic settings to all resources, routing logs and metrics to the centralised Log Analytics workspace in the Management subscription.
+
+**Defender for Cloud** — Ensure Microsoft Defender for Cloud is enabled on all subscriptions with the appropriate pricing tier.
+
+The power of Azure Policy is in its **enforcement modes**:
+
+*   **Deny** — Prevent non-compliant resources from being created
+*   **Audit** — Allow creation but flag as non-compliant for reporting
+*   **DeployIfNotExists** — Automatically deploy a configuration (e.g., diagnostic settings) if it does not exist
+*   **Modify** — Automatically modify a resource to bring it into compliance (e.g., add a missing tag)
+
+This combination of deny, audit, and auto-remediation gives the platform team a comprehensive governance toolkit that scales without requiring manual oversight.
+
+---
+
+## Identity and access management
+
+Azure's identity model is centred on **Microsoft Entra ID** (formerly Azure AD), which serves as both the identity provider and the directory service for the entire Azure estate.
+
+**Role-Based Access Control (RBAC)** is how permissions are granted. Azure provides hundreds of built-in roles, and you can define custom roles for specific needs. Role assignments are scoped to Management Groups, subscriptions, resource groups, or individual resources.
+
+The enterprise pattern for identity includes:
+
+*   **Centralised identity** — All users and groups are managed in Microsoft Entra ID, federated to on-premises Active Directory if required
+*   **Group-based RBAC** — Permissions are assigned to **Entra ID security groups** rather than individual users. A user's group membership determines their access across the Azure estate
+*   **Privileged Identity Management (PIM)** — Elevated roles (Owner, Contributor on production subscriptions) are not permanently assigned. Instead, users request **just-in-time activation** through PIM, with time-limited access, approval workflows, and full audit trails
+*   **Conditional Access** — Policies that require multi-factor authentication, compliant devices, or specific network locations before granting access to Azure management plane operations
+*   **Managed Identities** — For service-to-service authentication, **managed identities** eliminate the need for credentials entirely. Azure handles the credential lifecycle automatically
+*   **Service Principals with federated credentials** — For CI/CD pipelines and external systems, **workload identity federation** allows authentication without storing secrets
+
+This identity model provides strong security with minimal operational overhead. PIM in particular is a standout capability — the ability to enforce just-in-time, approval-gated, time-limited access to critical roles is a significant uplift over permanent role assignments.
+
+---
+
+## Networking — hub-spoke topology
+
+The networking architecture in Azure Landing Zones follows a **hub-spoke model**, with the hub network hosted in the **Connectivity subscription** under the Platform Management Group.
+
+**Hub network** — The central virtual network that hosts shared networking services:
+
+*   **Azure Firewall** — Centralised traffic inspection, filtering, and logging for all east-west and north-south traffic
+*   **VPN Gateway** or **ExpressRoute Gateway** — Connectivity to on-premises networks
+*   **Azure Bastion** — Secure remote access to virtual machines without public IP addresses
+*   **DNS infrastructure** — **Azure Private DNS Zones** and **DNS forwarders** for name resolution across the hub-spoke topology and to on-premises
+
+**Spoke networks** — Each workload subscription has its own virtual network (spoke) that is peered to the hub. Traffic between spokes and to the internet is routed through the hub's Azure Firewall via **user-defined routes (UDRs)**.
+
+An alternative to the traditional hub-spoke model is **Azure Virtual WAN**, which provides a Microsoft-managed hub with automated spoke connectivity, integrated VPN and ExpressRoute support, and simplified routing. Virtual WAN is well-suited for organisations with many spokes and complex routing requirements.
+
+**Private Link** is used extensively to ensure that PaaS services (Storage, SQL, Key Vault, etc.) are accessed over private endpoints within the virtual network rather than over the public internet. This is enforced via Azure Policy — policies deny the creation of PaaS resources with public network access enabled.
+
+**Network segmentation** within each spoke follows a tiered model:
+
+*   **Web tier** — Subnets for Application Gateways and public-facing load balancers
+*   **Application tier** — Private subnets for compute workloads (VMs, AKS, App Services)
+*   **Data tier** — Isolated subnets for private endpoints to database and storage services
+*   **Management tier** — Subnets for monitoring agents, bastion access, and operational tooling
+
+Network security groups enforce micro-segmentation within each tier, and **Azure Firewall** provides centralised policy enforcement at the hub level.
+
+---
+
+## Baseline capabilities per subscription
+
+Every landing zone subscription receives a standardised baseline deployed via **Infrastructure as Code** (typically **Bicep** or **Terraform**) and managed centrally:
+
+**Diagnostic settings** — All resources are configured to send logs and metrics to the centralised **Log Analytics workspace** in the Management subscription. This is enforced by Azure Policy using the **DeployIfNotExists** effect.
+
+**Microsoft Defender for Cloud** — Enabled on every subscription with the appropriate Defender plans (Defender for Servers, Defender for Storage, Defender for SQL, Defender for Key Vault, Defender for Containers). Security recommendations and alerts flow to the centralised security team.
+
+**Azure Monitor** — Centralised monitoring with **alerts** configured for critical resource health metrics, **action groups** for notification routing, and **workbooks** for operational dashboards.
+
+**Network Watcher** — Enabled in every region where resources are deployed, providing network diagnostics, packet capture, and flow log capabilities.
+
+**Storage account for diagnostics** — A dedicated storage account for boot diagnostics and any resource-specific log retention requirements.
+
+**Key Vault** — A dedicated **Azure Key Vault** per subscription for secrets, certificates, and encryption keys, with access policies scoped to the workload's managed identities.
+
+**Budget and cost alerts** — **Azure Cost Management** budgets configured per subscription with alerts at 50%, 75%, 90%, and 100% thresholds. Budget data is surfaced to both the delivery team and the finance team for chargeback.
+
+**Tags** — Mandatory tags enforced via Azure Policy: product, environment, cost centre, owner, criticality, and data classification.
+
+---
+
+## Cost management and chargeback
+
+Azure provides robust tooling for cost management in a multi-subscription model:
+
+**Azure Cost Management + Billing** provides visibility into spending across all subscriptions. Because each subscription maps to a single workload and environment, cost attribution is straightforward — the subscription is the billing unit.
+
+**Budgets** are set at the subscription level and trigger alerts when spending approaches or exceeds thresholds. For organisations with strict cost governance, budgets can be combined with automation to **shut down non-critical resources** or **notify cost centre owners** when thresholds are breached.
+
+**Tags** provide additional granularity within a subscription. While the subscription itself provides the primary cost boundary, tags allow further breakdown by component, team, or feature.
+
+**Cost allocation rules** in Azure Cost Management allow shared costs (e.g., hub networking, monitoring infrastructure) to be distributed proportionally across the subscriptions that consume them.
+
+**Azure Reservations** and **Savings Plans** provide discounted pricing for committed usage. In a multi-subscription model, reservations are purchased at the billing account or enrollment level and automatically apply to eligible resources across all subscriptions, ensuring maximum utilisation.
+
+The key advantage of the multi-subscription model for cost management is that the **subscription is the natural cost boundary**. You do not need to rely on tagging discipline or complex allocation rules for the primary cost split — each subscription's cost is directly attributable to a product and environment.
+
+---
+
+## The anti-pattern — everything in one subscription
+
+The most common anti-pattern is putting **everything into a single subscription with resource group separation only**. Resource groups provide logical grouping and lifecycle management, but they are **not a security boundary** and they do not provide the isolation characteristics of separate subscriptions:
+
+*   **RBAC bleeds across resource groups** — A Contributor role at the subscription level grants access to all resource groups, making fine-grained isolation difficult
+*   **Resource limits are shared** — All workloads compete for the same subscription-level quotas
+*   **Cost attribution requires tagging** — Without separate subscriptions, cost is not naturally isolated
+*   **Policy cannot be differentiated** — You cannot apply different Azure Policies to different resource groups within the same subscription (policies at the resource group level are possible but lose the inheritance benefits of Management Groups)
+*   **Blast radius is uncontained** — A network misconfiguration or credential compromise affects all workloads in the subscription
+
+The solution is clear: **subscriptions are the isolation boundary, not resource groups**. Use resource groups for lifecycle management within a subscription, but use subscriptions for security, cost, and governance isolation.
+
+---
+
+## How does Azure compare to AWS and GCP?
+
+Having now covered all three major cloud providers, it is worth drawing some comparisons.
+
+The **core pattern is identical** across all three: use the platform's strongest isolation primitive (AWS Account, GCP Project, Azure Subscription) as the boundary for each workload and environment. Layer governance through a hierarchical management structure (AWS OUs, GCP Folders, Azure Management Groups). Deploy standardised baselines via Infrastructure as Code. Enforce policies centrally while empowering delivery teams to operate within guardrails.
+
+**Identity** is where the approaches diverge most significantly. AWS uses **federated IAM roles** that users assume via SAML or OIDC — a powerful but indirect model. GCP uses **Google Workspace identities** with direct IAM bindings — simpler but tightly coupled to the Google ecosystem. Azure uses **Microsoft Entra ID** with **RBAC** and **PIM** — the most mature identity platform, with just-in-time access, conditional access policies, and deep integration with the Microsoft ecosystem.
+
+**Policy enforcement** varies in approach. AWS uses **SCPs** (deny-only guardrails at the OU level) combined with AWS Config rules for compliance. GCP uses **Organisation Policies** (hard constraints that cannot be overridden) combined with organisation-level IAM. Azure uses **Azure Policy** (deny, audit, deploy-if-not-exists, modify) — the most flexible enforcement model, with both preventative and remediation capabilities.
+
+**Networking** follows similar patterns across all three — hub-spoke topologies with centralised firewalling, private connectivity to on-premises, and private endpoints for managed services. Azure's **Virtual WAN** and **Azure Firewall** provide a more integrated experience, while AWS's **Transit Gateway** and GCP's **Shared VPC** offer comparable functionality with different operational models.
+
+**Tooling maturity** for the landing zone pattern is arguably strongest in Azure, where the **Cloud Adoption Framework** and **Azure Landing Zone accelerators** provide ready-to-deploy reference implementations. AWS **Control Tower** offers a similar but less prescriptive experience. GCP's **Cloud Foundation Toolkit** provides Terraform modules but leaves more of the architectural decisions to the organisation.
+
+Regardless of which cloud provider you are using, the fundamental principle is the same: **isolation is not optional at enterprise scale**. Accounts, projects, and subscriptions are free. The governance and security they enable is invaluable.
+
+---
+
+## Conclusion
+
+*   Single-subscription models create **resource contention**, **permission sprawl**, **cost attribution challenges**, and **uncontained blast radius** that worsen as the organisation scales
+*   Azure's resource hierarchy — **Tenant, Management Groups, Subscriptions, Resource Groups, Resources** — provides a powerful governance framework when designed deliberately
+*   **Azure Landing Zones** from the Cloud Adoption Framework provide an opinionated, enterprise-scale reference architecture with Platform, Landing Zones, Sandbox, and Decommissioned Management Groups
+*   **One subscription per workload per environment** is the core principle, providing isolation for security, cost, quotas, and blast radius
+*   **Azure Policy** is the governance engine — combining deny, audit, deploy-if-not-exists, and modify effects to enforce compliance at scale without manual oversight
+*   **Microsoft Entra ID** with **RBAC**, **PIM**, and **Conditional Access** provides the most mature identity and access management model of the three major cloud providers
+*   **Hub-spoke networking** with Azure Firewall, Private Link, and ExpressRoute provides secure, centralised network architecture
+*   The multi-account/project/subscription pattern is **consistent across AWS, GCP, and Azure** — the isolation primitive differs, but the principles of workload isolation, hierarchical governance, and standardised baselines are universal
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

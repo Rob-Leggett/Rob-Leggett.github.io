@@ -1,0 +1,286 @@
+---
+title: "AWS Multi-Account Architecture - Scaling Cloud with Account Isolation"
+date: "2026-03-08"
+slug: "aws-multi-account-architecture-scaling-with-isolation"
+status: "publish"
+feature_image: "/blog/aws-multi-account-architecture-scaling-with-isolation/feature-image.png"
+tags: ["AWS", "Cloud", "Architecture", "Multi-Account", "Security", "Networking", "Landing Zone", "Governance", "Robert Leggett"]
+
+meta:
+  title: "AWS Multi-Account Architecture - Scaling Cloud with Account Isolation | Robert Leggett"
+  description: "A practical guide to designing AWS multi-account architectures using AWS Organizations, account isolation, baseline security controls, and shared responsibility models for enterprise-scale cloud environments."
+  keywords: ["AWS multi-account", "AWS Organizations", "cloud architecture", "account isolation", "SCP policies", "cloud governance", "landing zone", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/aws-multi-account-architecture-scaling-with-isolation"
+  image: "https://robertleggett.com.au/blog/aws-multi-account-architecture-scaling-with-isolation/feature-image.png"
+
+og:
+  type: "article"
+  title: "AWS Multi-Account Architecture - Scaling Cloud with Account Isolation"
+  description: "A practical guide to designing AWS multi-account architectures using AWS Organizations, account isolation, baseline security controls, and shared responsibility models for enterprise-scale cloud environments."
+  image: "https://robertleggett.com.au/blog/aws-multi-account-architecture-scaling-with-isolation/feature-image.png"
+  url: "https://robertleggett.com.au/blog/aws-multi-account-architecture-scaling-with-isolation"
+
+twitter:
+  card: "summary_large_image"
+  title: "AWS Multi-Account Architecture - Scaling Cloud with Account Isolation"
+  description: "A practical guide to designing AWS multi-account architectures using AWS Organizations, account isolation, baseline security controls, and shared responsibility models for enterprise-scale cloud environments."
+  image: "https://robertleggett.com.au/blog/aws-multi-account-architecture-scaling-with-isolation/feature-image.png"
+---
+
+For those who know me, you will know that I have spent a significant amount of time working with AWS across large enterprise environments. One of the most impactful architectural decisions I have been involved in is the migration from shared AWS accounts to a proper **multi-account model**. It sounds straightforward on paper, but in practice it requires careful planning, strong governance, and a platform team that genuinely understands the operational reality of running workloads at scale.
+
+If I'm to be perfectly honest, the single biggest mistake I see organisations make with AWS is treating accounts as a scarce resource. They cram multiple products, environments, and teams into a single account, and then wonder why their security posture is a mess, their cost attribution is guesswork, and every deployment feels like a game of Russian roulette. The truth is that AWS accounts are free. The isolation they provide is not.
+
+In this article, we will walk through the architecture pattern of moving from shared AWS accounts to a multi-account model using **AWS Organizations**. We will cover the problems with shared accounts, the structure of a well-designed multi-account hierarchy, the baseline capabilities every account should have, and the shared responsibility model between platform and delivery teams. Join us as we explore what it takes to scale cloud with account isolation.
+
+---
+
+## Before you start
+
+About this post:
+
+*   10 – 16-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   An understanding of why shared AWS accounts create risk at scale
+*   A reference architecture for AWS multi-account design using AWS Organizations
+*   Knowledge of baseline security and networking controls deployed to every account
+*   Clarity on the shared responsibility model between platform and delivery teams
+*   Practical guidance on anti-patterns to avoid
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## The problem with shared accounts
+
+Before we look at the solution, it is worth understanding the pain that drives organisations toward a multi-account model in the first place. If you have worked in a large enterprise that started its cloud journey early, you have almost certainly encountered the **shared account problem**.
+
+In a shared account model, multiple products, teams, and sometimes even multiple environments share a single AWS account. On the surface this seems efficient — fewer accounts to manage, less overhead, simpler billing. In reality, it creates a cascade of problems that become increasingly painful as the organisation scales.
+
+**Permission sprawl** is the first issue. When multiple teams share an account, IAM policies become a tangled web of roles, policies, and permissions that nobody fully understands. Teams need access to their own resources but not to each other's, yet the account boundary — which is AWS's strongest isolation primitive — is shared. You end up with overly permissive policies because the alternative is a constant stream of access requests that slow everyone down.
+
+**Blast radius** is the second and arguably most dangerous issue. If a deployment goes wrong, a misconfigured security group is applied, or a credential is compromised, the impact is not limited to one product or one environment. It affects everything in the account. A bad deployment to a staging environment could take down production if they share the same account. This is not a theoretical risk — I have seen it happen.
+
+**Service quotas and limits** are shared across the account. One team's workload hitting a Lambda concurrency limit or an EC2 instance limit can starve another team's workload. You can request quota increases, but you are always managing contention rather than eliminating it.
+
+**Cost attribution** becomes guesswork. Tags help, but they are not enforced consistently, and many AWS services do not support tagging on all resources. When finance asks which product is responsible for a spike in the bill, the answer is often a shrug and a best guess.
+
+**Legacy roles and service accounts** accumulate over time. Nobody wants to delete an IAM role that might be in use somewhere, so the account fills with stale credentials and orphaned roles that represent a growing security risk.
+
+The bottom line is this: shared accounts trade short-term simplicity for long-term pain. The multi-account model inverts this trade-off.
+
+---
+
+## The multi-account model
+
+The core principle of the multi-account model is simple: **one AWS account per product per environment**. A product with development, staging, and production environments gets three separate AWS accounts. Each account is an isolation boundary for permissions, networking, billing, and blast radius.
+
+These accounts are managed under **AWS Organizations**, which provides a hierarchical structure of **Organisational Units (OUs)** that mirror your organisation's logical groupings. A typical hierarchy looks something like this:
+
+```
+AWS Organizations (Management Account)
+│
+├── Security OU
+│   ├── Log Archive Account
+│   ├── Security Tooling Account
+│   └── Audit Account
+│
+├── Infrastructure OU
+│   ├── Shared Services Account
+│   ├── Networking Account
+│   └── CI/CD Account
+│
+├── Sandbox OU
+│   └── Developer Sandbox Accounts
+│
+├── Workloads OU
+│   ├── NonProd OU
+│   │   ├── product-a-dev
+│   │   ├── product-a-staging
+│   │   ├── product-b-dev
+│   │   └── product-b-staging
+│   │
+│   └── Prod OU
+│       ├── product-a-prod
+│       └── product-b-prod
+│
+└── Suspended OU
+    └── (decommissioned accounts)
+```
+
+The **Management Account** sits at the root and is used exclusively for managing the organisation — billing, OUs, and service control policies. No workloads run here.
+
+The **Security OU** contains accounts dedicated to centralised logging, security tooling, and audit. The **Log Archive Account** aggregates CloudTrail logs, VPC flow logs, and other audit data from every account in the organisation. The **Security Tooling Account** runs detective controls like GuardDuty, Security Hub, and AWS Config aggregators.
+
+The **Infrastructure OU** contains shared services — the networking account that manages Transit Gateways and Direct Connect, the CI/CD account that runs deployment pipelines, and any shared service accounts.
+
+The **Workloads OU** is where product accounts live, separated into **NonProd** and **Prod** OUs. This separation allows you to apply different **Service Control Policies (SCPs)** to each — for example, allowing broader experimentation in nonprod while enforcing strict controls in production.
+
+The **Sandbox OU** provides developer playground accounts with time-limited access and aggressive cost controls. The **Suspended OU** is where decommissioned accounts are moved rather than deleted.
+
+---
+
+## Central management and the platform team
+
+A multi-account model does not work without a dedicated **platform team** (sometimes called a cloud services team or cloud engineering team) that owns the account lifecycle. This team is responsible for:
+
+*   **Account provisioning** — Creating new accounts via automation (typically AWS Control Tower or custom automation using AWS Organizations APIs)
+*   **Baseline deployment** — Deploying a standardised set of security, networking, and operational controls to every new account
+*   **Guardrails and governance** — Defining and enforcing SCPs, tagging policies, and compliance standards
+*   **Network architecture** — Managing the hub-and-spoke network topology, Transit Gateway, Direct Connect, and DNS
+*   **Central security tooling** — Aggregating security findings, managing incident response, and maintaining detective controls
+
+The platform team operates as an **internal product team**. Their customers are the delivery teams who build and run workloads in the accounts. This mindset shift — from gatekeepers to enablers — is critical. If the platform team is a bottleneck, teams will work around them. If the platform team provides **self-service capabilities** backed by automation and guardrails, teams will move faster and more securely.
+
+**AWS Service Catalog** is a powerful tool here. It allows the platform team to publish curated products — pre-approved architectures, networking configurations, database setups — that delivery teams can provision on demand without raising tickets. This is how you scale governance without scaling headcount.
+
+---
+
+## Baseline capabilities deployed to every account
+
+Every account provisioned into the organisation receives a **baseline deployment** — a standardised set of capabilities that ensure security, observability, and networking are consistent from day one. This baseline is typically deployed via **Infrastructure as Code** (CloudFormation StackSets or Terraform) and managed centrally by the platform team.
+
+**Federation and identity** is the foundation. Each account is configured with a **SAML provider** that federates to the enterprise identity provider (e.g., Microsoft Entra ID, Okta). IAM roles are created for standard personas — read-only, developer, administrator — and mapped to identity provider groups. No long-lived IAM user credentials are created. Access is always federated, always temporary, always auditable.
+
+**Detective controls and remediation** ensure that misconfigurations are detected and corrected automatically. **AWS Config rules** check for compliance against a defined set of rules — encryption at rest, public access blocks on S3, security group configurations. Non-compliant resources trigger automated remediation via Lambda functions or Systems Manager Automation documents.
+
+**Security services** are enabled across the board:
+
+*   **CloudTrail** is enabled in every account with logs shipped to the centralised Log Archive Account
+*   **Amazon GuardDuty** monitors for malicious activity and unauthorised behaviour
+*   **AWS Config** tracks resource configurations and evaluates compliance rules
+*   **Amazon Inspector** scans EC2 instances and container images for vulnerabilities
+*   **AWS Shield Standard** provides DDoS protection at no additional cost
+*   **AWS WAF** is deployed on public-facing load balancers and CloudFront distributions
+
+**Networking** is provisioned as part of the baseline:
+
+*   A **VPC** with private subnets across multiple availability zones
+*   **VPC endpoints** for AWS services (S3, DynamoDB, KMS, CloudWatch, etc.) to keep traffic off the public internet
+*   **VPC flow logs** enabled and shipped to the centralised logging account
+*   **NAT Gateways** for outbound internet access from private subnets
+*   Connectivity to the **Transit Gateway** in the networking account, providing access to on-premises networks via **Direct Connect** and to other accounts
+*   **Route 53** private hosted zones for internal DNS resolution
+*   Network segmentation into **web**, **application**, **database**, and **management** tiers using security groups and NACLs
+
+**Centralised logging** ensures every account's operational and security data flows to a central location:
+
+*   **CloudWatch Logs** are retained locally with key metrics and alarms configured
+*   **CloudTrail logs** are shipped to the Log Archive Account in a tamper-proof S3 bucket with object lock enabled
+*   **VPC flow logs** and **AWS Config snapshots** are shipped to the same centralised location
+*   A **SIEM integration** consumes these logs for security analysis and alerting
+
+**Tagging enforcement** is critical for cost attribution and governance. The baseline enforces a mandatory set of tags on all resources — product, environment, cost centre, owner, and criticality. **Tag policies** at the organisation level ensure consistency, and **AWS Config rules** detect untagged resources.
+
+**Service Control Policies (SCPs)** are applied at the OU level to restrict what can be done within accounts:
+
+*   **Region restrictions** — Workloads can only be deployed in approved regions (e.g., ap-southeast-2 for Australian data sovereignty)
+*   **Service restrictions** — Only approved AWS services can be used
+*   **Guardrails** — Prevent disabling CloudTrail, deleting VPC flow logs, or modifying baseline infrastructure
+*   **Encryption enforcement** — Prevent creation of unencrypted EBS volumes, S3 buckets, or RDS instances
+
+---
+
+## The shared responsibility model
+
+A multi-account architecture introduces a clear **shared responsibility model** between the platform team and delivery teams.
+
+The **platform team** is responsible for:
+
+*   Account provisioning and lifecycle management
+*   Baseline deployment and maintenance
+*   Network architecture and connectivity
+*   Centralised security tooling and incident response
+*   SCP policies and organisation-level governance
+*   Cost management tooling and reporting
+
+**Delivery teams** are responsible for:
+
+*   Workload-specific infrastructure within their accounts
+*   Application-level security controls (application-layer encryption, secrets management, input validation)
+*   Workload-specific monitoring and alerting
+*   Deployment pipelines for their applications
+*   Managing their own IAM roles and policies within the boundaries set by SCPs
+*   Cost optimisation of their own workloads
+
+This model works because the boundaries are clear. The platform team provides the **guardrails and the runway**, and delivery teams operate freely within those boundaries. If a delivery team needs something outside the baseline — a new AWS service, a custom network configuration, a VPC peering connection — they request it through the platform team, who evaluates it against the governance framework and provisions it if approved.
+
+---
+
+## Security controls in depth
+
+Security in a multi-account model is layered and defence-in-depth.
+
+**Identity and access management** starts with federation. All human access is via the enterprise identity provider. Users authenticate through single sign-on and assume IAM roles with temporary credentials. **Role-based access control (RBAC)** is implemented via identity provider groups — a user's group membership determines which accounts they can access and which role they assume. The principle of **least privilege** is enforced — developers get read-only access to production, administrators get elevated access only when needed.
+
+**Network segmentation** ensures that workloads are isolated at the network layer. Each account's VPC is divided into tiers:
+
+*   **Web tier** — Public-facing subnets for load balancers (no direct internet access to instances)
+*   **Application tier** — Private subnets for compute workloads
+*   **Database tier** — Isolated private subnets for data stores with no internet route
+*   **Management tier** — Subnets for bastion hosts, monitoring agents, and operational tooling
+
+Security groups enforce **micro-segmentation** within tiers, and **NACLs** provide a secondary layer of defence at the subnet level.
+
+**Encryption** is enforced everywhere. **AWS KMS** provides customer-managed keys for each account, and SCPs prevent the creation of unencrypted resources. Data is encrypted at rest in S3, EBS, RDS, and DynamoDB. Data in transit is encrypted via TLS, enforced by ALB and CloudFront configurations.
+
+**Detective controls** provide continuous monitoring. GuardDuty analyses VPC flow logs, CloudTrail events, and DNS queries for signs of compromise. Security Hub aggregates findings from GuardDuty, Inspector, Config, and third-party tools into a single dashboard. Automated alerting ensures that critical findings are escalated immediately.
+
+---
+
+## The anti-pattern — multiple products in one account
+
+The most common anti-pattern I encounter is organisations that put **multiple products into a single AWS account**, separated only by naming conventions and tags. This approach feels efficient but creates compounding problems:
+
+*   **Blast radius** — A misconfiguration in one product's infrastructure can affect all products in the account
+*   **Permission sprawl** — IAM policies become increasingly complex as you try to isolate access between products within the same account
+*   **Cost attribution** — Tags are the only mechanism for cost allocation, and they are inconsistently applied and not supported on all resource types
+*   **Quota contention** — All products share service quotas, creating unpredictable resource availability
+*   **Compliance complexity** — Demonstrating isolation to auditors is difficult when everything lives in the same account
+*   **Operational risk** — Shared service accounts and cross-product dependencies create hidden coupling
+
+The fix is straightforward: **one account per product per environment**. Yes, this means more accounts. But accounts are free, and the isolation they provide is the single most effective architectural lever you have for reducing risk in AWS.
+
+---
+
+## Benefits of the multi-account model
+
+The benefits of a well-implemented multi-account architecture compound over time:
+
+*   **Reduced blast radius** — A problem in one account cannot affect workloads in another account. This is the strongest isolation primitive AWS provides
+*   **Cleaner security posture** — IAM policies are scoped to a single product and environment, making them simpler, easier to audit, and less prone to over-permissioning
+*   **Accurate cost attribution** — Each account maps to a product and environment, making cost allocation straightforward without relying on tags
+*   **Improved compliance and auditing** — Account-level isolation makes it easier to demonstrate compliance with regulatory requirements and pass audits
+*   **Service quota isolation** — Each account has its own service quotas, eliminating contention between products
+*   **Standardised governance** — Baseline deployments ensure every account meets the same security, networking, and operational standards from day one
+*   **Follows AWS best practices** — AWS explicitly recommends the multi-account model and has built tooling (Control Tower, Organizations, StackSets) specifically to support it
+
+---
+
+## Conclusion
+
+*   Shared AWS accounts create **permission sprawl**, **blast radius risk**, **quota contention**, and **cost attribution challenges** that compound as organisations scale
+*   The multi-account model provides **one account per product per environment**, using AWS Organizations and Organisational Units for hierarchical management
+*   A dedicated **platform team** manages account provisioning, baseline deployment, security controls, and network architecture
+*   Every account receives a **standardised baseline** covering federation, detective controls, security services, networking, centralised logging, tagging, and SCPs
+*   A clear **shared responsibility model** defines what the platform team manages versus what delivery teams manage
+*   **Security is layered** — federation, RBAC, network segmentation, encryption, detective controls, and SCPs work together to provide defence in depth
+*   The most common anti-pattern is **multiple products in one account** — resist the temptation, accounts are free and isolation is invaluable
+*   A well-designed multi-account architecture **scales with the organisation** and provides the foundation for secure, governed, cost-transparent cloud operations
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

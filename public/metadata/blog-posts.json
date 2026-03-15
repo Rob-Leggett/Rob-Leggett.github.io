@@ -7,11 +7,46 @@
     "feature_image": "/blog/demystifying-large-language-models/feature-image.png"
   },
   {
+    "slug": "building-a-local-ai-playground-classical-ml-meets-modern-llms",
+    "title": "Building a Local AI Playground - Classical ML Meets Modern LLMs",
+    "date": "2026-03-12",
+    "excerpt": "If I'm to be perfectly honest, the best way I have found to genuinely understand a technology is to build something end-to-end with it — not a toy example from a tutorial, but a project that forces you to make real architectural decisions and deal with the friction that only surf…",
+    "feature_image": "/blog/building-a-local-ai-playground-classical-ml-meets-modern-llms/feature-image.png"
+  },
+  {
+    "slug": "azure-multi-subscription-architecture-enterprise-landing-zones",
+    "title": "Azure Multi-Subscription Architecture - Enterprise Landing Zones",
+    "date": "2026-03-11",
+    "excerpt": "If I'm to be perfectly honest, Azure's approach to enterprise-scale cloud architecture is the most prescriptive of the three major cloud providers — and I mean that as a compliment. Where AWS and GCP give you the building blocks and leave you to design the structure, Microsoft ha…",
+    "feature_image": "/blog/azure-multi-subscription-architecture-enterprise-landing-zones/feature-image.png"
+  },
+  {
+    "slug": "infrastructure-as-code-with-aws-cdk-reusable-constructs",
+    "title": "Infrastructure as Code with AWS CDK - Building Reusable Constructs at Scale",
+    "date": "2026-03-10",
+    "excerpt": "For those who know me, you will know that I have strong opinions about infrastructure. I have always believed that if you cannot reproduce your entire cloud environment from a single command, you do not truly own it. Over the years I have worked with CloudFormation templates that…",
+    "feature_image": "/blog/infrastructure-as-code-with-aws-cdk-reusable-constructs/feature-image.png"
+  },
+  {
+    "slug": "gcp-multi-project-architecture-organising-cloud-at-scale",
+    "title": "GCP Multi-Project Architecture - Organising Cloud at Scale",
+    "date": "2026-03-09",
+    "excerpt": "It feels like every conversation I have about cloud architecture eventually arrives at the same fundamental question — how do you organise things at scale? Whether you are managing ten projects or ten thousand, the answer is never \"just create another project and figure it out la…",
+    "feature_image": "/blog/gcp-multi-project-architecture-organising-cloud-at-scale/feature-image.png"
+  },
+  {
     "slug": "building-ai-powered-applications-in-the-cloud",
     "title": "Building AI-Powered Applications in the Cloud - A Practical Guide for Engineers",
     "date": "2026-03-08",
     "excerpt": "It feels like every conversation in technology today circles back to the same topic — artificial intelligence. Whether it is a startup trying to embed intelligent features into their product or a large enterprise looking to modernise legacy workflows, the push to integrate AI int…",
     "feature_image": "/blog/building-ai-powered-applications-in-the-cloud/feature-image.png"
+  },
+  {
+    "slug": "aws-multi-account-architecture-scaling-with-isolation",
+    "title": "AWS Multi-Account Architecture - Scaling Cloud with Account Isolation",
+    "date": "2026-03-08",
+    "excerpt": "For those who know me, you will know that I have spent a significant amount of time working with AWS across large enterprise environments. One of the most impactful architectural decisions I have been involved in is the migration from shared AWS accounts to a proper **multi-accou…",
+    "feature_image": "/blog/aws-multi-account-architecture-scaling-with-isolation/feature-image.png"
   },
   {
     "slug": "the-rise-of-ai-agents",
@@ -68,6 +103,76 @@
     "date": "2026-01-11",
     "excerpt": "For those who know me, you will know that I have always been passionate about developer experience and the tools that make engineering teams more productive. Throughout my career, I have seen paradigm shifts — from manual deployments to CI/CD, from monoliths to microservices, fro…",
     "feature_image": "/blog/ai-powered-developer-tools-transforming-software-development/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-data-mesh",
+    "title": "Deep Dive - Data Mesh Architecture",
+    "date": "2025-07-19",
+    "excerpt": "Welcome to the \"Data Mesh Deep Dive\" series! In this comprehensive exploration, we will immerse ourselves in one of the most significant paradigm shifts in how organisations think about data architecture. Data mesh challenges the deeply entrenched assumption that data must be own…",
+    "feature_image": "/blog/deep-dive-data-mesh/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-serverless-at-scale",
+    "title": "Deep Dive - Serverless at Scale",
+    "date": "2025-07-17",
+    "excerpt": "Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the world of serverless computing and event-driven architecture at scale. Serverless has fundamentally changed how we build and operate software — shifting our focus from managing inf…",
+    "feature_image": "/blog/deep-dive-serverless-at-scale/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-ai-cloud-security",
+    "title": "Deep Dive - AI-Powered Cloud Security",
+    "date": "2025-07-15",
+    "excerpt": "Welcome to the \"AI-Powered Cloud Security Deep Dive\" series! In this comprehensive exploration, we will immerse ourselves in the rapidly evolving world of artificial intelligence and machine learning as applied to cloud security. The traditional approach of writing static rules a…",
+    "feature_image": "/blog/deep-dive-ai-cloud-security/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-platform-engineering",
+    "title": "Deep Dive - Platform Engineering",
+    "date": "2025-07-13",
+    "excerpt": "Welcome to the \"Deep Dive\" series! In this comprehensive exploration, we will immerse ourselves in the world of Platform Engineering — a discipline that has rapidly emerged as the next evolution beyond DevOps. As organisations scale their engineering teams and adopt cloud-native…",
+    "feature_image": "/blog/deep-dive-platform-engineering/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-vector-databases",
+    "title": "Deep Dive - Vector Databases and Embeddings",
+    "date": "2025-07-11",
+    "excerpt": "Welcome to the \"Deep Dive\" series! In this comprehensive exploration, we will immerse ourselves in the world of vector databases and embeddings — the foundational technology powering modern AI search, recommendation systems, and Retrieval Augmented Generation (RAG). Whether you a…",
+    "feature_image": "/blog/deep-dive-vector-databases/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-multi-cloud-networking",
+    "title": "Deep Dive - Multi-Cloud Networking",
+    "date": "2025-07-09",
+    "excerpt": "Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of multi-cloud networking, unravelling its inner workings to shed light on one of the most complex challenges facing modern organisations. Whether you're a cloud archi…",
+    "feature_image": "/blog/deep-dive-multi-cloud-networking/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-mlops",
+    "title": "Deep Dive - MLOps",
+    "date": "2025-07-07",
+    "excerpt": "Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of MLOps (Machine Learning Operations), unravelling its inner workings to shed light on the discipline of operationalising machine learning at scale. Whether you are a…",
+    "feature_image": "/blog/deep-dive-mlops/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-kubernetes-cost-optimisation",
+    "title": "Deep Dive - Kubernetes Cost Optimisation",
+    "date": "2025-07-05",
+    "excerpt": "Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Kubernetes cost optimisation, unraveling the strategies, tools, and architectural patterns that enable organisations to dramatically reduce their cloud spend withou…",
+    "feature_image": "/blog/deep-dive-kubernetes-cost-optimisation/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-infrastructure-as-code-at-scale",
+    "title": "Deep Dive - Infrastructure as Code at Scale",
+    "date": "2025-07-03",
+    "excerpt": "Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Infrastructure as Code (IaC), unravelling its evolution, tooling, patterns, and the operational challenges that emerge when you move beyond a handful of resources t…",
+    "feature_image": "/blog/deep-dive-infrastructure-as-code-at-scale/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-zero-trust-architecture",
+    "title": "Deep Dive - Zero Trust Architecture",
+    "date": "2025-07-01",
+    "excerpt": "Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Zero Trust Architecture (ZTA), unravelling its core principles, technical components, and real-world implementation across major cloud providers. Whether you are a…",
+    "feature_image": "/blog/deep-dive-zero-trust-architecture/feature-image.png"
   },
   {
     "slug": "seizing-the-future-an-eager-approach-to-digital-identity-migration-strategies",

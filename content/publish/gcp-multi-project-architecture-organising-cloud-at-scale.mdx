@@ -1,0 +1,344 @@
+---
+title: "GCP Multi-Project Architecture - Organising Cloud at Scale"
+date: "2026-03-09"
+slug: "gcp-multi-project-architecture-organising-cloud-at-scale"
+status: "publish"
+feature_image: "/blog/gcp-multi-project-architecture-organising-cloud-at-scale/feature-image.png"
+tags: ["GCP", "Cloud", "Architecture", "Multi-Project", "Security", "Governance", "Organisation Policies", "Identity", "Robert Leggett"]
+
+meta:
+  title: "GCP Multi-Project Architecture - Organising Cloud at Scale | Robert Leggett"
+  description: "A practical guide to designing GCP multi-project architectures using folders, organisation policies, centralised logging, and identity federation for enterprise-scale cloud environments."
+  keywords: ["GCP multi-project", "Google Cloud", "cloud architecture", "GCP folders", "organisation policies", "cloud governance", "GCP identity", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/gcp-multi-project-architecture-organising-cloud-at-scale"
+  image: "https://robertleggett.com.au/blog/gcp-multi-project-architecture-organising-cloud-at-scale/feature-image.png"
+
+og:
+  type: "article"
+  title: "GCP Multi-Project Architecture - Organising Cloud at Scale"
+  description: "A practical guide to designing GCP multi-project architectures using folders, organisation policies, centralised logging, and identity federation for enterprise-scale cloud environments."
+  image: "https://robertleggett.com.au/blog/gcp-multi-project-architecture-organising-cloud-at-scale/feature-image.png"
+  url: "https://robertleggett.com.au/blog/gcp-multi-project-architecture-organising-cloud-at-scale"
+
+twitter:
+  card: "summary_large_image"
+  title: "GCP Multi-Project Architecture - Organising Cloud at Scale"
+  description: "A practical guide to designing GCP multi-project architectures using folders, organisation policies, centralised logging, and identity federation for enterprise-scale cloud environments."
+  image: "https://robertleggett.com.au/blog/gcp-multi-project-architecture-organising-cloud-at-scale/feature-image.png"
+---
+
+It feels like every conversation I have about cloud architecture eventually arrives at the same fundamental question — how do you organise things at scale? Whether you are managing ten projects or ten thousand, the answer is never "just create another project and figure it out later." If you have worked in a large enterprise that adopted Google Cloud Platform without a clear organisational strategy from the start, you have experienced the pain that comes from growing organically without guardrails.
+
+For those who know me, you will know that I have spent considerable time working with GCP in enterprise environments where the scale of operations demanded a rigorous approach to project and folder architecture. What I have learned is that GCP's resource hierarchy is incredibly powerful when used well, but it can become a tangled mess remarkably quickly when it is not. The hierarchy is your governance framework — folders are not just for tidiness, they are the enforcement points for policies, permissions, and operational boundaries.
+
+In this article, we will walk through the architecture pattern of designing a GCP multi-project model using the full depth of GCP's resource hierarchy. We will cover the folder structure, naming conventions, baseline capabilities, identity federation, organisation policies, and the anti-patterns that trip organisations up. Join us as we explore what it takes to organise cloud at scale.
+
+---
+
+## Before you start
+
+About this post:
+
+*   10 – 16-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   An understanding of GCP's resource hierarchy and how to leverage it for governance
+*   A reference architecture for multi-project design using folders and organisation policies
+*   Knowledge of baseline security, logging, and networking controls deployed per project
+*   Clarity on identity federation with Google Workspace and enterprise identity providers
+*   Practical guidance on naming conventions and anti-patterns to avoid
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## The problem with a single project
+
+Just as with AWS accounts, the temptation in GCP is to keep things simple by putting everything into a single project or a small number of shared projects. The reasoning sounds sensible — fewer projects means less management overhead, simpler billing, and less to keep track of. In practice, this approach creates a set of compounding problems that become increasingly painful as the organisation grows.
+
+**Permission sprawl** is the first casualty. GCP's **Cloud IAM** is powerful, but when multiple teams and products share a project, the number of IAM bindings grows rapidly. You end up granting broader permissions than necessary because fine-grained separation within a single project is difficult to maintain. Service accounts proliferate, and nobody is quite sure which ones are still in use.
+
+**Environment separation** disappears. Development, staging, and production resources coexist in the same project, which means a misconfiguration in a development workload can impact production. There is no hard boundary between them — just naming conventions and hope.
+
+**Quota limitations** are shared across the project. GCP enforces quotas at the project level for most services, so one team's workload can consume the available quota and starve another team's workload. Requesting quota increases becomes a shared concern rather than an isolated one.
+
+**Cost attribution** is unreliable. Labels help, but they require discipline to apply consistently, and not all GCP services support labels on all resource types. When the finance team asks for a breakdown by product, the answer is often an approximation at best.
+
+**Organisation policies** cannot be leveraged effectively. GCP's organisation policy service allows you to enforce constraints at the organisation, folder, or project level. If everything is in one project, you lose the ability to apply different policies to different environments or products.
+
+The multi-project model addresses all of these problems by using GCP's resource hierarchy as the primary governance mechanism.
+
+---
+
+## The GCP resource hierarchy
+
+GCP's resource hierarchy is the backbone of its governance model. Understanding it is essential before designing a multi-project architecture.
+
+```
+Organisation (linked to Google Workspace domain)
+│
+├── Folder (logical grouping)
+│   ├── Folder (nested up to 10 levels)
+│   │   ├── Project (resource container)
+│   │   │   └── Resources (VMs, buckets, etc.)
+│   │   └── Project
+│   └── Folder
+│       └── Project
+│
+└── Folder
+    └── Project
+```
+
+The **Organisation** is the root node, linked to your **Google Workspace** domain. It is the top-level container for all resources and the highest point at which you can apply IAM policies and organisation policies.
+
+**Folders** provide logical grouping within the organisation. They can be nested up to ten levels deep and serve as the primary mechanism for applying policies and permissions to groups of projects. Folders are where governance lives.
+
+**Projects** are the fundamental resource containers in GCP. Every resource — a Compute Engine instance, a Cloud Storage bucket, a BigQuery dataset — belongs to exactly one project. Projects are the billing unit, the quota boundary, and the primary scope for IAM policies.
+
+**Resources** are the actual cloud services and infrastructure running within projects.
+
+The key insight is that **IAM policies and organisation policies inherit downward** through the hierarchy. A policy applied at the organisation level applies to every folder and project beneath it. A policy applied at a folder level applies to every project within that folder. This inheritance model is what makes the folder structure so powerful — it allows you to apply different governance rules to different parts of your organisation without managing them project by project.
+
+---
+
+## The dual organisation approach
+
+One pattern I have seen work well in large enterprises is the **dual organisation approach**. Rather than a single GCP organisation, you maintain two:
+
+**Primary Organisation** — This is your main organisation where all production and nonproduction workloads live. It contains your standard folder hierarchy with proper governance, policies, and controls. This organisation also hosts any **Proof of Concept (PoC)** projects that require access to production-grade data or integrations.
+
+**Sandpit Organisation** — This is a separate, isolated organisation used for:
+
+*   **Technical reviews and evaluations** — Testing new GCP services or third-party integrations without risk to the primary organisation
+*   **Organisation-wide change testing** — Validating changes to organisation policies, folder structures, or IAM configurations before applying them to the primary organisation
+*   **Training and experimentation** — Providing a safe space for engineers to learn and experiment without governance constraints
+
+The Sandpit Organisation has relaxed policies and aggressive cost controls (budget alerts, auto-shutdown of idle resources). It is intentionally separate from the primary organisation to ensure that experimentation cannot accidentally affect production workloads or governance controls.
+
+---
+
+## Folder structure design
+
+The folder structure within the primary organisation is where the architecture comes together. A well-designed folder hierarchy balances governance needs with operational flexibility. Here is a reference structure:
+
+```
+Organisation
+│
+├── product-development/
+│   ├── nonprod/
+│   │   ├── dev/
+│   │   │   ├── entitlements-dev
+│   │   │   ├── payments-dev
+│   │   │   └── notifications-dev
+│   │   ├── test/
+│   │   │   ├── entitlements-test
+│   │   │   ├── payments-test
+│   │   │   └── notifications-test
+│   │   └── staging/
+│   │       ├── entitlements-staging
+│   │       ├── payments-staging
+│   │       └── notifications-staging
+│   └── prod/
+│       ├── entitlements-prod
+│       ├── payments-prod
+│       └── notifications-prod
+│
+├── business-intelligence/
+│   ├── nonprod/
+│   │   └── analytics-dev
+│   └── prod/
+│       └── analytics-prod
+│
+├── infrastructure/
+│   ├── networking-prod
+│   ├── shared-services-prod
+│   └── dns-prod
+│
+├── cicd/
+│   ├── build-nonprod
+│   └── build-prod
+│
+├── security/
+│   ├── logging-prod
+│   ├── security-tooling-prod
+│   └── audit-prod
+│
+└── poc/
+    └── poc-projects (with production data access)
+```
+
+The hierarchy follows a consistent pattern:
+
+*   **Segmentation folders** at the top level group projects by business domain — product development, business intelligence, infrastructure, CI/CD, and security
+*   **Foundation folders** (infrastructure, CI/CD, security) contain the shared platform capabilities that support all other workloads
+*   **Environment folders** (nonprod/prod) separate workloads by lifecycle stage, allowing different organisation policies and IAM bindings for each
+*   **Team or product folders** within environment folders group related projects together
+
+This structure allows you to:
+
+*   Apply **strict organisation policies** to the prod folder (e.g., restrict regions, enforce encryption) while allowing more flexibility in nonprod
+*   Grant **IAM permissions** at the folder level so that a team gets access to all of their projects without individual project-level bindings
+*   Enforce **budget controls** at the folder level
+*   Apply **labels** consistently within a folder for cost reporting
+
+---
+
+## Naming conventions
+
+Consistent naming conventions are essential when managing hundreds or thousands of projects. A naming convention should be deterministic — given the inputs, you should be able to derive the project name without looking it up.
+
+**Folder naming** follows the logical grouping: `{logical-grouping}`, for example `product-development`, `business-intelligence`, `nonprod`, `prod`.
+
+**Project naming** follows a structured pattern: `{prefix}-{service_group}-{region}-{env_type}-{index}`
+
+For example:
+
+*   `acme-entitlements-global-prod-01` — The first production entitlements project for the Acme organisation, globally scoped
+*   `acme-payments-au-dev-01` — The first development payments project in the Australian region
+*   `acme-analytics-global-nonprod-01` — The first nonprod analytics project
+
+The components are:
+
+*   **prefix** — A short organisational identifier (e.g., your company abbreviation)
+*   **service_group** — The product or service name
+*   **region** — Geographic scope (e.g., `au`, `global`, `us`)
+*   **env_type** — Environment type (`dev`, `test`, `staging`, `prod`)
+*   **index** — A numeric index to allow multiple projects for the same service/environment combination
+
+This convention makes it immediately clear what a project contains, who owns it, and what environment it belongs to — without needing to look up a registry.
+
+---
+
+## Baseline capabilities per project
+
+Every project provisioned into the organisation receives a standardised baseline that ensures security, observability, and governance are consistent from day one. This baseline is deployed via **Infrastructure as Code** (typically Terraform) and managed centrally by the platform team.
+
+**Cloud IAM policies** are the foundation. Each project receives IAM bindings that grant access based on the team's identity provider group membership. Permissions follow the principle of **least privilege** — developers get the minimum permissions required for the services enabled in the project. Service accounts are created with tightly scoped roles and short-lived credentials where possible.
+
+**API enablement** is controlled via a **whitelist** approach. Only approved GCP APIs are enabled in each project. This prevents teams from using unapproved services and reduces the attack surface. The list of approved APIs is determined by the platform team and varies by project type — a data analytics project will have BigQuery and Dataflow enabled, while a web application project will have Cloud Run and Cloud SQL.
+
+**Organisation Policies** are applied at the lowest appropriate level — typically the project level for workload-specific constraints, and the folder level for cross-cutting concerns. Common policies include:
+
+*   **Restrict allowed regions** — Ensure resources are only created in approved regions (e.g., `australia-southeast1` for data sovereignty requirements)
+*   **Restrict VM external IP access** — Prevent Compute Engine instances from having public IP addresses
+*   **Restrict resource sharing** — Control which projects can share resources via Shared VPC or cross-project access
+*   **Enforce uniform bucket-level access** — Ensure Cloud Storage buckets use IAM-only access control
+*   **Disable service account key creation** — Prevent long-lived service account keys, forcing the use of workload identity federation
+
+**Project labels** are mandatory. Every project must have labels for cost centre, product, environment, owner, and criticality. These labels flow through to billing exports, enabling accurate cost attribution and reporting.
+
+**Centralised logging** ensures that audit and operational data flows to a central location. **Cloud Audit Logs** (Admin Activity, Data Access, System Event) are routed to a centralised **Cloud Storage bucket** in the security logging project. From there, logs are ingested into a **SIEM** for security analysis and alerting. **Cloud Logging** sinks are configured at the organisation level to capture logs from all projects automatically.
+
+**VPC configuration** is provisioned as part of the baseline for projects that require networking:
+
+*   A **VPC** with private subnets across multiple zones in the approved region
+*   **Private Google Access** enabled to allow resources to reach Google APIs without public IP addresses
+*   **VPC flow logs** enabled and exported to the centralised logging project
+*   Connectivity via **Shared VPC** or **VPC peering** to the networking project for on-premises access
+*   **Cloud NAT** for outbound internet access from private subnets
+*   **Firewall rules** following a deny-all default with explicit allow rules for required traffic
+
+---
+
+## Identity and access management
+
+Identity in GCP is fundamentally different from AWS. Where AWS uses **IAM roles** that users assume via federation, GCP uses **Google Workspace identities** (or Cloud Identity identities) directly, with permissions granted via **IAM bindings** on resources.
+
+The typical enterprise pattern is:
+
+1.  **Google Workspace** is federated to the enterprise identity provider (e.g., **Microsoft Entra ID**, formerly Azure AD) via SAML or OIDC
+2.  Users authenticate to the enterprise IdP and receive a Google Workspace session
+3.  **IAM permissions** are granted to **Google Groups** rather than individual users
+4.  Group membership is managed in the enterprise IdP and synchronised to Google Workspace via **Google Cloud Directory Sync** or **SCIM provisioning**
+5.  Users access GCP resources based on their group membership — for example, a user in the `gcp-entitlements-prod-viewer` group gets Viewer access to the entitlements production project
+
+This approach has several advantages:
+
+*   **No AWS-style role assumption** — Users access resources directly via their Google identity, which simplifies the access model
+*   **Group-based access** — All permissions are managed via group membership, making it easy to onboard and offboard users
+*   **Least privilege per project** — Permissions are scoped to individual projects based on which APIs are enabled, so a viewer in a BigQuery-only project sees very different resources than a viewer in a Compute Engine project
+*   **Audit trail** — Every action is logged against the user's Google identity in Cloud Audit Logs
+
+For **service-to-service authentication**, GCP's **Workload Identity Federation** allows workloads running outside GCP (e.g., in CI/CD pipelines) to authenticate without long-lived service account keys. For workloads running within GCP, **attached service accounts** with tightly scoped IAM roles are the standard pattern.
+
+---
+
+## Organisation policies in depth
+
+Organisation policies are one of GCP's most powerful governance mechanisms, and they deserve special attention. Unlike IAM (which controls **who** can do **what**), organisation policies control **what is allowed** regardless of who is doing it. Even an organisation administrator cannot override an organisation policy — it is a hard constraint.
+
+Policies are defined as **constraints** and applied at the organisation, folder, or project level. They inherit downward through the hierarchy, with lower-level policies taking precedence where conflicts exist.
+
+The recommended approach is to apply policies at the **lowest level possible**. This gives you maximum flexibility — you can apply strict constraints to production folders while allowing broader capabilities in nonproduction or sandbox environments.
+
+Common organisation policy constraints include:
+
+*   `constraints/compute.restrictLoadBalancerCreationForTypes` — Restrict which load balancer types can be created
+*   `constraints/compute.vmExternalIpAccess` — Deny external IP addresses on VM instances
+*   `constraints/gcp.resourceLocations` — Restrict resource creation to approved regions
+*   `constraints/iam.disableServiceAccountKeyCreation` — Prevent creation of long-lived service account keys
+*   `constraints/storage.uniformBucketLevelAccess` — Enforce IAM-only access on Cloud Storage buckets
+*   `constraints/sql.restrictPublicIp` — Prevent Cloud SQL instances from having public IP addresses
+*   `constraints/compute.requireShieldedVm` — Require Shielded VM features on all Compute Engine instances
+
+The power of organisation policies is that they **cannot be circumvented** by users with elevated IAM permissions. This makes them the strongest governance tool in GCP and the primary mechanism for enforcing compliance at scale.
+
+---
+
+## The anti-pattern — everything in one project
+
+The most damaging anti-pattern in GCP is putting **all products and environments into a single project**. This is the GCP equivalent of the shared AWS account problem, and it creates the same cascade of issues:
+
+*   **Permission sprawl** — IAM bindings accumulate and become overly permissive
+*   **No environment isolation** — Development and production resources coexist, creating blast radius risk
+*   **Quota contention** — All workloads compete for the same project-level quotas
+*   **Cost attribution failure** — Labels are the only mechanism and they are inconsistently applied
+*   **Organisation policy limitations** — You cannot apply different policies to different workloads within the same project
+*   **Audit complexity** — Demonstrating isolation to auditors is nearly impossible when everything is in one project
+
+A slightly less severe but still problematic anti-pattern is **one project per environment** (e.g., one dev project for all products, one prod project for all products). This provides environment separation but still suffers from permission sprawl, quota contention, and cost attribution issues within each environment.
+
+The correct approach is **one project per product per environment**, organised within a well-designed folder hierarchy. Projects are free to create, and the isolation they provide is the foundation of good governance in GCP.
+
+---
+
+## Benefits of the multi-project model
+
+The benefits of a well-implemented multi-project architecture are substantial and compound over time:
+
+*   **Environment isolation** — Development, staging, and production workloads are hard-separated at the project level, eliminating cross-environment blast radius
+*   **Cleaner permissions** — IAM bindings are scoped to individual projects, making them simpler, easier to audit, and aligned with least privilege
+*   **Accurate cost attribution** — Each project maps to a product and environment, and project labels provide clean cost reporting without relying on resource-level labelling
+*   **Organisation policy enforcement** — Different policies can be applied to different parts of the folder hierarchy, enabling tailored governance for production versus nonproduction environments
+*   **Central logging and security** — Audit logs from all projects flow to a central location, providing a unified view for security monitoring and incident response
+*   **Quota isolation** — Each project has its own service quotas, eliminating contention between products
+*   **Scalable governance** — As the organisation grows and new products are added, the folder structure and baseline deployment scale naturally without rearchitecting the foundation
+
+---
+
+## Conclusion
+
+*   Single-project or shared-project models create **permission sprawl**, **blast radius risk**, **quota contention**, and **cost attribution challenges** that worsen at scale
+*   GCP's resource hierarchy — **Organisation, Folders, Projects, Resources** — is the primary governance mechanism and should be designed deliberately from day one
+*   A **dual organisation approach** separates production workloads from experimentation and organisation-wide testing
+*   The folder structure should reflect **business domains**, **environments**, and **foundation services** with consistent naming conventions
+*   Every project receives a **standardised baseline** covering IAM policies, API enablement, organisation policies, labels, centralised logging, and VPC configuration
+*   **Identity federation** through Google Workspace and the enterprise IdP provides group-based, least-privilege access without long-lived credentials
+*   **Organisation policies** are the strongest governance tool in GCP — they enforce hard constraints that cannot be overridden by any user
+*   The most common anti-pattern is **all products in one project** — resist the temptation, projects are free and the isolation they provide is foundational to good governance
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

@@ -52,7 +52,7 @@ const COMMANDS: Record<string, (args: string[]) => string[]> = {
 
   whoami: () => [
     "Robert Leggett",
-    "Senior Engineering Manager & Cloud Architect",
+    "Technology Leader & Cloud Architect",
     "Melbourne, Australia",
   ],
 

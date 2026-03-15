@@ -1,0 +1,583 @@
+---
+title: "Deep Dive - Platform Engineering"
+date: "2025-07-13"
+slug: "deep-dive-platform-engineering"
+status: "publish"
+feature_image: "/blog/deep-dive-platform-engineering/feature-image.png"
+tags: ["Platform Engineering", "Internal Developer Platform", "Backstage", "DevOps", "Developer Experience", "GitOps", "ArgoCD", "Crossplane", "Self-Service Infrastructure", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Platform Engineering | Robert Leggett"
+  description: "A comprehensive deep dive into platform engineering — building internal developer platforms, golden paths, self-service infrastructure, and improving developer experience with Backstage, Crossplane, and GitOps."
+  keywords: ["Platform Engineering", "Internal Developer Platform", "Backstage", "Golden Paths", "Developer Experience", "DevOps", "GitOps", "ArgoCD", "Crossplane", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-platform-engineering"
+  image: "https://robertleggett.com.au/blog/deep-dive-platform-engineering/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Platform Engineering"
+  description: "A comprehensive deep dive into platform engineering — building internal developer platforms, golden paths, and self-service infrastructure with Backstage, Crossplane, and GitOps."
+  image: "https://robertleggett.com.au/blog/deep-dive-platform-engineering/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-platform-engineering"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Platform Engineering"
+  description: "A comprehensive deep dive into platform engineering — building internal developer platforms, golden paths, and self-service infrastructure with Backstage, Crossplane, and GitOps."
+  image: "https://robertleggett.com.au/blog/deep-dive-platform-engineering/feature-image.png"
+---
+
+Welcome to the "Deep Dive" series! In this comprehensive exploration, we will immerse ourselves in the world of Platform Engineering — a discipline that has rapidly emerged as the next evolution beyond DevOps. As organisations scale their engineering teams and adopt cloud-native technologies, the cognitive load placed on individual developers has grown to an unsustainable level. Platform engineering addresses this head-on by treating infrastructure and developer tooling as a product, building Internal Developer Platforms that empower teams to ship software faster without sacrificing reliability. Whether you are a seasoned infrastructure engineer, a software developer looking to understand the platform your organisation is building, or an engineering leader evaluating your platform strategy, our goal is to provide clear and thorough explanations that will deepen your understanding of every facet of platform engineering. Join us on this enlightening journey as we explore golden paths, self-service infrastructure, developer portals, and the tools and practices that are reshaping how modern software is built and delivered. Let's dive in and demystify the world of platform engineering together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of platform engineering, Internal Developer Platforms, golden paths, and the tooling ecosystem including Backstage, Crossplane, and ArgoCD
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is Platform Engineering?
+
+Platform engineering is the discipline of designing and building self-service toolchains and workflows that enable software engineering organisations to ship software quickly, reliably, and at scale. At its core, it is about constructing an Internal Developer Platform (IDP) — a curated set of tools, services, and automated workflows that abstract away the underlying infrastructure complexity and present developers with a simplified, self-service interface.
+
+The term gained significant traction from around 2022 onwards, but the principles behind it are not entirely new. For years, organisations have struggled with a fundamental tension: as cloud-native ecosystems grew in power, they also grew in complexity. Kubernetes, service meshes, observability stacks, CI/CD pipelines, infrastructure-as-code tools, secret management systems — the list of technologies a developer was expected to understand ballooned dramatically.
+
+DevOps, as a cultural movement, encouraged developers to own the full lifecycle of their software — "you build it, you run it." While this philosophy drove collaboration between development and operations teams, it also inadvertently pushed an enormous cognitive load onto developers. A backend engineer writing business logic suddenly also needed to understand Helm charts, Terraform modules, Kubernetes networking policies, and incident response runbooks. The intent was empowerment, but the outcome was often overwhelm.
+
+Platform engineering emerged as the pragmatic response to this problem. Rather than expecting every developer to become an infrastructure expert, platform engineering proposes that a dedicated platform team builds and maintains an Internal Developer Platform — a product — that other engineering teams consume as customers. The platform team operates with a product mindset, gathering requirements from their internal users, iterating on features, measuring adoption and satisfaction, and continuously improving the developer experience.
+
+The key insight is that a well-designed platform does not remove autonomy from developers. Instead, it provides sensible defaults and golden paths that make the right thing the easy thing. Developers retain the ability to customise and override when necessary, but the vast majority of their day-to-day workflows — scaffolding a new service, provisioning a database, deploying to production, viewing logs and metrics — are streamlined through the platform.
+
+An Internal Developer Platform typically sits as an abstraction layer between the developer and the underlying infrastructure and tooling. It provides a consistent, API-driven interface that orchestrates everything from code repositories and CI/CD pipelines to cloud resources and observability dashboards. The developer interacts with the platform, and the platform handles the rest.
+
+---
+
+## Platform Engineering vs DevOps vs SRE
+
+One of the most common questions when discussing platform engineering is how it relates to DevOps and Site Reliability Engineering (SRE). These three disciplines are deeply complementary, but they address different concerns and operate at different levels of abstraction.
+
+![Platform engineering vs DevOps vs SRE comparison](/blog/deep-dive-platform-engineering/inline-1.png)
+
+Platform Engineering vs DevOps vs SRE Comparison
+
+1.  **DevOps** is fundamentally a cultural movement and a set of practices. It emerged to break down the silos between development and operations teams. DevOps promotes shared ownership, continuous integration and continuous delivery (CI/CD), infrastructure as code, monitoring, and rapid feedback loops. It is not a specific role or tool, but rather a philosophy that encourages collaboration and automation across the software delivery lifecycle. The goal is to reduce the time between committing a change and that change running reliably in production.
+
+2.  **Site Reliability Engineering (SRE)** was pioneered at Google and applies software engineering principles to operations problems. SRE introduces rigorous concepts such as Service Level Indicators (SLIs), Service Level Objectives (SLOs), and Service Level Agreements (SLAs). SRE teams define error budgets — the acceptable amount of unreliability — and use those budgets to balance the velocity of feature delivery against the stability of production systems. When the error budget is exhausted, the team shifts focus from feature work to reliability improvements. SRE is deeply concerned with toil reduction, incident management, capacity planning, and the long-term operational health of systems.
+
+3.  **Platform Engineering** takes the outputs of DevOps practices and SRE principles and packages them into a self-service platform product. Where DevOps says "automate everything and share ownership," and SRE says "define reliability targets and engineer towards them," platform engineering says "build an internal product that makes it easy for developers to do all of these things without needing to understand every underlying detail." The platform team abstracts the complexity, provides guardrails, and ensures that the golden path leads developers towards well-architected, observable, and reliable systems by default.
+
+It is critical to understand that these three disciplines do not replace one another. DevOps culture is the foundation upon which platform engineering is built. SRE practices inform the reliability standards and operational guardrails that the platform enforces. Platform engineering is the delivery mechanism that makes DevOps and SRE principles accessible and scalable across the entire organisation.
+
+In practice, a mature engineering organisation might have a DevOps culture embedded across all teams, an SRE function that defines and monitors reliability standards, and a platform engineering team that builds and maintains the Internal Developer Platform through which teams interact with infrastructure, CI/CD, and observability tooling.
+
+---
+
+## Internal Developer Platform (IDP) Architecture
+
+An Internal Developer Platform is not a single tool or product you can purchase off the shelf. It is a carefully composed set of integrated tools, APIs, and workflows that together provide a cohesive self-service experience for developers. The architecture of an IDP can be understood as a series of layers, each serving a distinct purpose.
+
+![Internal Developer Platform architecture layers](/blog/deep-dive-platform-engineering/inline-2.png)
+
+Internal Developer Platform Architecture Layers
+
+1.  **Developer Portal (UI Layer)** — This is the primary interface through which developers interact with the platform. The developer portal provides a unified view of all services, documentation, APIs, and platform capabilities. It serves as the service catalogue, the documentation hub, and the entry point for self-service workflows such as creating a new service, provisioning infrastructure, or viewing the health of a running system. Backstage by Spotify is the most widely adopted open-source developer portal framework. The portal reduces context-switching by bringing together information that would otherwise be scattered across dozens of different tools and dashboards.
+
+2.  **Platform APIs and Orchestration** — Beneath the portal sits the API and orchestration layer. Every capability the platform offers — from scaffolding a service to provisioning a database to triggering a deployment — is exposed through well-defined APIs. This layer handles request validation, policy enforcement, workflow orchestration, and integration with downstream systems. It ensures that every action taken through the portal (or via CLI or API directly) follows the organisation's standards and compliance requirements. Common patterns include custom Kubernetes operators, purpose-built orchestration services, and workflow engines like Argo Workflows or Temporal.
+
+3.  **Integration and Delivery (CI/CD)** — The CI/CD layer handles the build, test, and deployment pipeline for every service managed by the platform. This includes source code integration with version control systems (GitHub, GitLab, Bitbucket), automated testing pipelines, container image building and scanning, artifact management, and deployment orchestration. Tools commonly found in this layer include GitHub Actions, GitLab CI, Jenkins, Tekton, and ArgoCD for GitOps-based deployments. The platform team typically provides standardised pipeline templates that teams can adopt, ensuring consistent build and deployment practices across the organisation.
+
+4.  **Infrastructure Management** — This layer is responsible for provisioning and managing the underlying cloud infrastructure. It encompasses compute resources (Kubernetes clusters, virtual machines, serverless functions), data stores (relational databases, NoSQL databases, message queues, object storage), networking (VPCs, load balancers, DNS, service meshes), and security (IAM roles, secrets management, network policies). Tools in this layer include Terraform, Pulumi, Crossplane, AWS CDK, and cloud-provider-specific APIs. Crossplane is particularly notable in the platform engineering context because it extends the Kubernetes API to manage external cloud resources, allowing infrastructure to be provisioned using the same declarative, GitOps-driven workflows as application deployments.
+
+5.  **Monitoring and Observability** — The observability layer provides developers with visibility into the health, performance, and behaviour of their services. This includes metrics collection and dashboarding (Prometheus, Grafana), distributed tracing (Jaeger, Tempo), log aggregation (Loki, Elasticsearch), alerting (PagerDuty, Opsgenie), and synthetic monitoring. A well-built platform pre-configures observability for every service deployed through the golden path, so that developers get dashboards, alerts, and tracing out of the box without needing to manually instrument everything.
+
+### The Five Core Capabilities
+
+Beyond the layered architecture, a mature Internal Developer Platform typically provides five core capabilities that span across the layers:
+
+*   **Application Scaffolding** — The ability to create a new service or application from a template with all the necessary boilerplate: repository, CI/CD pipeline, Kubernetes manifests, observability configuration, and catalogue registration. This is often handled through software templates in Backstage.
+
+*   **Infrastructure Provisioning** — Self-service provisioning of cloud resources such as databases, caches, message queues, and storage buckets. Developers request what they need through the portal or API, and the platform handles provisioning, configuration, and access management.
+
+*   **Environment Management** — The ability to create, manage, and tear down deployment environments (development, staging, production, ephemeral preview environments). This includes managing environment-specific configuration, secrets, and access controls.
+
+*   **Deployment Management** — Streamlined deployment workflows including progressive delivery (canary deployments, blue-green deployments, feature flags), rollback capabilities, and deployment status tracking. GitOps with ArgoCD is a popular pattern for managing deployments declaratively.
+
+*   **Role-Based Access Control (RBAC)** — Fine-grained access control that ensures developers can only access and modify the resources and environments they are authorised to use. This integrates with the organisation's identity provider and enforces the principle of least privilege across all platform capabilities.
+
+---
+
+## Golden Paths and Paved Roads
+
+The concept of golden paths (also referred to as paved roads) is central to platform engineering. A golden path is a well-supported, opinionated, end-to-end workflow for accomplishing a common development task. It represents the recommended way to do something within your organisation — the path that has been tested, optimised, and supported by the platform team.
+
+![Golden path flow](/blog/deep-dive-platform-engineering/inline-3.png)
+
+Golden Path Flow — Developer Request → Template → Provision → Deploy → Monitor
+
+1.  **Developer Request** — A developer initiates a workflow through the developer portal or CLI. For example, they want to create a new microservice for their team. They fill in a form specifying the service name, owning team, programming language, and target environment.
+
+2.  **Template Execution** — The platform executes a software template that scaffolds the new service. This generates a Git repository with the project skeleton, including source code boilerplate, a Dockerfile, Kubernetes manifests, a CI/CD pipeline definition, a `catalog-info.yaml` for Backstage registration, observability configuration (Prometheus metrics, structured logging), and any other organisational standards.
+
+3.  **Infrastructure Provisioning** — Based on the template configuration, the platform provisions any required infrastructure resources. This might include a PostgreSQL database, a Redis cache, an S3 bucket, or IAM roles. Crossplane or Terraform handles the actual provisioning, and the platform tracks the lifecycle of these resources.
+
+4.  **Deployment** — The CI/CD pipeline is automatically triggered when code is pushed to the new repository. The pipeline builds the container image, runs tests, scans for vulnerabilities, pushes the image to a registry, and updates the deployment manifests. ArgoCD detects the manifest changes and synchronises the desired state to the Kubernetes cluster.
+
+5.  **Monitoring and Ongoing Operations** — Once deployed, the service is automatically registered in the observability stack. Grafana dashboards are provisioned, alerting rules are configured based on SLOs, and distributed tracing is enabled. The developer can view the health and performance of their new service directly from the developer portal.
+
+The critical philosophy behind golden paths is that they are **opinionated but not mandated**. A golden path represents the easiest and most supported way to accomplish a task, but it does not prevent a team from taking a different approach if they have a valid reason. The goal is to reduce cognitive load by making the default choice the right choice. When a developer follows the golden path, they inherit all of the security, compliance, and operational best practices that the platform team has baked in.
+
+This approach achieves **standardisation without rigidity**. Teams are not forced into a one-size-fits-all mould, but the vast majority of use cases are well served by the golden path, and teams that deviate accept the responsibility of maintaining their custom approach.
+
+The net effect is a dramatic reduction in the time and effort required to go from an idea to a running, observable, production-ready service. What might have previously taken days or weeks of provisioning, configuration, and pipeline setup can now be accomplished in minutes through the golden path.
+
+---
+
+## Backstage by Spotify
+
+Backstage is an open-source developer portal framework originally created by Spotify and donated to the Cloud Native Computing Foundation (CNCF), where it achieved Incubating project status. It has become the de facto standard for building developer portals and is the most widely adopted frontend for Internal Developer Platforms.
+
+![Backstage architecture](/blog/deep-dive-platform-engineering/inline-4.png)
+
+Backstage Architecture — Frontend → Backend → Plugins → Integrations
+
+1.  **Frontend** — Backstage provides a React-based single-page application that serves as the developer portal UI. It is highly customisable through theming and plugin registration. Organisations can tailor the portal to their brand and add custom pages and widgets.
+
+2.  **Backend** — The Backstage backend is a Node.js application that handles API requests, plugin backends, authentication, and integration with external systems. It connects to a PostgreSQL database for persistent storage.
+
+3.  **Plugins** — Backstage's plugin architecture is its greatest strength. Everything in Backstage is a plugin — the software catalogue, software templates, TechDocs, Kubernetes integration, CI/CD dashboards, cost management, and more. Organisations can build custom plugins to integrate with their specific internal tools and systems. The plugin ecosystem is extensive and growing rapidly.
+
+4.  **Integrations** — Backstage integrates with a wide range of external systems including GitHub, GitLab, Bitbucket, Jenkins, ArgoCD, Kubernetes, PagerDuty, Grafana, SonarQube, Snyk, and many others. These integrations surface relevant information from each tool directly within the developer portal.
+
+### Software Catalog
+
+The Software Catalog is the heart of Backstage. It provides a centralised inventory of all software components, APIs, resources, systems, and teams within the organisation. Every entity in the catalogue is defined by a `catalog-info.yaml` file that lives alongside the source code in the repository. This ensures that the catalogue stays in sync with the actual state of the codebase.
+
+The catalogue supports a rich entity model including Components (services, libraries, websites), APIs (REST, gRPC, GraphQL), Resources (databases, S3 buckets, Kubernetes clusters), Systems (logical groupings of components), Domains (business domains), Groups (teams), and Users.
+
+Here is an example of a `catalog-info.yaml` for a payment service:
+
+```yaml
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: payment-service
+  description: Handles payment processing and billing
+  annotations:
+    github.com/project-slug: org/payment-service
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - java
+    - spring-boot
+    - payments
+  links:
+    - url: https://grafana.internal/d/payment-service
+      title: Grafana Dashboard
+      icon: dashboard
+spec:
+  type: service
+  lifecycle: production
+  owner: team-payments
+  system: billing-platform
+  providesApis:
+    - payment-api
+  consumesApis:
+    - customer-api
+    - notification-api
+  dependsOn:
+    - resource:payments-db
+    - component:auth-service
+```
+
+This descriptor tells Backstage everything it needs to know about the payment service — who owns it, what system it belongs to, which APIs it provides and consumes, what resources it depends on, and how to find its documentation and dashboards. The annotations connect the entity to external systems like GitHub and TechDocs.
+
+### Software Templates
+
+Software Templates are Backstage's mechanism for golden path workflows. They allow the platform team to define parameterised templates that developers can execute through the portal to scaffold new projects, provision infrastructure, or perform any other repeatable task.
+
+A template consists of parameters (the form fields presented to the developer), steps (the actions to execute), and output (the results to display). Here is an example template for creating a new Spring Boot microservice:
+
+```yaml
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: spring-boot-service
+  title: Spring Boot Microservice
+  description: Create a new Spring Boot microservice with CI/CD
+spec:
+  owner: team-platform
+  type: service
+  parameters:
+    - title: Service Details
+      required:
+        - name
+        - owner
+      properties:
+        name:
+          title: Service Name
+          type: string
+          pattern: '^[a-z0-9-]+$'
+        owner:
+          title: Owner Team
+          type: string
+          ui:field: OwnerPicker
+        environment:
+          title: Target Environment
+          type: string
+          enum:
+            - development
+            - staging
+            - production
+  steps:
+    - id: fetch-template
+      name: Fetch Template
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          owner: ${{ parameters.owner }}
+    - id: publish
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        repoUrl: github.com?owner=org&repo=${{ parameters.name }}
+        description: ${{ parameters.name }} microservice
+    - id: register
+      name: Register in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+```
+
+When a developer executes this template, Backstage presents a form where they enter the service name, select the owning team, and choose a target environment. Backstage then fetches the skeleton template, replaces the placeholder values, publishes the generated repository to GitHub, and registers the new service in the catalogue — all in a single automated workflow.
+
+### TechDocs
+
+TechDocs is Backstage's built-in documentation solution. It follows a "docs like code" approach where documentation is written in Markdown, lives alongside the source code in the repository, and is automatically built and published by Backstage. TechDocs uses MkDocs under the hood and generates a searchable, navigable documentation site for every component in the catalogue.
+
+This eliminates the perennial problem of documentation living in a wiki that is disconnected from the codebase and perpetually out of date. When documentation is co-located with code and rendered through the same portal where developers discover and manage services, it is far more likely to be read, maintained, and kept current.
+
+### Key Plugins
+
+The Backstage plugin ecosystem includes several notable capabilities:
+
+*   **Kubernetes Plugin** — Displays the health and status of Kubernetes workloads directly in the component page, including pod status, replica counts, and recent events.
+*   **CI/CD Plugins** — Integrations with GitHub Actions, GitLab CI, Jenkins, and Tekton to display build and deployment status.
+*   **Cost Management** — Plugins that surface cloud cost data per team or per service, enabling cost-aware development.
+*   **Security Scanning** — Integrations with Snyk, SonarQube, and Trivy to surface vulnerability data in the portal.
+*   **API Documentation** — Automatic rendering of OpenAPI, AsyncAPI, and GraphQL schemas with interactive exploration.
+
+---
+
+## Crossplane for Infrastructure Abstraction
+
+Crossplane is an open-source project, also a CNCF Incubating project, that extends the Kubernetes API to provision and manage infrastructure resources across any cloud provider. It transforms your Kubernetes cluster into a universal control plane for infrastructure, allowing teams to define, compose, and consume cloud resources using the same declarative YAML manifests and GitOps workflows they already use for application deployments.
+
+### Why Crossplane Matters for Platform Engineering
+
+Traditional infrastructure-as-code tools like Terraform operate outside the Kubernetes ecosystem. They require separate state management, separate CI/CD pipelines, and separate operational workflows. Crossplane brings infrastructure management into the Kubernetes control loop, meaning infrastructure resources are continuously reconciled against the desired state — just like Kubernetes continuously reconciles pod state.
+
+For platform teams, Crossplane is particularly powerful because it enables the creation of custom abstractions called **Compositions**. A Composition defines how a high-level resource claim (for example, "I need a production-ready PostgreSQL database") maps to a set of lower-level cloud provider resources (an RDS instance, a security group, a subnet group, a parameter group, IAM roles, and so on). The platform team authors the Composition once, and developers consume it through a simplified claim.
+
+### Compositions and Claims
+
+The key architectural concepts in Crossplane are:
+
+*   **Managed Resources** — These are fine-grained representations of individual cloud provider resources (an S3 bucket, an RDS instance, a VPC). They map one-to-one to provider APIs.
+
+*   **Composite Resources (XRs)** — These are custom, higher-level abstractions that the platform team defines. They represent a logical grouping of managed resources. For example, a "CompositeDatabase" might include an RDS instance, a security group, and a secrets entry.
+
+*   **Composite Resource Definitions (XRDs)** — These define the schema (API) for a Composite Resource, specifying what parameters developers can set and what outputs are available.
+
+*   **Compositions** — These define how a Composite Resource maps to a set of managed resources. They contain the templates and patches that translate developer-facing parameters into provider-specific configurations.
+
+*   **Claims** — These are the simplified, namespace-scoped resources that developers actually create. A claim references a Composite Resource and provides the required parameters. The developer never sees the underlying managed resources.
+
+Here is an example Crossplane Composition that provisions an EKS cluster on AWS:
+
+```yaml
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: cluster-aws
+  labels:
+    provider: aws
+    cluster: eks
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.org/v1alpha1
+    kind: CompositeCluster
+  resources:
+    - name: eks-cluster
+      base:
+        apiVersion: eks.aws.crossplane.io/v1beta1
+        kind: Cluster
+        spec:
+          forProvider:
+            region: ap-southeast-2
+            version: "1.28"
+            roleArnSelector:
+              matchControllerRef: true
+      patches:
+        - fromFieldPath: spec.parameters.nodeCount
+          toFieldPath: spec.forProvider.scalingConfig.desiredSize
+    - name: node-group
+      base:
+        apiVersion: eks.aws.crossplane.io/v1beta1
+        kind: NodeGroup
+        spec:
+          forProvider:
+            region: ap-southeast-2
+            instanceTypes:
+              - t3.medium
+            scalingConfig:
+              minSize: 1
+              maxSize: 10
+```
+
+In this Composition, the platform team defines that a `CompositeCluster` with the `aws` provider and `eks` cluster type should result in the creation of an EKS cluster and a node group in the `ap-southeast-2` region. The developer consuming this Composition only needs to submit a claim specifying the desired node count and any other exposed parameters — they do not need to know the details of EKS configuration, IAM roles, or networking.
+
+A developer's claim might look as simple as:
+
+```yaml
+apiVersion: platform.example.org/v1alpha1
+kind: ClusterClaim
+metadata:
+  name: my-team-cluster
+  namespace: team-payments
+spec:
+  parameters:
+    nodeCount: 3
+  compositionSelector:
+    matchLabels:
+      provider: aws
+      cluster: eks
+```
+
+This is the power of Crossplane in a platform engineering context — the platform team encapsulates organisational best practices, security policies, and infrastructure standards into Compositions, and developers consume them through simple, well-documented claims.
+
+---
+
+## GitOps with ArgoCD
+
+GitOps is a set of practices that uses Git as the single source of truth for declarative infrastructure and application configurations. The core principle is straightforward: the desired state of your system is defined in Git, and an automated agent continuously ensures that the actual state of the system matches the desired state.
+
+![GitOps deployment flow](/blog/deep-dive-platform-engineering/inline-5.png)
+
+GitOps Deployment Flow — Git Push → ArgoCD Sync → Kubernetes Apply
+
+1.  **Git Push** — A developer or automated pipeline commits a change to the deployment manifests in a Git repository. This might be an update to a Kubernetes Deployment resource specifying a new container image tag, a change to a ConfigMap, or a modification to resource limits.
+
+2.  **ArgoCD Detection** — ArgoCD continuously monitors the Git repository for changes. When it detects that the desired state in Git differs from the actual state in the Kubernetes cluster, it identifies the drift and prepares a synchronisation operation.
+
+3.  **Synchronisation** — ArgoCD applies the changes from Git to the Kubernetes cluster. It uses `kubectl apply` under the hood but adds sophisticated features such as resource ordering, hook execution (pre-sync, sync, post-sync), health checking, and progressive sync strategies.
+
+4.  **Reconciliation** — After applying the changes, ArgoCD continuously monitors the health and sync status of the application. If the actual state drifts from the desired state (for example, if someone manually modifies a resource in the cluster), ArgoCD can automatically self-heal by reapplying the desired state from Git.
+
+5.  **Feedback** — ArgoCD provides real-time visibility into the synchronisation status, health, and history of every application. This information is surfaced in the ArgoCD UI, through notifications (Slack, email, webhook), and can be integrated into Backstage through plugins.
+
+### ArgoCD Architecture
+
+ArgoCD follows a controller pattern within Kubernetes. It consists of several key components:
+
+*   **API Server** — Exposes the ArgoCD API and serves the web UI. Handles authentication and authorisation.
+*   **Repository Server** — Clones Git repositories and generates Kubernetes manifests from various sources (plain YAML, Helm charts, Kustomize overlays, Jsonnet).
+*   **Application Controller** — Continuously monitors running applications and compares the live state against the desired state defined in Git. Performs synchronisation when drift is detected.
+*   **ApplicationSet Controller** — Enables automated generation of ArgoCD Application resources from templates, supporting patterns like monorepo, multi-cluster, and multi-tenant deployments.
+
+### ArgoCD Application Manifest
+
+Here is an example ArgoCD Application manifest for deploying the payment service:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: payment-service
+  namespace: argocd
+spec:
+  project: billing-platform
+  source:
+    repoURL: https://github.com/org/payment-service-deploy.git
+    targetRevision: main
+    path: overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: payments
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+```
+
+This manifest tells ArgoCD to deploy the payment service from the `overlays/production` path in the deployment repository to the `payments` namespace. The sync policy is configured for automated synchronisation with pruning (removing resources that no longer exist in Git) and self-healing (automatically correcting manual drift). The retry configuration ensures that transient failures do not leave the application in a broken state.
+
+### GitOps Principles
+
+The four core principles of GitOps are:
+
+*   **Declarative** — The entire system, including infrastructure and applications, is described declaratively. YAML manifests, Helm charts, and Kustomize overlays define the desired state.
+
+*   **Versioned and Immutable** — The desired state is stored in Git, providing a complete audit trail of every change, who made it, and when. Git's immutable history ensures that any state can be reproduced.
+
+*   **Pulled Automatically** — Approved changes are automatically applied to the system by the GitOps agent. There are no manual `kubectl apply` commands in production.
+
+*   **Continuously Reconciled** — The GitOps agent continuously observes the actual system state and attempts to reconcile it with the desired state. Drift is detected and corrected automatically.
+
+For platform engineering, GitOps is foundational because it provides a consistent, auditable, and automated mechanism for deploying both applications and infrastructure. When combined with Crossplane, even cloud resources can be managed through the same GitOps workflow.
+
+---
+
+## Developer Experience (DevEx) Metrics
+
+Building an Internal Developer Platform is a significant investment, and like any product, its success must be measured. Platform teams need quantitative and qualitative metrics to understand whether the platform is delivering value, identify areas for improvement, and justify continued investment.
+
+### DORA Metrics
+
+The DORA (DevOps Research and Assessment) metrics are the most widely used quantitative measures of software delivery performance. They were identified through years of research by the DORA team (now part of Google Cloud) and published in the annual State of DevOps reports and the book *Accelerate*.
+
+The four key DORA metrics are:
+
+*   **Deployment Frequency** — How often does the organisation deploy code to production? Elite performers deploy on demand, multiple times per day. A well-functioning platform should increase deployment frequency by reducing the friction and risk of deployments.
+
+*   **Lead Time for Changes** — How long does it take from code commit to code running in production? This measures the efficiency of the entire delivery pipeline. Platform engineering reduces lead time by automating the pipeline and eliminating manual handoffs and approval bottlenecks.
+
+*   **Change Failure Rate** — What percentage of deployments cause a failure in production that requires remediation (rollback, hotfix, or patch)? Golden paths and automated testing reduce change failure rates by ensuring that every deployment follows proven patterns and passes comprehensive checks.
+
+*   **Mean Time to Recovery (MTTR)** — When a failure occurs, how quickly can the organisation restore service? Platforms that provide automated rollback, comprehensive observability, and well-defined incident response workflows significantly reduce MTTR.
+
+### SPACE Framework
+
+The SPACE framework, developed by researchers at Microsoft, GitHub, and the University of Victoria, provides a more holistic view of developer productivity. It argues that no single metric captures productivity and instead proposes five dimensions:
+
+*   **Satisfaction and Well-being** — How satisfied are developers with their tools, workflows, and work environment? This is measured through surveys and directly correlates with retention and performance.
+
+*   **Performance** — What is the outcome of the developer's work? This includes code quality, reliability of the systems they build, and customer impact.
+
+*   **Activity** — What is the volume of work output? This includes metrics like number of pull requests, code reviews, deployments, and documentation updates. Activity metrics must be interpreted carefully — more activity does not necessarily mean more productivity.
+
+*   **Communication and Collaboration** — How effectively do teams communicate and collaborate? This includes review turnaround times, knowledge sharing, and the discoverability of documentation and services through the platform.
+
+*   **Efficiency and Flow** — How efficiently can developers complete their tasks? This measures time spent on productive work versus time lost to tooling issues, waiting, context-switching, and toil.
+
+### Measuring Platform Success
+
+To measure the success of an Internal Developer Platform, teams typically track a combination of:
+
+*   **Adoption Metrics** — Percentage of teams using the platform, number of services registered in the catalogue, number of golden path executions per month.
+*   **Time-to-Productivity** — How long does it take a new developer to ship their first change to production? A good platform should dramatically reduce this onboarding time.
+*   **Self-Service Rate** — What percentage of infrastructure and deployment tasks are completed through self-service versus manual requests or tickets?
+*   **Developer Satisfaction (NPS/CSAT)** — Regular surveys measuring how developers feel about the platform, what pain points remain, and what capabilities they want.
+*   **Toil Reduction** — Measurable decrease in repetitive, manual operational tasks through platform automation.
+
+---
+
+## Platform Team Topology
+
+The organisational structure of platform teams is as important as the technology they build. The Team Topologies model, developed by Matthew Skelton and Manuel Pais, provides a powerful framework for thinking about how platform teams should be structured and how they should interact with the rest of the organisation.
+
+![Platform team topology](/blog/deep-dive-platform-engineering/inline-6.png)
+
+Platform Team Topology — Enabling Team Model
+
+1.  **Platform Team as Enabling Team** — In the Team Topologies model, a platform team operates as an enabling team. Its primary purpose is to reduce the cognitive load on stream-aligned teams (the teams that deliver value to end users) by providing self-service capabilities. The platform team does not build features for customers — it builds capabilities for developers.
+
+2.  **Stream-Aligned Teams as Customers** — Stream-aligned teams are the primary consumers of the platform. They are organised around a flow of business value (a product, a service, a user journey) and are responsible for building, deploying, and operating their software. The platform exists to make these teams more effective by handling the undifferentiated heavy lifting of infrastructure, CI/CD, and observability.
+
+3.  **Interaction Modes** — Team Topologies defines three interaction modes: Collaboration (working closely together for a limited time to discover new patterns), X-as-a-Service (consuming a well-defined capability with minimal interaction), and Facilitating (helping a team overcome an obstacle or adopt a new practice). A mature platform team primarily operates in X-as-a-Service mode, providing well-documented, self-service capabilities. However, it periodically enters Collaboration mode with specific teams to understand their needs and develop new platform features, and Facilitating mode to help teams adopt new platform capabilities.
+
+### Thin Platform vs Thick Platform
+
+A common debate in platform engineering is whether to build a thin platform or a thick platform:
+
+*   **Thin Platform** — Provides lightweight abstractions and sensible defaults while allowing teams significant flexibility. The platform team curates and configures a set of tools but does not heavily customise or abstract them. Developers interact with standard tools (Terraform, Helm, ArgoCD) but through standardised templates and configurations.
+
+*   **Thick Platform** — Provides deep abstractions that hide the underlying complexity entirely. Developers interact with high-level, purpose-built APIs and never directly touch Terraform, Helm, or Kubernetes manifests. The platform team builds and maintains significant custom tooling.
+
+The right choice depends on the organisation's size, maturity, and the skill level of its developers. Most organisations start thin and progressively add abstractions as they identify common patterns and recurring pain points. The key principle is to build only what is needed and to avoid premature abstraction.
+
+### Platform as a Product
+
+Perhaps the most important principle in platform engineering is treating the platform as a product. This means:
+
+*   **Product Management** — The platform has a product manager (or the platform team lead fulfils this role) who gathers requirements, prioritises features, and maintains a roadmap.
+*   **User Research** — The platform team regularly interviews their users (developers) to understand pain points, gather feedback, and validate assumptions.
+*   **Marketing and Adoption** — New platform capabilities are announced, documented, and evangelised. The platform team runs workshops, writes blog posts, and maintains comprehensive documentation.
+*   **Iterative Delivery** — Platform features are delivered incrementally, with frequent releases and feedback loops. The platform team practises what it preaches — continuous delivery of their own product.
+*   **Metrics and KPIs** — Platform success is measured through adoption metrics, developer satisfaction scores, and the impact on engineering velocity and reliability.
+
+---
+
+## API-Driven Platform Layers
+
+A fundamental architectural principle of any Internal Developer Platform is that every capability should be API-first. Every action a developer can perform through the portal should also be available through a well-documented API. This ensures that the platform is programmable, extensible, and composable.
+
+### Why API-First Matters
+
+When platform capabilities are exposed solely through a UI, they become bottlenecks. Automation scripts, CI/CD pipelines, and custom tools cannot interact with the platform without screen-scraping or manual intervention. An API-first approach ensures that:
+
+*   **Automation is a first-class citizen** — CI/CD pipelines can trigger infrastructure provisioning, deployment, and observability configuration through API calls.
+*   **Custom integrations are straightforward** — Teams with unique requirements can build on top of the platform's APIs without waiting for the platform team to build a specific UI feature.
+*   **Testing is simplified** — Platform capabilities can be tested programmatically through their APIs.
+*   **Consistency is guaranteed** — Whether a capability is invoked through the portal, CLI, or API, the same validation, policy enforcement, and orchestration logic is applied.
+
+### Internal API Marketplace
+
+A mature platform provides an internal API marketplace — a catalogue of all platform APIs with comprehensive documentation, usage examples, and interactive exploration. This marketplace is typically hosted within Backstage alongside the software catalogue.
+
+Each platform API should include:
+
+*   **OpenAPI or AsyncAPI specification** — A machine-readable description of the API's endpoints, request and response schemas, and authentication requirements.
+*   **Usage documentation** — Human-readable guides explaining common use cases, best practices, and troubleshooting tips.
+*   **Client libraries or SDKs** — Pre-built libraries in common languages that simplify interaction with the API.
+*   **Rate limiting and quotas** — Clear documentation of any rate limits, quotas, or usage policies.
+*   **Versioning** — A clear versioning strategy (typically URL-based or header-based) that ensures backward compatibility and provides a deprecation path for breaking changes.
+
+### Self-Service Through APIs
+
+The ultimate goal of API-driven platform layers is to enable true self-service. A developer should be able to:
+
+*   Scaffold a new service by calling the scaffolding API with the desired parameters.
+*   Provision a database by submitting a Crossplane claim through the Kubernetes API.
+*   Deploy to production by merging a pull request that triggers the GitOps workflow.
+*   View logs and metrics by querying the observability APIs or navigating the Grafana dashboards linked from the Backstage portal.
+*   Manage access by requesting role assignments through the RBAC API.
+
+Every one of these interactions flows through well-defined APIs, each enforcing the organisation's policies, compliance requirements, and best practices. The developer portal is simply the most visible consumer of these APIs — it is not the only way to interact with the platform.
+
+This API-first philosophy also future-proofs the platform. As new tools and technologies emerge, they can be integrated behind stable API contracts without disrupting the developer experience. The internal API marketplace becomes the connective tissue of the entire engineering organisation, enabling a composable, evolvable platform architecture.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

@@ -1,0 +1,916 @@
+---
+title: "Deep Dive - Infrastructure as Code at Scale"
+date: "2025-07-03"
+slug: "deep-dive-infrastructure-as-code-at-scale"
+status: "publish"
+feature_image: "/blog/deep-dive-infrastructure-as-code-at-scale/feature-image.png"
+tags: ["Infrastructure as Code", "Terraform", "AWS CDK", "CloudFormation", "Pulumi", "DevOps", "Policy as Code", "Multi-Account", "CI/CD", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Infrastructure as Code at Scale | Robert Leggett"
+  description: "A comprehensive deep dive into Infrastructure as Code at scale — covering Terraform, CDK, state management, module patterns, policy-as-code, testing, and multi-account deployment strategies."
+  keywords: ["Infrastructure as Code", "Terraform", "AWS CDK", "CloudFormation", "Pulumi", "State Management", "Policy as Code", "IaC Testing", "Multi-Account Strategy", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-infrastructure-as-code-at-scale"
+  image: "https://robertleggett.com.au/blog/deep-dive-infrastructure-as-code-at-scale/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Infrastructure as Code at Scale"
+  description: "A comprehensive deep dive into Infrastructure as Code — from Terraform state management to CDK constructs, policy-as-code, and multi-account strategies."
+  image: "https://robertleggett.com.au/blog/deep-dive-infrastructure-as-code-at-scale/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-infrastructure-as-code-at-scale"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Infrastructure as Code at Scale"
+  description: "From Terraform to CDK — a complete technical reference for managing infrastructure as code across multi-account, multi-region environments."
+  image: "https://robertleggett.com.au/blog/deep-dive-infrastructure-as-code-at-scale/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Infrastructure as Code (IaC), unravelling its evolution, tooling, patterns, and the operational challenges that emerge when you move beyond a handful of resources to managing hundreds — or thousands — of infrastructure components across multiple accounts and regions. Whether you are beginning your IaC journey or looking to refine your approach at enterprise scale, our goal is to provide clear and practical explanations that will deepen your understanding. Join us on this deep dive as we demystify how modern organisations define, provision, test, and govern their infrastructure as code. Let's get started.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of Infrastructure as Code tooling, patterns, and strategies for operating at scale
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is Infrastructure as Code?
+
+Infrastructure as Code (IaC) is the practice of defining and managing cloud and on-premises infrastructure through machine-readable configuration files rather than through manual processes or interactive configuration tools. Instead of clicking through a console to create a virtual machine, a network, or a database, you write code that describes the **desired state** of that infrastructure, and a tool reconciles the real world with your definition.
+
+There are two primary paradigms within IaC:
+
+*   **Declarative** — You describe *what* you want the end state to look like, and the tool determines *how* to get there. Terraform, CloudFormation, and AWS CDK (which synthesises to CloudFormation) follow this model.
+*   **Imperative** — You describe the *steps* the tool should take to reach the desired state. Shell scripts and some configuration management tools lean towards this approach.
+
+A critical property of well-designed IaC is **idempotency** — applying the same configuration multiple times produces the same result without unintended side effects. If you run `terraform apply` and nothing has changed, nothing happens. This is what makes IaC safe to run repeatedly and what underpins the entire model of continuous deployment for infrastructure.
+
+When you manage a single project with a dozen resources, IaC is a convenience. When you manage hundreds of microservices across multiple AWS accounts and regions, it becomes an absolute necessity. At scale, the challenges shift from "how do I write this configuration" to "how do I organise, govern, test, and deploy thousands of resources safely and consistently." That is the focus of this deep dive.
+
+---
+
+## How has IaC evolved?
+
+The journey to modern Infrastructure as Code has passed through several distinct eras, each solving the limitations of the previous generation.
+
+![Infrastructure as Code evolution timeline from manual provisioning to modern programmatic approaches](/blog/deep-dive-infrastructure-as-code-at-scale/inline-1.png)
+
+IaC Evolution Timeline
+
+1.  **Manual Provisioning (pre-2005)** — Engineers logged into physical servers or cloud consoles and manually configured resources. This approach was error-prone, slow, and entirely undocumented. Every environment was a snowflake.
+2.  **Shell Scripts and Golden Images (2005–2010)** — Teams began capturing provisioning steps in Bash or PowerShell scripts. While repeatable, these scripts were fragile, order-dependent, and lacked idempotency. A failed script run could leave infrastructure in a partially configured state.
+3.  **Configuration Management (2010–2014)** — Tools such as **Ansible**, **Chef**, and **Puppet** introduced idempotent, agent-based (or agentless) configuration. They excelled at configuring the *inside* of servers — installing packages, managing files, starting services — but were less suited to provisioning the infrastructure itself (networks, load balancers, managed services).
+4.  **Declarative IaC (2014–2019)** — **Terraform** (2014) and **AWS CloudFormation** (2011, but widely adopted later) shifted the focus to declaring the desired state of infrastructure resources. Terraform introduced the concept of providers and a universal workflow (`init`, `plan`, `apply`) that could target any cloud. CloudFormation offered deep AWS integration with stack-based lifecycle management.
+5.  **Programmatic IaC (2018–present)** — **AWS CDK** (2018) and **Pulumi** (2018) recognised that HCL and YAML, while readable, lack the expressiveness of general-purpose programming languages. CDK lets you use TypeScript, Python, Java, or Go to define constructs that synthesise down to CloudFormation. Pulumi takes a similar approach but manages its own state and supports multiple clouds natively. This era brought loops, conditionals, inheritance, and testing frameworks directly into infrastructure definitions.
+
+Each generation built on the lessons of the last, and today most organisations use a combination of these tools depending on the workload and team preference.
+
+---
+
+## What are the major IaC tools and how do they compare?
+
+### Terraform
+
+**Terraform** by HashiCorp is arguably the most widely adopted IaC tool. It uses its own domain-specific language called **HCL** (HashiCorp Configuration Language) and operates through a provider ecosystem that supports AWS, Azure, GCP, Kubernetes, GitHub, Datadog, and hundreds more.
+
+Key characteristics:
+
+*   Multi-cloud by design
+*   Declarative with a plan-and-apply workflow
+*   Open-source core (OpenTofu fork also available)
+*   State file tracks real-world resource mappings
+*   Rich module registry for reusable components
+
+### CloudFormation
+
+**AWS CloudFormation** is the native IaC service for AWS. You define resources in JSON or YAML templates, and CloudFormation manages the lifecycle through **stacks**.
+
+Key characteristics:
+
+*   Deep AWS integration — supports new services on launch day
+*   Stack-based lifecycle with rollback on failure
+*   Change sets for previewing changes before execution
+*   No state file to manage — AWS manages state internally
+*   Limited to AWS resources (though custom resources extend this)
+
+### AWS CDK
+
+The **AWS Cloud Development Kit (CDK)** lets you define cloud infrastructure using familiar programming languages. Under the hood, CDK **synthesises** your code into CloudFormation templates.
+
+Key characteristics:
+
+*   TypeScript, Python, Java, Go, and C# support
+*   Three levels of constructs (L1, L2, L3) with increasing abstraction
+*   Full IDE support — autocompletion, type checking, refactoring
+*   Testable with standard unit testing frameworks
+*   Leverages CloudFormation for deployment and rollback
+
+### Pulumi
+
+**Pulumi** enables infrastructure definition in general-purpose languages (TypeScript, Python, Go, Java, C#) with its own state management backend.
+
+Key characteristics:
+
+*   Multi-cloud support
+*   Native language constructs — loops, classes, functions
+*   Managed state backend (Pulumi Cloud) or self-managed (S3, Azure Blob)
+*   Policy-as-code built in (CrossGuard)
+*   Strong testing story with standard test frameworks
+
+### Side-by-side comparison — S3 bucket with encryption
+
+The same resource defined across three tools:
+
+**Terraform (HCL):**
+
+```hcl
+resource "aws_s3_bucket" "main" {
+  bucket = "my-organisation-data-bucket"
+
+  tags = {
+    Environment = "production"
+    ManagedBy   = "terraform"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
+  bucket = aws_s3_bucket.main.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.main.arn
+    }
+    bucket_key_enabled = true
+  }
+}
+```
+
+**AWS CDK (TypeScript):**
+
+```typescript
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as kms from 'aws-cdk-lib/aws-kms';
+
+const encryptionKey = new kms.Key(this, 'BucketKey', {
+  enableKeyRotation: true,
+});
+
+new s3.Bucket(this, 'MainBucket', {
+  bucketName: 'my-organisation-data-bucket',
+  encryption: s3.BucketEncryption.KMS,
+  encryptionKey,
+  bucketKeyEnabled: true,
+  removalPolicy: cdk.RemovalPolicy.RETAIN,
+});
+```
+
+**CloudFormation (YAML):**
+
+```yaml
+Resources:
+  MainBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-organisation-data-bucket
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref BucketKmsKey
+            BucketKeyEnabled: true
+      Tags:
+        - Key: Environment
+          Value: production
+        - Key: ManagedBy
+          Value: cloudformation
+```
+
+Notice how the CDK version is more concise — the L2 `Bucket` construct handles several CloudFormation details implicitly, such as applying a bucket policy for KMS. Terraform sits somewhere in between, offering explicit resource definitions with a cleaner syntax than raw CloudFormation.
+
+---
+
+## How does Terraform state management work?
+
+Terraform's **state file** is the single most important concept to understand when operating Terraform at scale. The state file is a JSON document that maps your configuration resources to real-world infrastructure. Without it, Terraform cannot know what already exists.
+
+![Terraform state management flow showing plan, apply, and state file interactions](/blog/deep-dive-infrastructure-as-code-at-scale/inline-2.png)
+
+Terraform State Management Flow
+
+1.  You write or modify `.tf` configuration files describing your desired infrastructure.
+2.  `terraform plan` reads the current state file and queries the cloud provider APIs to determine the actual state.
+3.  Terraform computes a **diff** between desired state, stored state, and actual state, then produces an execution plan.
+4.  `terraform apply` executes the plan, creating, modifying, or destroying resources to reconcile the differences.
+5.  After apply completes, the state file is updated with the new resource mappings, IDs, and attributes.
+
+### Local vs remote state
+
+By default, Terraform stores state in a local `terraform.tfstate` file. This is fine for learning but completely inadequate for teams. At scale, you must use a **remote backend** — most commonly an S3 bucket with DynamoDB for state locking.
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket         = "my-org-terraform-state"
+    key            = "prod/networking/terraform.tfstate"
+    region         = "ap-southeast-2"
+    dynamodb_table = "terraform-state-lock"
+    encrypt        = true
+  }
+}
+```
+
+**State locking** prevents two engineers (or two pipeline runs) from modifying the same state file simultaneously, which would cause corruption. DynamoDB provides this locking mechanism for S3 backends.
+
+### Essential state commands
+
+```bash
+# Initialise with remote backend configuration
+terraform init \
+  -backend-config="bucket=my-terraform-state" \
+  -backend-config="key=prod/terraform.tfstate" \
+  -backend-config="region=ap-southeast-2"
+
+# Generate and save an execution plan
+terraform plan -out=tfplan
+
+# Apply the saved plan
+terraform apply tfplan
+
+# List all resources tracked in state
+terraform state list
+
+# Show details of a specific resource
+terraform state show aws_s3_bucket.main
+
+# Move a resource to a different state address (refactoring)
+terraform state mv aws_s3_bucket.old aws_s3_bucket.new
+
+# Remove a resource from state without destroying it
+terraform state rm aws_s3_bucket.imported
+```
+
+### Workspaces
+
+Terraform **workspaces** allow you to manage multiple state files from a single configuration. Each workspace gets its own isolated state. This is useful for managing environment variants (dev, staging, prod) but should be used carefully — at scale, many teams prefer entirely separate state files per environment with different backend keys rather than relying on workspaces.
+
+```bash
+terraform workspace new staging
+terraform workspace select staging
+terraform workspace list
+```
+
+---
+
+## What are CDK construct levels?
+
+AWS CDK organises its abstractions into three levels, each providing increasing layers of opinion and convenience.
+
+![AWS CDK construct levels hierarchy showing L1, L2, and L3 constructs](/blog/deep-dive-infrastructure-as-code-at-scale/inline-3.png)
+
+CDK Construct Levels
+
+1.  **L1 Constructs (Cfn Resources)** — These are direct, one-to-one mappings to CloudFormation resource types. They are auto-generated and prefixed with `Cfn`. You must specify every property explicitly, just as you would in raw CloudFormation. Use L1 when you need a resource that does not yet have an L2 construct, or when you need precise control.
+2.  **L2 Constructs (Curated)** — These are hand-written by the CDK team and provide sensible defaults, convenience methods, and grant-based IAM permissions. For example, `s3.Bucket` is an L2 construct that automatically creates a bucket policy and supports one-liner encryption configuration. L2 constructs are the most commonly used level.
+3.  **L3 Constructs (Patterns)** — Also called "solution constructs" or "patterns", these compose multiple L2 constructs together to implement common architectural patterns. For example, `aws-ecs-patterns.ApplicationLoadBalancedFargateService` creates an ALB, target group, ECS service, task definition, and log group in a single construct.
+
+### CDK example — VPC with subnets
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { Construct } from 'constructs';
+
+export class NetworkStack extends cdk.Stack {
+  public readonly vpc: ec2.Vpc;
+
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    this.vpc = new ec2.Vpc(this, 'MainVpc', {
+      vpcName: 'organisation-main-vpc',
+      maxAzs: 3,
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'Public',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: 'Private',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        {
+          cidrMask: 24,
+          name: 'Isolated',
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
+      ],
+      natGateways: 3,
+    });
+
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpc.vpcId,
+      description: 'VPC identifier',
+      exportName: 'MainVpcId',
+    });
+  }
+}
+```
+
+This single L2 `Vpc` construct creates the VPC, subnets across three availability zones, route tables, an internet gateway, NAT gateways, and all necessary associations. In raw CloudFormation, this would be well over two hundred lines of YAML.
+
+---
+
+## How do you structure IaC for scale?
+
+When an organisation grows beyond a handful of services, the way you structure your IaC codebase matters enormously. Poor structure leads to tangled dependencies, massive blast radii, and slow deployments.
+
+### Monorepo vs polyrepo
+
+*   **Monorepo** — All IaC lives in a single repository. Teams share modules, linting, and CI/CD pipeline definitions. This works well for organisations that want strong consistency and shared tooling but requires careful directory structure and ownership boundaries.
+*   **Polyrepo** — Each team or service owns its own IaC repository. This provides stronger isolation and autonomy but can lead to duplication and configuration drift across teams.
+
+Many organisations adopt a **hybrid** approach: a shared monorepo for platform modules and account-level infrastructure, with individual service repos consuming those modules.
+
+### Directory structure example (Terraform monorepo)
+
+```text
+infrastructure/
+├── modules/                          # Reusable shared modules
+│   ├── networking/
+│   │   ├── vpc/
+│   │   │   ├── main.tf
+│   │   │   ├── variables.tf
+│   │   │   └── outputs.tf
+│   │   └── transit-gateway/
+│   ├── compute/
+│   │   ├── ecs-service/
+│   │   └── lambda-function/
+│   ├── data/
+│   │   ├── rds-cluster/
+│   │   └── dynamodb-table/
+│   └── security/
+│       ├── iam-role/
+│       └── waf/
+├── accounts/                         # Per-account configurations
+│   ├── management/
+│   │   ├── main.tf
+│   │   └── backend.tf
+│   ├── shared-services/
+│   │   ├── networking/
+│   │   │   ├── main.tf
+│   │   │   └── backend.tf
+│   │   └── dns/
+│   ├── workload-dev/
+│   │   ├── services/
+│   │   │   ├── api-gateway/
+│   │   │   └── user-service/
+│   │   └── backend.tf
+│   └── workload-prod/
+│       ├── services/
+│       └── backend.tf
+├── policies/                         # OPA / Sentinel policies
+│   ├── deny-public-s3.rego
+│   └── require-encryption.rego
+└── .github/
+    └── workflows/
+        └── terraform.yml
+```
+
+### Versioning modules
+
+Shared modules should be **versioned** so that consuming teams can pin to a known-good version and upgrade deliberately.
+
+```hcl
+module "vpc" {
+  source  = "git::https://github.com/my-org/terraform-modules.git//networking/vpc?ref=v2.3.1"
+
+  vpc_cidr    = "10.0.0.0/16"
+  environment = "production"
+}
+```
+
+For CDK, shared constructs are published as packages to a private npm registry or CodeArtifact:
+
+```typescript
+import { OrganisationVpc } from '@my-org/cdk-constructs';
+
+new OrganisationVpc(this, 'Vpc', {
+  environment: 'production',
+  cidr: '10.0.0.0/16',
+});
+```
+
+---
+
+## What is drift detection and how do you handle it?
+
+**Drift** occurs when the actual state of infrastructure diverges from the state defined in your IaC configuration. This can happen when someone makes a manual change through the AWS Console, an automated process modifies a resource, or an external service updates a configuration.
+
+![Drift detection and remediation flow showing detect, compare, alert, and remediate steps](/blog/deep-dive-infrastructure-as-code-at-scale/inline-6.png)
+
+Drift Detection and Remediation Flow
+
+1.  A scheduled pipeline or monitoring tool runs drift detection against your IaC configuration.
+2.  The tool compares the desired state (from your code) with the actual state (from cloud provider APIs).
+3.  Any differences are flagged as drift and an alert is raised — through Slack, PagerDuty, or a ticketing system.
+4.  The team reviews the drift and decides whether to **remediate** (reapply the IaC to overwrite the manual change) or **adopt** (update the IaC code to reflect the intentional change).
+
+### Detection methods
+
+*   **Terraform** — Running `terraform plan` on a schedule will reveal any drift. A non-empty plan indicates resources have changed outside of Terraform.
+*   **CloudFormation** — The `aws cloudformation detect-stack-drift` API checks each resource in a stack against its template definition.
+*   **AWS Config** — Config Rules can continuously monitor resource configurations and flag non-compliant changes.
+*   **CDK** — Since CDK synthesises to CloudFormation, you can use CloudFormation drift detection on deployed stacks.
+
+### Automated drift detection pipeline
+
+```bash
+# Run terraform plan and capture exit code
+terraform plan -detailed-exitcode -out=drift-check.tfplan
+
+# Exit codes:
+#   0 = no changes (no drift)
+#   1 = error
+#   2 = changes detected (drift found)
+
+if [ $? -eq 2 ]; then
+  echo "DRIFT DETECTED — notifying team"
+  # Send alert to Slack, create Jira ticket, etc.
+fi
+```
+
+At scale, drift detection should be automated and run on a schedule (e.g., every four hours) against every state file. Treating drift as a first-class operational concern prevents configuration divergence from compounding over time.
+
+---
+
+## What is policy-as-code?
+
+Policy-as-code brings the same principles of version control, review, and automation to governance rules. Instead of documenting policies in a wiki and hoping engineers follow them, you encode the rules as executable checks that run in your CI/CD pipeline.
+
+### Open Policy Agent (OPA) with Rego
+
+**OPA** is a general-purpose policy engine. You write policies in **Rego**, a declarative query language. OPA can evaluate Terraform plans, Kubernetes manifests, API requests, and more.
+
+```rego
+package terraform.s3
+
+deny[msg] {
+  resource := input.resource_changes[_]
+  resource.type == "aws_s3_bucket"
+
+  not bucket_has_encryption(resource)
+
+  msg := sprintf(
+    "S3 bucket '%s' must have server-side encryption enabled",
+    [resource.address]
+  )
+}
+
+bucket_has_encryption(resource) {
+  resource.change.after.server_side_encryption_configuration[_].rule[_].apply_server_side_encryption_by_default[_].sse_algorithm
+}
+```
+
+### HashiCorp Sentinel
+
+**Sentinel** is HashiCorp's policy-as-code framework, tightly integrated with Terraform Cloud and Terraform Enterprise.
+
+```python
+import "tfplan/v2" as tfplan
+
+s3_buckets = filter tfplan.resource_changes as _, rc {
+  rc.type is "aws_s3_bucket" and
+  rc.mode is "managed" and
+  (rc.change.actions contains "create" or rc.change.actions contains "update")
+}
+
+encryption_enabled = rule {
+  all s3_buckets as _, bucket {
+    bucket.change.after.server_side_encryption_configuration is not null
+  }
+}
+
+main = rule {
+  encryption_enabled
+}
+```
+
+### AWS Service Control Policies (SCPs)
+
+**SCPs** operate at the AWS Organisations level and provide guardrails across all accounts in an organisation. They do not grant permissions — they restrict them.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyUnencryptedS3Uploads",
+      "Effect": "Deny",
+      "Action": "s3:PutObject",
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:x-amz-server-side-encryption": "aws:kms"
+        }
+      }
+    }
+  ]
+}
+```
+
+At scale, policy-as-code forms a critical layer of defence. Combining SCPs (preventive guardrails), OPA or Sentinel (pipeline-time validation), and AWS Config Rules (continuous compliance monitoring) provides defence in depth for infrastructure governance.
+
+---
+
+## How do you test IaC?
+
+Testing infrastructure code has traditionally been an afterthought, but at scale it is essential. Untested modules deployed across dozens of accounts can cause widespread outages.
+
+### Unit testing (CDK Assertions)
+
+CDK's `assertions` module lets you validate synthesised CloudFormation templates without deploying anything.
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import { Template } from 'aws-cdk-lib/assertions';
+import { MyStack } from '../lib/my-stack';
+
+test('S3 bucket has encryption enabled', () => {
+  const app = new cdk.App();
+  const stack = new MyStack(app, 'TestStack');
+  const template = Template.fromStack(stack);
+
+  template.hasResourceProperties('AWS::S3::Bucket', {
+    BucketEncryption: {
+      ServerSideEncryptionConfiguration: [
+        {
+          ServerSideEncryptionByDefault: {
+            SSEAlgorithm: 'aws:kms',
+          },
+        },
+      ],
+    },
+  });
+});
+
+test('VPC has three availability zones', () => {
+  const app = new cdk.App();
+  const stack = new MyStack(app, 'TestStack');
+  const template = Template.fromStack(stack);
+
+  template.resourceCountIs('AWS::EC2::Subnet', 9);
+});
+```
+
+### Snapshot testing
+
+CDK also supports **snapshot testing**, which captures the entire synthesised CloudFormation template and compares it against a stored baseline. This catches unintended changes.
+
+```typescript
+test('Stack matches snapshot', () => {
+  const app = new cdk.App();
+  const stack = new MyStack(app, 'TestStack');
+  const template = Template.fromStack(stack);
+
+  expect(template.toJSON()).toMatchSnapshot();
+});
+```
+
+### Integration testing with Terratest
+
+**Terratest** (written in Go) deploys real infrastructure, validates it, and then destroys it. This provides the highest confidence but is slower and incurs cloud costs.
+
+```go
+package test
+
+import (
+  "testing"
+  "github.com/gruntwork-io/terratest/modules/terraform"
+  "github.com/stretchr/testify/assert"
+)
+
+func TestS3BucketCreation(t *testing.T) {
+  t.Parallel()
+
+  terraformOptions := &terraform.Options{
+    TerraformDir: "../modules/s3-bucket",
+    Vars: map[string]interface{}{
+      "bucket_name": "test-bucket-integration",
+      "environment": "test",
+    },
+  }
+
+  defer terraform.Destroy(t, terraformOptions)
+  terraform.InitAndApply(t, terraformOptions)
+
+  bucketName := terraform.Output(t, terraformOptions, "bucket_name")
+  assert.Equal(t, "test-bucket-integration", bucketName)
+}
+```
+
+### Terraform validate and lint
+
+Before any tests run, static analysis catches syntax errors and style issues:
+
+```bash
+# Validate configuration syntax
+terraform validate
+
+# Format check
+terraform fmt -check -recursive
+
+# TFLint for best practices
+tflint --recursive
+```
+
+A robust IaC testing strategy layers these approaches: **lint → validate → unit test → plan → integration test**, with each stage providing faster feedback than the next.
+
+---
+
+## How do you build CI/CD pipelines for IaC?
+
+Deploying infrastructure changes should follow the same rigorous pipeline practices as application code. The key difference is that IaC pipelines typically include a **plan** stage for review and an **approval gate** before applying changes to production.
+
+![IaC CI/CD pipeline flow from commit through lint, plan, approve, to apply](/blog/deep-dive-infrastructure-as-code-at-scale/inline-4.png)
+
+IaC CI/CD Pipeline Flow
+
+1.  An engineer commits IaC changes and opens a pull request.
+2.  The pipeline runs **linting** (`terraform fmt`, `tflint`, `eslint` for CDK) and **validation** (`terraform validate`, `cdk synth`).
+3.  **Unit tests** run against the configuration.
+4.  `terraform plan` or `cdk diff` generates a change preview, which is posted as a comment on the pull request for review.
+5.  After peer review and approval, the pull request is merged to the main branch.
+6.  A deployment pipeline runs `terraform apply` or `cdk deploy`, targeting the appropriate environment.
+7.  **Policy-as-code** checks (OPA, Sentinel) run before apply to enforce governance.
+8.  Production deployments require an additional **manual approval gate**.
+
+### GitHub Actions workflow example
+
+```yaml
+name: Terraform CI/CD
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'infrastructure/**'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/terraform-ci
+          aws-region: ap-southeast-2
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Init
+        run: terraform init -backend-config=environments/prod/backend.hcl
+        working-directory: infrastructure
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: infrastructure
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: infrastructure
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color -out=tfplan
+        working-directory: infrastructure
+
+      - name: Post Plan to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `${{ steps.plan.outputs.stdout }}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '### Terraform Plan\n```\n' + output + '\n```'
+            });
+
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/terraform-ci
+          aws-region: ap-southeast-2
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Init
+        run: terraform init -backend-config=environments/prod/backend.hcl
+        working-directory: infrastructure
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: infrastructure
+```
+
+---
+
+## How do you manage multi-account and multi-region deployments?
+
+At enterprise scale, infrastructure is rarely confined to a single AWS account. **AWS Organisations** enables a multi-account strategy where accounts are used as isolation boundaries — separating workloads, environments, and security domains.
+
+![Multi-account IaC deployment pattern showing management, shared services, and workload accounts](/blog/deep-dive-infrastructure-as-code-at-scale/inline-5.png)
+
+Multi-Account Deployment Pattern
+
+1.  The **Management Account** hosts AWS Organisations, SCPs, and centralised billing. Minimal workloads run here.
+2.  A **Shared Services Account** provides resources consumed by all other accounts — transit gateways, DNS zones, container registries, centralised logging.
+3.  **Workload Accounts** (dev, staging, production) host application infrastructure. Each account provides blast radius isolation — a misconfiguration in dev cannot impact production.
+4.  A **Security/Audit Account** aggregates CloudTrail logs, GuardDuty findings, and Config data across all accounts.
+
+### Cross-account Terraform provider configuration
+
+Terraform can assume roles in other accounts using the `assume_role` block:
+
+```hcl
+provider "aws" {
+  region = "ap-southeast-2"
+
+  assume_role {
+    role_arn     = "arn:aws:iam::111111111111:role/TerraformDeployRole"
+    session_name = "terraform-workload-prod"
+    external_id  = "my-org-external-id"
+  }
+
+  default_tags {
+    tags = {
+      ManagedBy   = "terraform"
+      Environment = "production"
+    }
+  }
+}
+
+provider "aws" {
+  alias  = "shared_services"
+  region = "ap-southeast-2"
+
+  assume_role {
+    role_arn     = "arn:aws:iam::222222222222:role/TerraformDeployRole"
+    session_name = "terraform-shared-services"
+  }
+}
+```
+
+### Multi-region considerations
+
+For resources that must span regions (e.g., CloudFront with ACM certificates in `us-east-1`, or DynamoDB global tables), you use aliased providers:
+
+```hcl
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  assume_role {
+    role_arn = "arn:aws:iam::111111111111:role/TerraformDeployRole"
+  }
+}
+
+resource "aws_acm_certificate" "cdn_cert" {
+  provider          = aws.us_east_1
+  domain_name       = "cdn.example.com"
+  validation_method = "DNS"
+}
+```
+
+### Separate state files vs workspaces
+
+At scale, most organisations prefer **separate state files per account and per component** over workspaces. This provides:
+
+*   Smaller blast radius per `apply`
+*   Independent locking — teams do not block each other
+*   Clearer ownership and audit trails
+*   Easier state recovery if corruption occurs
+
+The backend key pattern `{account}/{region}/{component}/terraform.tfstate` makes state organisation predictable and discoverable.
+
+---
+
+## What is blast radius control?
+
+**Blast radius** refers to the scope of impact when something goes wrong with an infrastructure change. A single monolithic state file containing every resource in your organisation means that a bad `terraform apply` could theoretically affect everything. At scale, minimising blast radius is a critical design consideration.
+
+### Strategies for controlling blast radius
+
+*   **Split state files** — Separate infrastructure into logical components (networking, compute, data, security), each with its own state file. A bad change to a compute module cannot corrupt your networking state.
+*   **Small stacks and modules** — Keep individual Terraform root modules or CDK stacks focused on a single concern. A stack that manages a VPC should not also manage application deployments.
+*   **Account-level isolation** — Use separate AWS accounts for different environments and workload domains. This is the strongest isolation boundary AWS provides.
+*   **Dependency ordering** — Understand and document the dependencies between your state files. Network infrastructure must exist before compute, and compute before application configuration.
+*   **Targeted applies** — Terraform's `-target` flag can limit an apply to specific resources, though this should be used sparingly and only in emergency situations.
+*   **Progressive rollouts** — Deploy changes to lower environments first, validate, then promote to production. Canary deployments for infrastructure (deploy to one region, validate, then roll out globally) add another layer of safety.
+
+---
+
+## Okay, what terminology do I need to understand?
+
+### Idempotency
+
+The property that applying the same operation multiple times produces the same result as applying it once. Running `terraform apply` on an unchanged configuration should produce no changes.
+
+### Desired State
+
+The infrastructure configuration as defined in your IaC code — what you *want* your infrastructure to look like.
+
+### Drift
+
+The divergence between your desired state (code) and the actual state (reality). Drift indicates that something changed outside of your IaC workflow.
+
+### State File
+
+A file (typically JSON) that maps your IaC resource definitions to real-world cloud resources. Terraform uses `terraform.tfstate`; CloudFormation manages state internally.
+
+### State Locking
+
+A mechanism that prevents concurrent modifications to the same state file. In Terraform, DynamoDB is commonly used for locking with S3 backends.
+
+### Construct
+
+In CDK, a construct is the fundamental building block. Everything in CDK — from a single S3 bucket to a complete microservice — is a construct. Constructs are composable and form a tree structure.
+
+### Module
+
+In Terraform, a module is a reusable container for multiple resources that are used together. Modules accept input variables and produce outputs.
+
+### Provider
+
+In Terraform, a provider is a plugin that interfaces with a specific cloud platform or service API. The AWS provider, for example, knows how to create and manage AWS resources.
+
+### Backend
+
+The storage mechanism for Terraform state. The backend determines where state is stored (local file, S3, Azure Blob, GCS) and how locking is handled.
+
+### Workspace
+
+In Terraform, a workspace is a named instance of state associated with a single configuration. Each workspace has an independent state file.
+
+### Blast Radius
+
+The scope of potential impact from a single infrastructure change. Smaller blast radii mean that failures affect fewer resources and are easier to recover from.
+
+### Policy-as-Code
+
+The practice of defining governance rules — security requirements, compliance standards, cost controls — as executable code that can be version-controlled, tested, and enforced automatically.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

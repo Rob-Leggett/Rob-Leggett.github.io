@@ -1,0 +1,472 @@
+---
+title: "Building a Local AI Playground - Classical ML Meets Modern LLMs"
+date: "2026-03-12"
+slug: "building-a-local-ai-playground-classical-ml-meets-modern-llms"
+status: "publish"
+feature_image: "/blog/building-a-local-ai-playground-classical-ml-meets-modern-llms/feature-image.png"
+tags: ["AI", "Machine Learning", "RAG", "LangChain", "LangGraph", "Ollama", "FastAPI", "MCP", "Python", "Robert Leggett"]
+
+meta:
+  title: "Building a Local AI Playground - Classical ML Meets Modern LLMs | Robert Leggett"
+  description: "A hands-on guide to building a local AI playground combining CatBoost classical ML, RAG with ChromaDB, LangGraph agents, Ollama local LLMs, and MCP server integration — all running on your machine."
+  keywords: ["local AI", "CatBoost", "RAG", "ChromaDB", "LangGraph", "LangChain", "Ollama", "FastAPI", "MCP server", "MLflow", "DuckDB", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/building-a-local-ai-playground-classical-ml-meets-modern-llms"
+  image: "https://robertleggett.com.au/blog/building-a-local-ai-playground-classical-ml-meets-modern-llms/feature-image.png"
+
+og:
+  type: "article"
+  title: "Building a Local AI Playground - Classical ML Meets Modern LLMs"
+  description: "A hands-on guide to building a local AI playground combining CatBoost classical ML, RAG with ChromaDB, LangGraph agents, Ollama local LLMs, and MCP server integration — all running on your machine."
+  image: "https://robertleggett.com.au/blog/building-a-local-ai-playground-classical-ml-meets-modern-llms/feature-image.png"
+  url: "https://robertleggett.com.au/blog/building-a-local-ai-playground-classical-ml-meets-modern-llms"
+
+twitter:
+  card: "summary_large_image"
+  title: "Building a Local AI Playground - Classical ML Meets Modern LLMs"
+  description: "A hands-on guide to building a local AI playground combining CatBoost classical ML, RAG with ChromaDB, LangGraph agents, Ollama local LLMs, and MCP server integration — all running on your machine."
+  image: "https://robertleggett.com.au/blog/building-a-local-ai-playground-classical-ml-meets-modern-llms/feature-image.png"
+---
+
+If I'm to be perfectly honest, the best way I have found to genuinely understand a technology is to build something end-to-end with it — not a toy example from a tutorial, but a project that forces you to make real architectural decisions and deal with the friction that only surfaces when you integrate multiple systems together. That is exactly why I built [ai-prep](https://github.com/Rob-Leggett/ai-prep), a local AI playground that combines **classical machine learning**, **retrieval-augmented generation**, **agentic AI**, and a **Model Context Protocol server** into a single unified workflow — all running entirely on your local machine with zero cloud dependency.
+
+The project started as a personal preparation exercise for working with production-grade AI systems, but it quickly grew into something more interesting. It demonstrates that you do not need a cloud account, a GPU cluster, or an enterprise licence to build a genuinely capable AI stack. A modern laptop, a handful of open-source libraries, and a disciplined approach to architecture can get you remarkably far. In this article, I will walk through every layer of the system — from training a classical ML model with experiment tracking through to building a tool-using LLM agent that orchestrates across multiple capabilities.
+
+---
+
+## Before you start
+
+About this post:
+
+*   10 – 14-min average reading time
+*   Suitable for beginner through to advanced
+
+What you will gain reading this post:
+
+*   A practical understanding of how to combine classical ML and modern LLM capabilities in a single system
+*   Hands-on patterns for building a RAG pipeline with ChromaDB, SentenceTransformers, and Ollama
+*   Insight into building tool-using LLM agents with LangGraph and LangChain
+*   Knowledge of how to expose AI capabilities via MCP for IDE and editor integration
+*   A Makefile-driven workflow for reproducible local AI development
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why local-first AI?
+
+It feels like every conversation about AI assumes you need a cloud provider, an API key, and a credit card. And for production workloads at scale, that is often true. But for **learning**, **experimentation**, and **prototyping**, the local-first approach has compelling advantages that are worth understanding.
+
+**Privacy** is the most obvious benefit. When you run models locally, your data never leaves your machine. There are no terms of service to navigate, no data processing agreements to sign, and no risk of sensitive information being used for model training. For organisations working with proprietary or regulated data, this matters enormously — but it also matters for individuals who simply want to experiment without sharing their data with a third party.
+
+**Cost** is the second factor. Cloud-hosted LLM APIs charge per token, and those costs add up quickly during development when you are iterating on prompts, testing edge cases, and running the same queries dozens of times. Locally-hosted models through **Ollama** cost nothing per inference after the initial download. You can experiment freely without watching a billing dashboard.
+
+**Speed of iteration** is perhaps the most underappreciated advantage. When your entire stack runs locally, the feedback loop is measured in milliseconds rather than network round trips. You change a prompt template, hit save, and see the result immediately. There is no API rate limiting, no cold start latency, and no dependency on external service availability.
+
+**Reproducibility** rounds out the case. A local stack defined in code — with pinned dependency versions, a Makefile for orchestration, and version-controlled configuration — can be reproduced identically on any machine. This is harder to achieve when your pipeline depends on cloud services that may change their behaviour between API versions.
+
+The trade-off, of course, is that local models are smaller and less capable than the frontier models available through cloud APIs. **Llama 3.1** running on a laptop is not going to match **GPT-4** or **Claude** on complex reasoning tasks. But for learning the patterns, building the plumbing, and validating architectures before scaling to production, local-first is an excellent starting point.
+
+---
+
+## Architecture overview
+
+The [ai-prep](https://github.com/Rob-Leggett/ai-prep) project is structured as a layered system where each component has a clear responsibility and communicates through well-defined interfaces.
+
+```
+┌─────────────────────────────────────────────────┐
+│                   Clients                        │
+│   (curl / browser / IDE via MCP)                 │
+└──────────────┬──────────────────┬────────────────┘
+               │                  │
+     ┌─────────▼─────────┐  ┌────▼──────────────┐
+     │   FastAPI Server   │  │   MCP Server       │
+     │ /predict /ask      │  │ predict() ask()    │
+     │ /agent  /health    │  │ health()           │
+     └────┬───┬───┬───────┘  └────────────────────┘
+          │   │   │
+   ┌──────▼┐ ┌▼────────┐ ┌──▼──────────────────┐
+   │CatBoost│ │RAG      │ │LangGraph Agent      │
+   │+MLflow │ │ChromaDB │ │(llama3.1 + tools)   │
+   └────────┘ │+Ollama  │ └─────────────────────┘
+              └─────────┘
+     ┌────────────────────────────────────────────┐
+     │        Mini Lakehouse (DuckDB + PyArrow)    │
+     └────────────────────────────────────────────┘
+```
+
+The **FastAPI server** is the primary interface, exposing four endpoints: `/health`, `/predict`, `/ask`, and `/agent`. The **MCP server** provides the same capabilities through the Model Context Protocol for integration with IDE tools like Claude and Cursor. Behind these interfaces sit three distinct AI capabilities: a **CatBoost** regression model tracked by **MLflow**, a **RAG pipeline** backed by **ChromaDB** and **Ollama**, and a **LangGraph agent** that can autonomously decide which capability to invoke based on the user's query. A **DuckDB mini lakehouse** provides structured data access across the stack.
+
+The project structure reflects this layered architecture:
+
+```
+├── app/                  # FastAPI serving layer
+│   ├── main.py           # API endpoints
+│   ├── core.py           # Business logic (model loading, RAG queries)
+│   └── tools.py          # LangChain tool definitions for the agent
+├── ml/
+│   ├── train_catboost.py # CatBoost training with MLflow tracking
+│   └── register_model.py # Optional model registry pattern
+├── rag/
+│   ├── build_index.py    # PDF ingestion into ChromaDB
+│   ├── build_index_from_csv.py  # CSV ingestion into ChromaDB
+│   └── query.py          # RAG query with LLM synthesis
+├── lakehouse/            # DuckDB parquet domains
+├── data/                 # Sample CSVs and PDFs
+├── mcp_server.py         # MCP server for IDE integration
+├── Makefile              # Reproducible workflow orchestration
+└── pyproject.toml        # Dependency management
+```
+
+---
+
+## Classical ML pipeline — CatBoost with MLflow
+
+Not everything needs a large language model. For structured prediction tasks — forecasting, classification, regression — classical ML models remain faster, cheaper, more interpretable, and often more accurate than LLM-based approaches. The project includes a complete **CatBoost** regression pipeline with **MLflow** experiment tracking to demonstrate this.
+
+The training script is deliberately straightforward. It loads data from a CSV file, splits it into training and test sets, trains a CatBoost regressor, evaluates it using **MAE** (Mean Absolute Error) and **R²** metrics, and logs everything to MLflow:
+
+```python
+from catboost import CatBoostRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, mean_absolute_error
+import mlflow.catboost
+import pandas as pd
+
+df = pd.read_csv("data/sample.csv")
+X = df.drop("target", axis=1).astype("float64")
+y = df["target"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+model = CatBoostRegressor(iterations=200, depth=6, learning_rate=0.1, verbose=False)
+model.fit(X_train, y_train)
+
+preds = model.predict(X_test)
+mae = float(mean_absolute_error(y_test, preds))
+r2 = float(r2_score(y_test, preds))
+
+with mlflow.start_run(run_name="latest_catboost") as run:
+    signature = mlflow.models.infer_signature(X_train, model.predict(X_train))
+    mlflow.catboost.log_model(
+        cb_model=model,
+        name="model",
+        signature=signature,
+        input_example=X_train.iloc[:2],
+    )
+    mlflow.log_metric("mae", mae)
+    mlflow.log_metric("r2", r2)
+
+    print(f"Logged model. MAE={mae:.4f} R2={r2:.4f} run_id={run.info.run_id}")
+```
+
+Running `make train` executes this script, logs the model and metrics to the local **MLflow** tracking directory, and automatically pins the latest model URI to a `.env` file. The FastAPI server reads this URI at startup to load the correct model version. This pattern — train, log, pin, serve — is a simplified but realistic version of what production ML systems do with model registries.
+
+The **MLflow UI** (available at `http://127.0.0.1:5000` via `make mlflow`) gives you full visibility into every training run: metrics, parameters, artefacts, and model signatures. It is invaluable for comparing experiments and understanding how changes to your training configuration affect model performance.
+
+For interpretability, the project includes **SHAP** as a dependency. SHAP (SHapley Additive exPlanations) provides a mathematically grounded way to explain individual predictions — which features contributed most to a given output and by how much. This is critical for building trust in ML models, especially in regulated domains.
+
+---
+
+## RAG pipeline — from documents to answers
+
+The **Retrieval-Augmented Generation** pipeline is where classical information retrieval meets modern language models. Instead of relying on the LLM's training data (which may be outdated or incomplete), RAG retrieves relevant documents from a local knowledge base and provides them as context to the LLM. The result is answers that are grounded in your actual data, with citations.
+
+The pipeline has three stages: **ingestion**, **embedding**, and **query**.
+
+**Ingestion** supports both PDF and CSV sources. For PDFs, the `build_index.py` script uses LangChain's `PyPDFLoader` to extract text, then splits it into manageable chunks using `RecursiveCharacterTextSplitter` with **800-character chunks** and **200-character overlap**. The overlap ensures that context is not lost at chunk boundaries:
+
+```python
+from langchain.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from sentence_transformers import SentenceTransformer
+import chromadb
+
+chroma = chromadb.PersistentClient(path="rag/chroma_store")
+collection = chroma.get_or_create_collection("legal_docs")
+
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
+splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=200)
+
+for file in os.listdir("data"):
+    if file.endswith(".pdf"):
+        docs = PyPDFLoader(f"data/{file}").load()
+        chunks = splitter.split_documents(docs)
+        for chunk in chunks:
+            emb = embedder.encode(chunk.page_content).tolist()
+            collection.add(
+                documents=[chunk.page_content],
+                embeddings=[emb],
+                metadatas=[{"source": file}],
+            )
+```
+
+For CSV data, the `build_index_from_csv.py` script converts each row into a natural language sentence and embeds it into the same ChromaDB collection. This approach makes structured data queryable through natural language — a powerful pattern for making tabular datasets accessible to non-technical users.
+
+**Embedding** uses the **all-MiniLM-L6-v2** model from SentenceTransformers. This is a lightweight embedding model that runs efficiently on CPU and produces 384-dimensional vectors. It is not the most powerful embedding model available, but it strikes an excellent balance between quality and speed for local development. The embeddings are stored in **ChromaDB**, a persistent vector database that supports similarity search out of the box.
+
+**Query** is where the magic happens. When a user asks a question, the system encodes the question into a vector, finds the most similar chunks in ChromaDB, and passes them as context to the LLM along with a carefully crafted prompt:
+
+```python
+def query_rag(question: str) -> tuple[str, list[dict]]:
+    client = PersistentClient(path=CHROMA_PATH)
+    collection = client.get_collection(COLLECTION)
+    res = collection.query(query_texts=[question], n_results=TOP_K)
+
+    docs = res["documents"][0] if res["documents"] else []
+    metas = res["metadatas"][0] if res["metadatas"] else []
+
+    if not docs:
+        return ("I couldn't find anything relevant in the index.", [])
+
+    context = "\n\n".join(docs)
+    prompt = (
+        "Answer the question using ONLY the context below. "
+        "If the answer isn't in the context, say you don't know.\n\n"
+        f"Context:\n{context}\n\nQuestion: {question}\nAnswer:"
+    )
+
+    answer = _llm.invoke(prompt)
+    sources = _unique_sources(metas)
+    return answer, sources
+```
+
+The prompt template is deliberately restrictive — it instructs the LLM to answer only from the provided context. This prevents hallucination and ensures that every answer can be traced back to a specific source document. The sources are returned alongside the answer so the user can verify the information.
+
+---
+
+## Agentic AI — LangGraph with tool-using LLMs
+
+The most interesting layer is the **agentic AI** component. While the `/predict` and `/ask` endpoints expose individual capabilities, the `/agent` endpoint exposes a **LangGraph agent** that can autonomously decide which capability to use based on the user's query.
+
+The agent is built using **LangChain** and **LangGraph**, with **llama3.1** running locally via **Ollama** as the reasoning engine. It has access to two tools: `predict_income_tool` (which invokes the CatBoost model) and `ask_docs_tool` (which queries the RAG pipeline). The LLM decides which tool to call — or whether to answer directly — based on the user's natural language query.
+
+The tool definitions use LangChain's `@tool` decorator with Pydantic schemas for type-safe argument validation:
+
+```python
+from langchain.tools import tool
+from pydantic import BaseModel, Field
+
+class PredictArgs(BaseModel):
+    age: float = Field(..., description="Age in years")
+    income: float = Field(..., description="Annual income")
+
+@tool("predict_income", args_schema=PredictArgs, return_direct=False)
+def predict_income_tool(age: float, income: float) -> dict:
+    """Run CatBoost prediction for a person with age and income."""
+    pred = predict_income(age, income)
+    return {"prediction": pred}
+
+class AskArgs(BaseModel):
+    question: str = Field(..., description="Natural language question for the document index")
+
+@tool("ask_docs", args_schema=AskArgs, return_direct=False)
+def ask_docs_tool(question: str) -> dict:
+    """Query the RAG index and return an answer with sources."""
+    answer, sources = ask_docs(question)
+    return {"answer": answer, "sources": sources}
+```
+
+The agent itself is created with a single line that wires the LLM to its available tools:
+
+```python
+from langchain.agents import create_agent
+from langchain_ollama import ChatOllama
+
+LLM = ChatOllama(model="llama3.1", temperature=0)
+TOOLS = [predict_income_tool, ask_docs_tool]
+AGENT = create_agent(LLM, TOOLS)
+```
+
+When a user sends a query like *"What is the predicted value for a 42-year-old with income 90000?"*, the LLM recognises this as a prediction task and calls `predict_income_tool` with the appropriate arguments. When the query is *"Which age group has the highest income?"*, the LLM routes to `ask_docs_tool` to query the knowledge base. And when the query is ambiguous, the LLM can chain multiple tool calls together to synthesise a comprehensive answer.
+
+This is the essence of **agentic AI** — the LLM acts as a reasoning engine that plans, selects tools, interprets results, and synthesises answers. It is a fundamentally different paradigm from traditional API design where the client must know exactly which endpoint to call.
+
+---
+
+## MCP server — AI capabilities for your IDE
+
+The **Model Context Protocol (MCP)** is an emerging standard for exposing AI capabilities to IDE and editor tools. The project includes an MCP server that makes the same capabilities available to tools like **Claude** and **Cursor** through a standardised interface.
+
+The MCP server is built using `FastMCP` and exposes three tools: `predict()`, `ask()`, and `health()`. Each tool proxies requests to the FastAPI server running locally:
+
+```python
+from mcp.server.fastmcp import FastMCP
+import requests
+
+APP_NAME = "ai-prep"
+API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8000")
+mcp = FastMCP(APP_NAME)
+
+@mcp.tool()
+def predict(age: float, income: float) -> dict:
+    """Run CatBoost prediction via FastAPI /predict."""
+    r = requests.get(f"{API_BASE}/predict", params={"age": age, "income": income}, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+@mcp.tool()
+def ask(question: str) -> dict:
+    """Query the local Chroma RAG via FastAPI /ask."""
+    r = requests.get(f"{API_BASE}/ask", params={"question": question}, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+@mcp.tool()
+def health() -> dict:
+    """Check FastAPI health (no arguments)."""
+    try:
+        r = requests.get(f"{API_BASE}/health", timeout=5)
+        return {"ok": r.status_code == 200, "body": r.json()}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+```
+
+This means that when you are working in an MCP-compatible editor, you can ask your AI assistant to run a prediction or query your document index without leaving the editor. The MCP server communicates over **stdio**, so there is no port management or network configuration required. You start it with `make mcp` and your editor discovers it automatically.
+
+The architectural elegance here is that the MCP server is a thin proxy. All the business logic lives in the FastAPI application, and the MCP server simply provides an alternative interface. This means you get consistency between your API endpoints and your IDE tools without duplicating logic.
+
+---
+
+## Mini lakehouse with DuckDB
+
+The project includes a lightweight **lakehouse** layer built on **DuckDB** and **PyArrow**. DuckDB is an embedded analytical database that reads Parquet files directly without requiring a separate server process. Combined with PyArrow for efficient columnar data handling, it provides a powerful structured data layer.
+
+```python
+import duckdb
+
+df = duckdb.query(
+    "SELECT * FROM 'lakehouse/legal/cases.parquet' LIMIT 10"
+).to_df()
+print(df.head())
+```
+
+The lakehouse directory contains Parquet files organised by domain. DuckDB can query these files with full SQL support — aggregations, joins, window functions, CTEs — without loading the entire dataset into memory. For a local development environment, this is a pragmatic alternative to spinning up a full data warehouse.
+
+This layer also serves as a data source for the RAG pipeline. You can ingest lakehouse data into ChromaDB to make it queryable through natural language, creating a bridge between structured SQL queries and unstructured natural language questions.
+
+---
+
+## API endpoints and the FastAPI serving layer
+
+The **FastAPI** application ties everything together behind a clean REST interface. There are four endpoints, each serving a distinct purpose:
+
+**`/health`** returns a simple status check. It is the endpoint your monitoring tools and load balancers will call:
+
+```bash
+curl http://127.0.0.1:8000/health
+# {"status": "ok"}
+```
+
+**`/predict`** invokes the CatBoost model for structured prediction. It takes `age` and `income` as query parameters and returns the model's prediction:
+
+```bash
+curl "http://127.0.0.1:8000/predict?age=42&income=90000"
+# {"prediction": 0.7234}
+```
+
+**`/ask`** queries the RAG pipeline. It takes a natural language question and returns an answer with source citations:
+
+```bash
+curl "http://127.0.0.1:8000/ask?question=Which%20age%20has%20the%20highest%20income?"
+# {"answer": "Based on the data, age 55 has the highest income...", "sources": [{"source": "sample.csv"}]}
+```
+
+**`/agent`** delegates to the LangGraph agent, which autonomously decides which tool to use:
+
+```bash
+curl "http://127.0.0.1:8000/agent?query=Predict%20the%20value%20for%20a%2030%20year%20old%20with%20income%2060000"
+# {"result": "The predicted value for a 30-year-old with income 60000 is 0.4512."}
+```
+
+FastAPI automatically generates **interactive Swagger documentation** at `/docs`, which makes it trivially easy to test endpoints during development. The application loads the pinned MLflow model at startup via the `.env` file, ensuring that the served model version is always explicit and traceable.
+
+---
+
+## Makefile-driven workflow
+
+Reproducibility is a core principle of the project, and the **Makefile** is the mechanism that enforces it. Instead of documenting a sequence of commands in a README and hoping engineers follow them in order, every operation is encapsulated as a Make target:
+
+```makefile
+install:     # Create venv and install dependencies
+serve:       # Start FastAPI server (background, with reload)
+mlflow:      # Launch MLflow tracking UI (background)
+ollama-model: # Ensure llama3.1 is downloaded
+ollama:      # Start Ollama runtime (background)
+index-csv:   # Build CSV-based RAG index
+mcp-all:     # Start FastAPI + MCP server
+run-all:     # Pull model, start all services, build index
+stop:        # Stop all background services
+train:       # Train CatBoost, log to MLflow, pin model URI
+pin-latest:  # Re-pin .env to most recent MLflow run
+model-uri:   # Show currently pinned model URI
+```
+
+The `make run-all` target is the single command that brings up the entire stack — it pulls the Ollama model, starts Ollama, FastAPI, and MLflow in parallel, waits for each service to be ready using port checks, then builds the RAG index. A new engineer can go from a fresh clone to a fully running AI stack in minutes.
+
+Background processes write their PIDs to a `.pids/` directory, and `make stop` cleanly terminates all services. This pattern eliminates the problem of orphaned processes that plague local development environments.
+
+---
+
+## The tech stack at a glance
+
+The project uses a carefully curated set of libraries, all managed through **pyproject.toml** and the **uv** package manager:
+
+*   **Python 3.11+** as the runtime
+*   **FastAPI** and **Uvicorn** for the API layer
+*   **CatBoost** for classical machine learning
+*   **MLflow** for experiment tracking and model management
+*   **ChromaDB** for vector storage and similarity search
+*   **SentenceTransformers** (all-MiniLM-L6-v2) for embedding generation
+*   **LangChain** and **LangGraph** for agent orchestration
+*   **langchain-ollama** for local LLM integration
+*   **Ollama** for running Llama 3.1 locally
+*   **DuckDB** and **PyArrow** for the mini lakehouse
+*   **Pydantic** for data validation across all layers
+*   **SHAP** for model interpretability
+*   **MCP** (FastMCP) for IDE tool integration
+
+Every dependency is pinned in `pyproject.toml` with minimum version constraints, and the full resolution is locked in `uv.lock` for reproducible installs.
+
+---
+
+## Lessons learned
+
+Building this project reinforced several principles that I believe apply broadly to AI engineering.
+
+**Classical ML is not dead.** The industry's obsession with large language models has created a blind spot for traditional ML techniques. For structured prediction tasks, a CatBoost model trained in seconds will outperform a prompted LLM at a fraction of the cost and latency. Know when to use each tool.
+
+**RAG is only as good as your chunking strategy.** The choice of chunk size, overlap, and splitting strategy has a dramatic impact on retrieval quality. Too large and you lose precision. Too small and you lose context. The 800-character chunks with 200-character overlap used here are a solid starting point, but the optimal configuration depends on your data.
+
+**Agents need good tools, not just good models.** The LangGraph agent's effectiveness is determined more by the quality of its tool definitions — clear descriptions, typed schemas, sensible defaults — than by the capability of the underlying LLM. A well-described tool with a small model outperforms a poorly described tool with a large model.
+
+**MCP is worth watching.** The Model Context Protocol is still early, but the idea of exposing AI capabilities through a standardised protocol that any editor can consume is powerful. It turns your local AI stack into a capability that is available everywhere in your development workflow.
+
+**Makefiles are underrated.** In the age of containerisation and cloud-native orchestration, the humble Makefile remains one of the most effective tools for local workflow automation. It is universally available, requires no additional dependencies, and makes complex multi-step workflows accessible through a single command.
+
+---
+
+## Conclusion
+
+*   **Local-first AI** offers privacy, zero cost per inference, fast iteration, and full reproducibility — making it ideal for learning, prototyping, and experimentation
+*   **Classical ML** (CatBoost + MLflow) remains the right choice for structured prediction tasks — faster, cheaper, and more interpretable than LLM-based approaches
+*   A **RAG pipeline** with ChromaDB and SentenceTransformers grounds LLM answers in your actual data, preventing hallucination and providing citations
+*   **LangGraph agents** with tool-using LLMs can autonomously route queries to the right capability, creating a single intelligent interface over multiple AI systems
+*   The **MCP server** bridges your local AI stack to your IDE, making capabilities available where you actually work
+*   A **Makefile-driven workflow** ensures reproducibility and makes the entire stack accessible through a single `make run-all` command
+*   The full project is open source at [github.com/Rob-Leggett/ai-prep](https://github.com/Rob-Leggett/ai-prep) — clone it, run it, and make it your own
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

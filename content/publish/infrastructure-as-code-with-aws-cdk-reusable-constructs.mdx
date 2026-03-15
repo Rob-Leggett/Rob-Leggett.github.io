@@ -1,0 +1,482 @@
+---
+title: "Infrastructure as Code with AWS CDK - Building Reusable Constructs at Scale"
+date: "2026-03-10"
+slug: "infrastructure-as-code-with-aws-cdk-reusable-constructs"
+status: "publish"
+feature_image: "/blog/infrastructure-as-code-with-aws-cdk-reusable-constructs/feature-image.png"
+tags: ["AWS CDK", "Infrastructure as Code", "TypeScript", "Cloud", "AWS", "CI/CD", "DevOps", "Reusable Constructs", "Robert Leggett"]
+
+meta:
+  title: "Infrastructure as Code with AWS CDK - Building Reusable Constructs at Scale | Robert Leggett"
+  description: "A practical guide to building a comprehensive AWS CDK project with reusable L1 construct wrappers, config-driven deployment, multi-account CI/CD, and auto-generated infrastructure diagrams."
+  keywords: ["AWS CDK", "Infrastructure as Code", "reusable constructs", "L1 constructs", "multi-account deployment", "GitHub Actions", "CDK Graph", "TypeScript IaC", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/infrastructure-as-code-with-aws-cdk-reusable-constructs"
+  image: "https://robertleggett.com.au/blog/infrastructure-as-code-with-aws-cdk-reusable-constructs/feature-image.png"
+
+og:
+  type: "article"
+  title: "Infrastructure as Code with AWS CDK - Building Reusable Constructs at Scale"
+  description: "A practical guide to building a comprehensive AWS CDK project with reusable L1 construct wrappers, config-driven deployment, multi-account CI/CD, and auto-generated infrastructure diagrams."
+  image: "https://robertleggett.com.au/blog/infrastructure-as-code-with-aws-cdk-reusable-constructs/feature-image.png"
+  url: "https://robertleggett.com.au/blog/infrastructure-as-code-with-aws-cdk-reusable-constructs"
+
+twitter:
+  card: "summary_large_image"
+  title: "Infrastructure as Code with AWS CDK - Building Reusable Constructs at Scale"
+  description: "A practical guide to building a comprehensive AWS CDK project with reusable L1 construct wrappers, config-driven deployment, multi-account CI/CD, and auto-generated infrastructure diagrams."
+  image: "https://robertleggett.com.au/blog/infrastructure-as-code-with-aws-cdk-reusable-constructs/feature-image.png"
+---
+
+For those who know me, you will know that I have strong opinions about infrastructure. I have always believed that if you cannot reproduce your entire cloud environment from a single command, you do not truly own it. Over the years I have worked with CloudFormation templates that stretched into thousands of lines, Terraform modules that were copied and pasted across repositories until nobody knew which version was canonical, and ad-hoc console changes that were documented in Slack messages. The common thread in every painful experience was the same — a lack of composability, a lack of type safety, and a lack of discipline around reuse.
+
+That is why I built a comprehensive **AWS CDK** project with **reusable L1 construct wrappers** spanning over fifty AWS services, organised into a layered stack architecture with config-driven deployment and a fully automated CI/CD pipeline. In this article, I will walk through the approach, the patterns, and the lessons learned. If you are building cloud infrastructure at any meaningful scale, I hope this gives you a practical framework to think about how CDK can transform the way your organisation manages its cloud estate.
+
+---
+
+## Before you start
+
+About this post:
+
+*   10 – 14-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A clear understanding of why AWS CDK offers advantages over CloudFormation and Terraform for large-scale infrastructure
+*   Practical patterns for building a reusable L1 construct library across fifty-plus AWS services
+*   Insight into config-driven, scope-based stack architecture for multi-account deployment
+*   Knowledge of CI/CD pipeline patterns using GitHub Actions with OIDC, matrix deployment, and semantic-release
+*   Understanding of how to auto-generate infrastructure diagrams from your CDK code
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why CDK over CloudFormation and Terraform?
+
+If I'm to be perfectly honest, the choice of IaC tool is less about which one is objectively best and more about which one matches how your team thinks and works. That said, after spending significant time with all three, I have come to believe that **AWS CDK** has a genuine edge when you are building at scale — and the reasons come down to three things: **type safety**, **composability**, and **testability**.
+
+**CloudFormation** is the foundation that CDK is built upon, and it is battle-tested. But writing raw CloudFormation YAML or JSON at scale is brutal. There is no autocompletion, no compile-time validation, and no ability to express abstractions. You end up with enormous template files where a single misplaced property name does not surface until deploy time. For a team managing hundreds of resources, this is a productivity killer.
+
+**Terraform** addresses many of CloudFormation's ergonomic issues. HCL is a genuine improvement over YAML for infrastructure definition, and the module system provides a reasonable mechanism for reuse. But HCL is still a domain-specific language. You cannot write a `for` loop that conditionally creates resources based on complex business logic without wrestling with HCL's limitations. You cannot write unit tests using your application's testing framework. And you cannot share types between your application code and your infrastructure code.
+
+**CDK** solves these problems by letting you define infrastructure in a **real programming language** — TypeScript, Python, Java, Go, or C#. This means you get the full power of the language: generics, interfaces, inheritance, loops, conditionals, and most importantly, your IDE's type system. When you mistype a property name, your editor tells you immediately. When you want to create a reusable pattern, you write a class. When you want to test it, you use Jest or pytest. This is a fundamentally different experience.
+
+```typescript
+// Type safety means your IDE catches errors before deployment
+const bucket = new s3.Bucket(this, 'DataBucket', {
+  bucketName: 'my-service-data',
+  encryption: s3.BucketEncryption.S3_MANAGED,
+  versioned: true,
+  removalPolicy: RemovalPolicy.RETAIN,
+  blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+});
+```
+
+The counter-argument I hear most often is that CDK generates CloudFormation under the hood, so you are adding a layer of abstraction without adding capability. That is technically true, but it misses the point. The abstraction layer is the capability. It is what allows you to build a library of reusable constructs that your entire organisation can consume, and that is where the real value lies.
+
+---
+
+## Building a reusable L1 construct library
+
+The heart of any serious CDK project is its **construct library**. CDK provides three levels of constructs: **L1** (direct CloudFormation mappings), **L2** (opinionated wrappers with sensible defaults), and **L3** (patterns that compose multiple resources). AWS provides excellent L2 constructs for many services, but they do not cover every service equally well, and they do not enforce your organisation's specific standards.
+
+My approach was to build **L1 construct wrappers** for over fifty AWS services. These wrappers sit between the raw CloudFormation resources and the stacks that consume them. Each wrapper encapsulates the organisation's standards — naming conventions, tagging strategies, encryption requirements, logging configuration — so that every team consuming the library gets compliant infrastructure by default.
+
+The constructs span seven broad categories:
+
+**Compute** covers the services that run your workloads. This includes wrappers for **AppRunner**, **ECS Clusters**, **Fargate Services**, and **Lambda Functions**. Each wrapper enforces standards like memory limits, timeout configurations, and logging integration.
+
+```typescript
+// Reusable Lambda construct with organisational defaults baked in
+export class Lambda extends Construct {
+  public readonly function: lambda.Function;
+
+  constructor(scope: Construct, id: string, props: LambdaProps) {
+    super(scope, id);
+
+    this.function = new lambda.Function(this, 'Function', {
+      functionName: props.functionName,
+      runtime: props.runtime ?? lambda.Runtime.NODEJS_22_X,
+      handler: props.handler ?? 'index.handler',
+      code: props.code,
+      memorySize: props.memorySize ?? 256,
+      timeout: props.timeout ?? Duration.seconds(30),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logs.RetentionDays.ONE_MONTH,
+      environment: {
+        NODE_OPTIONS: '--enable-source-maps',
+        ...props.environment,
+      },
+    });
+  }
+}
+```
+
+**Event and Messaging** covers the asynchronous backbone of modern architectures. Wrappers exist for **EventBridge**, **IoT Core**, **Kafka (MSK)**, **Kinesis**, **SNS**, **SQS**, and **Step Functions**. These are particularly important because messaging infrastructure is where misconfiguration tends to cause the most pain — dead letter queues that are not configured, retry policies that are too aggressive, and encryption that is forgotten.
+
+**IAM and Identity** is where governance lives. Constructs for **SSO Assignments**, **Cognito User Pools**, **Permission Sets**, and **IAM Roles** ensure that the principle of least privilege is enforced consistently. Getting IAM right at scale is one of the hardest problems in cloud security, and having standardised constructs that encode your organisation's permission boundaries makes a measurable difference.
+
+**Logging and Observability** includes **CloudWatch Log Groups** and **CloudTrail** configuration. Every resource that produces logs routes them through a standardised log group with consistent retention periods and encryption.
+
+**Networking** is the largest category and arguably the most complex. It includes constructs for **API Gateway**, **Application Load Balancers**, **ACM Certificates**, **CloudFront Distributions**, **Customer Gateways**, **VPC Endpoints**, **Internet Gateways**, **NAT Gateways**, **Route Tables**, **Route 53 Hosted Zones and Records**, **Security Groups**, **Subnets**, **Transit Gateways**, **VPCs**, **VPN Connections**, and **WAF Web ACLs**. Networking is where consistency matters most — a single misconfigured security group or route table can create a security incident or a production outage.
+
+```typescript
+// VPC construct with standardised CIDR allocation and subnet layout
+export class Vpc extends Construct {
+  public readonly vpc: ec2.Vpc;
+
+  constructor(scope: Construct, id: string, props: VpcProps) {
+    super(scope, id);
+
+    this.vpc = new ec2.Vpc(this, 'Vpc', {
+      vpcName: props.vpcName,
+      ipAddresses: ec2.IpAddresses.cidr(props.cidr),
+      maxAzs: props.maxAzs ?? 3,
+      natGateways: props.natGateways ?? 1,
+      subnetConfiguration: props.subnetConfiguration ?? [
+        { name: 'Public', subnetType: ec2.SubnetType.PUBLIC, cidrMask: 24 },
+        { name: 'Private', subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, cidrMask: 22 },
+        { name: 'Isolated', subnetType: ec2.SubnetType.PRIVATE_ISOLATED, cidrMask: 24 },
+      ],
+      flowLogs: {
+        default: { destination: ec2.FlowLogDestination.toCloudWatchLogs() },
+      },
+    });
+  }
+}
+```
+
+**Security** covers **Parameter Store** and **Secrets Manager** wrappers that enforce encryption and rotation policies.
+
+**Storage** includes **S3 Buckets**, **DynamoDB Tables**, **ECR Repositories**, **ElastiCache Clusters**, and **RDS Aurora Serverless v2** clusters. Each storage construct enforces encryption at rest, backup policies, and access controls as non-negotiable defaults.
+
+The key insight here is that building the constructs is not the hard part. The hard part is getting the **defaults right** so that teams consuming the library do not need to think about compliance, security, or operational standards. The construct library becomes your organisation's **paved road** — the path of least resistance that also happens to be the most secure and well-architected path.
+
+---
+
+## Stack architecture and scope-based deployment
+
+With a construct library in place, the next challenge is organising your stacks. In a multi-account AWS environment, not every stack should deploy everywhere. Infrastructure stacks deploy to your networking account, security stacks deploy to your security account, and workload stacks deploy to environment-specific accounts.
+
+The architecture I settled on uses three top-level categories, each containing multiple stacks:
+
+**Infrastructure** encompasses the foundational building blocks — **Organisation** configuration, **Network** topology (VPCs, transit gateways, VPN connections), and **Observability** (centralised logging, monitoring dashboards). These stacks are deployed once and shared across the organisation.
+
+**Security** covers **Identity** (SSO assignments, permission sets, Cognito) and **Central Logging** (CloudTrail, log aggregation). These stacks enforce governance and audit requirements.
+
+**Workloads** are the environment-specific stacks that deploy your actual services — compute, databases, APIs, and event infrastructure. These are deployed per-environment (development, staging, production) into separate AWS accounts.
+
+The mechanism that ties it all together is a **scope context** passed at synthesis time. Each stack reads from a shared `config.json` file and deploys only the resources relevant to its scope:
+
+```typescript
+// config.json drives what gets deployed based on scope
+{
+  "infrastructure": {
+    "network": {
+      "vpc": { "cidr": "10.0.0.0/16", "maxAzs": 3 },
+      "transitGateway": { "enabled": true }
+    },
+    "observability": {
+      "logRetentionDays": 90
+    }
+  },
+  "security": {
+    "identity": {
+      "ssoInstanceArn": "arn:aws:sso:::instance/ssoins-xxxxxxxxx"
+    }
+  },
+  "workloads": {
+    "services": [
+      { "name": "order-service", "runtime": "nodejs22.x", "memory": 512 },
+      { "name": "payment-service", "runtime": "nodejs22.x", "memory": 1024 }
+    ]
+  }
+}
+```
+
+```typescript
+// Stack reads config and deploys based on scope
+const scope = app.node.tryGetContext('scope') ?? 'all';
+const config = JSON.parse(fs.readFileSync('config.json', 'utf-8'));
+
+if (scope === 'infrastructure' || scope === 'all') {
+  new NetworkStack(app, 'NetworkStack', {
+    env: { account: config.infrastructure.accountId, region: 'ap-southeast-2' },
+    config: config.infrastructure.network,
+  });
+}
+
+if (scope === 'security' || scope === 'all') {
+  new IdentityStack(app, 'IdentityStack', {
+    env: { account: config.security.accountId, region: 'ap-southeast-2' },
+    config: config.security.identity,
+  });
+}
+```
+
+This approach means you can run `cdk deploy --context scope=infrastructure` to deploy only the infrastructure stacks, or `cdk deploy --context scope=all` to deploy everything. It keeps your deployment pipeline clean and your blast radius small.
+
+---
+
+## CI/CD pipeline with GitHub Actions
+
+A CDK project without a robust CI/CD pipeline is just a local experiment. The pipeline I built uses **GitHub Actions** with reusable workflow templates, matrix-based multi-account deployment, and **OIDC role assumption** — no long-lived AWS credentials stored as secrets.
+
+The pipeline is structured around three reusable workflow templates:
+
+**build-template** handles synthesis, linting, and unit testing. It runs on every pull request and validates that the CDK app synthesises cleanly, all Jest tests pass, and no breaking changes have been introduced to the construct library.
+
+```yaml
+# .github/workflows/build-template.yml
+name: Build Template
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        required: false
+        type: string
+        default: '22'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      - run: npx cdk synth --context scope=all
+```
+
+**deploy-template** performs the actual CDK deployment. It uses a **matrix strategy** to deploy across multiple AWS accounts in parallel, with each account assuming its own OIDC role. The scope context determines which stacks are deployed to which account.
+
+```yaml
+# .github/workflows/deploy-template.yml
+name: Deploy Template
+on:
+  workflow_call:
+    inputs:
+      scope:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-southeast-2
+      - run: npm ci
+      - run: npx cdk deploy --all --require-approval never --context scope=${{ inputs.scope }}
+```
+
+**release-template** handles versioning and changelog generation using **semantic-release**. Commit messages following the Conventional Commits specification automatically determine the next version number, generate release notes, and create a GitHub release.
+
+The orchestrating workflow ties these templates together:
+
+```yaml
+# .github/workflows/main.yml
+name: Main Pipeline
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-template.yml
+
+  deploy-infrastructure:
+    needs: build
+    uses: ./.github/workflows/deploy-template.yml
+    with:
+      scope: infrastructure
+      environment: infrastructure
+
+  deploy-security:
+    needs: build
+    uses: ./.github/workflows/deploy-template.yml
+    with:
+      scope: security
+      environment: security
+
+  deploy-workloads:
+    needs: [deploy-infrastructure, deploy-security]
+    strategy:
+      matrix:
+        environment: [dev, staging, production]
+    uses: ./.github/workflows/deploy-template.yml
+    with:
+      scope: workloads
+      environment: ${{ matrix.environment }}
+
+  release:
+    needs: deploy-workloads
+    uses: ./.github/workflows/release-template.yml
+```
+
+**OIDC role assumption** deserves special attention. Instead of storing long-lived AWS access keys as GitHub secrets, each deployment job assumes an IAM role using GitHub's OIDC identity provider. This means there are no credentials to rotate, no secrets to leak, and each deployment is scoped to exactly the permissions it needs. It is one of those patterns that once you adopt, you cannot imagine going back.
+
+---
+
+## Auto-generated infrastructure diagrams
+
+One of the most valuable additions to the project has nothing to do with deployment — it is **auto-generated infrastructure diagrams**. Using the **@aws/pdk CdkGraph** plugin, the CDK app automatically generates visual diagrams of your infrastructure as part of the synthesis process.
+
+```typescript
+import { CdkGraph, FilterPreset } from '@aws/pdk/cdk-graph';
+import { CdkGraphDiagramPlugin } from '@aws/pdk/cdk-graph-plugin-diagram';
+
+const graph = new CdkGraph(app, {
+  plugins: [
+    new CdkGraphDiagramPlugin({
+      defaults: {
+        filterPlan: {
+          preset: FilterPreset.COMPACT,
+        },
+      },
+    }),
+  ],
+});
+
+app.synth();
+await graph.report();
+```
+
+This is enormously valuable for several reasons. First, it eliminates the perennial problem of documentation going stale — the diagrams are always accurate because they are generated from the same code that creates the infrastructure. Second, it gives new team members a visual map of the entire environment without anyone having to maintain it. Third, it serves as a powerful communication tool for stakeholders who do not read TypeScript but do understand architecture diagrams.
+
+The generated diagrams can be filtered by stack, by resource type, or by custom criteria. You can produce a high-level overview showing the relationship between stacks, or drill down into a specific stack to see every resource and its connections.
+
+---
+
+## Testing every construct
+
+Testing infrastructure code has historically been treated as optional. In a CDK project, there is no excuse for it — you have the full power of your language's testing framework at your disposal.
+
+Every construct in the library has corresponding **Jest unit tests** that validate the synthesised CloudFormation output. The tests use CDK's `assertions` module to inspect the generated template:
+
+```typescript
+import { App, Stack } from 'aws-cdk-lib';
+import { Template } from 'aws-cdk-lib/assertions';
+import { Lambda } from '../constructs/lambda';
+
+describe('Lambda Construct', () => {
+  test('creates function with correct defaults', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+
+    new Lambda(stack, 'TestLambda', {
+      functionName: 'test-function',
+      code: lambda.Code.fromInline('exports.handler = async () => {}'),
+    });
+
+    const template = Template.fromStack(stack);
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'test-function',
+      Runtime: 'nodejs22.x',
+      MemorySize: 256,
+      Timeout: 30,
+      TracingConfig: { Mode: 'Active' },
+    });
+  });
+
+  test('allows overriding memory and timeout', () => {
+    const app = new App();
+    const stack = new Stack(app, 'TestStack');
+
+    new Lambda(stack, 'TestLambda', {
+      functionName: 'custom-function',
+      code: lambda.Code.fromInline('exports.handler = async () => {}'),
+      memorySize: 1024,
+      timeout: Duration.minutes(5),
+    });
+
+    const template = Template.fromStack(stack);
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      MemorySize: 1024,
+      Timeout: 300,
+    });
+  });
+});
+```
+
+This approach catches breaking changes early, validates that organisational defaults are applied correctly, and gives engineers confidence to refactor constructs without fear. When you have over fifty constructs, each with multiple configuration options, automated testing is not a nice-to-have — it is essential.
+
+The tests run as part of the **build-template** workflow, so every pull request is validated before it can be merged. If a construct change breaks an expected CloudFormation output, the pipeline fails and the engineer knows exactly what went wrong.
+
+---
+
+## Multi-account deployment strategy
+
+A production-grade AWS environment uses **multiple accounts** — at minimum, separate accounts for infrastructure, security, and each workload environment. This provides strong blast radius isolation, independent billing, and clear separation of duties.
+
+The CDK project supports this through a combination of the scope-based deployment described earlier and per-account environment configuration. Each AWS account has its own IAM role for CDK deployment, assumed via OIDC, and the pipeline's matrix strategy ensures that workload stacks are deployed to the correct account for each environment.
+
+The flow looks like this:
+
+*   **Infrastructure account** receives network, organisation, and observability stacks
+*   **Security account** receives identity, IAM, and central logging stacks
+*   **Development account** receives workload stacks with development-specific configuration
+*   **Staging account** receives workload stacks mirroring production at reduced scale
+*   **Production account** receives workload stacks with full production configuration
+
+Each account's configuration lives in the same `config.json` file, keyed by environment name. This means a single source of truth drives the entire deployment, and differences between environments are explicit and auditable.
+
+The discipline required here is significant. You need to ensure that your construct library works correctly when synthesised against different account and region contexts. You need to handle cross-account references carefully — for example, a workload stack in the development account might need to reference a VPC in the infrastructure account via a transit gateway. CDK's `Fn.importValue` and SSM Parameter Store lookups are your friends here.
+
+---
+
+## Lessons learned
+
+Building this project taught me several things that I wish I had known at the start.
+
+**Start with the construct library, not the stacks.** It is tempting to jump straight into building stacks that deploy resources. Resist this urge. Invest the time upfront to design your construct interfaces, encode your organisational standards, and write comprehensive tests. The stacks become trivially simple when the constructs are solid.
+
+**Config-driven deployment eliminates drift.** When every resource property is derived from a configuration file rather than hardcoded in a stack, you eliminate an entire class of configuration drift bugs. It also makes it dramatically easier to spin up new environments — you add an entry to the config file and the pipeline does the rest.
+
+**OIDC is non-negotiable.** If you are still storing AWS credentials as GitHub secrets, stop. OIDC role assumption is more secure, easier to manage, and supported natively by both GitHub Actions and AWS. The setup takes thirty minutes and the security improvement is permanent.
+
+**Auto-generated diagrams pay for themselves.** I was sceptical about the value of generated diagrams until I saw how much time they saved during architecture reviews and onboarding conversations. They are now one of the most-referenced artefacts in the project.
+
+**Test ruthlessly.** Every construct should have tests. Every stack should synthesise cleanly in CI. Every deployment should be gated on a passing test suite. The cost of a test is minutes of engineering time. The cost of a misconfigured security group in production is significantly higher.
+
+---
+
+## Conclusion
+
+*   **AWS CDK** provides genuine advantages over CloudFormation and Terraform for large-scale infrastructure — type safety, composability, and testability are transformative at scale
+*   A **reusable L1 construct library** spanning fifty-plus services encodes your organisational standards and provides a paved road for every team
+*   **Config-driven, scope-based deployment** keeps your stacks organised, your blast radius small, and your environments consistent
+*   **GitHub Actions with OIDC role assumption** eliminates long-lived credentials and enables secure, matrix-based multi-account deployment
+*   **Auto-generated infrastructure diagrams** using CdkGraph ensure your documentation is always accurate and require zero manual effort
+*   **Jest unit tests** for every construct catch breaking changes early and give engineers confidence to evolve the library
+*   Invest in the **construct library first** — solid constructs make stacks trivially simple and pay dividends across the entire organisation
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

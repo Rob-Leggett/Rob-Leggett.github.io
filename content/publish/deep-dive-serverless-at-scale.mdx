@@ -1,0 +1,524 @@
+---
+title: "Deep Dive - Serverless at Scale"
+date: "2025-07-17"
+slug: "deep-dive-serverless-at-scale"
+status: "publish"
+feature_image: "/blog/deep-dive-serverless-at-scale/feature-image.png"
+tags: ["Serverless", "Event-Driven Architecture", "AWS Lambda", "Step Functions", "Cold Start", "CQRS", "Event Sourcing", "Cloud Architecture", "Microservices", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Serverless at Scale | Robert Leggett"
+  description: "A comprehensive deep dive into serverless architecture at scale — covering event-driven patterns, cold starts, orchestration with Step Functions, CQRS, event sourcing, and production-ready serverless design."
+  keywords: ["Serverless", "AWS Lambda", "Event-Driven Architecture", "Step Functions", "Cold Start", "CQRS", "Event Sourcing", "Serverless Patterns", "Cloud Architecture", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-serverless-at-scale"
+  image: "https://robertleggett.com.au/blog/deep-dive-serverless-at-scale/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Serverless at Scale"
+  description: "A comprehensive deep dive into serverless architecture at scale — covering event-driven patterns, cold starts, orchestration with Step Functions, CQRS, event sourcing, and production-ready serverless design."
+  image: "https://robertleggett.com.au/blog/deep-dive-serverless-at-scale/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-serverless-at-scale"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Serverless at Scale"
+  description: "A comprehensive deep dive into serverless architecture at scale — covering event-driven patterns, cold starts, orchestration with Step Functions, CQRS, event sourcing, and production-ready serverless design."
+  image: "https://robertleggett.com.au/blog/deep-dive-serverless-at-scale/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the world of serverless computing and event-driven architecture at scale. Serverless has fundamentally changed how we build and operate software — shifting our focus from managing infrastructure to delivering business value. But running serverless at scale is an entirely different challenge. You need to understand cold starts, orchestration patterns, data modelling strategies, observability, and cost dynamics. Whether you are an architect evaluating serverless for a greenfield project or a developer pushing an existing serverless system to handle millions of events per day, our goal is to provide clear and thorough explanations that will deepen your understanding of what it truly takes to run serverless in production. Let's dive in and demystify serverless at scale together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of serverless architecture patterns at scale
+*   Practical knowledge of cold start mitigation, orchestration, event-driven patterns, and cost optimisation
+*   Production-ready code examples using AWS Lambda, Step Functions, EventBridge, and Powertools
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is Serverless Computing?
+
+The term "serverless" is one of the most misunderstood labels in cloud computing. Servers absolutely still exist — you simply do not manage them. Serverless is a cloud execution model where the cloud provider dynamically allocates compute resources on your behalf, automatically scales those resources in response to demand, and charges you only for the actual time your code is running. There is no capacity planning, no patching, and no idle cost when nothing is happening.
+
+Serverless computing is broadly split into two categories. **Functions as a Service (FaaS)** refers to event-triggered compute — you deploy a function, and the cloud provider runs it in response to an event such as an HTTP request, a message on a queue, or a file upload. AWS Lambda, Google Cloud Functions, and Azure Functions are the most prominent FaaS offerings. **Backend as a Service (BaaS)** refers to fully managed services that eliminate operational overhead for common backend concerns — DynamoDB for data storage, Cognito for authentication, S3 for object storage, API Gateway for HTTP routing, and EventBridge for event routing are all examples.
+
+The mental shift from traditional infrastructure to serverless is significant. In a traditional model, you provision servers, configure auto-scaling groups, and pay for compute whether it is being utilised or not. Your application is "always on." In a serverless model, your application is "event-triggered." Nothing runs until something happens. An API request arrives, a file lands in a bucket, a message appears on a queue — and only then does a function spin up, execute, and shut down. This execution model fundamentally changes how you think about architecture, state management, and operational cost.
+
+The serverless execution model follows a straightforward lifecycle. An event source triggers a function invocation. The cloud provider either reuses a warm execution environment or provisions a new one (a cold start). Your handler code runs. The response is returned. If no further invocations arrive within a provider-defined window, the execution environment is reclaimed. This model brings enormous benefits — automatic scaling from zero to thousands of concurrent executions, granular pay-per-use billing, and zero operational burden for the underlying infrastructure. But it also introduces challenges that do not exist in traditional architectures: cold start latency, execution time limits, stateless design constraints, and the complexity of distributed event-driven systems.
+
+Understanding these trade-offs is the foundation for building serverless systems that perform reliably at scale.
+
+---
+
+## Serverless Event-Driven Architecture Overview
+
+Before diving into individual patterns and components, it is worth understanding the overall shape of a serverless event-driven architecture. At a high level, the architecture comprises three layers: event sources, compute, and downstream services.
+
+![Serverless event-driven architecture overview](/blog/deep-dive-serverless-at-scale/inline-1.png)
+
+Serverless Event-Driven Architecture Overview
+
+1.  **Event Sources** generate the events that trigger your serverless functions. These include synchronous sources like Amazon API Gateway (HTTP requests), and asynchronous sources like Amazon S3 (object creation events), DynamoDB Streams (change data capture), Amazon EventBridge (application events and scheduled rules), Amazon SQS (message queues), Amazon SNS (pub/sub notifications), and Amazon Kinesis (real-time data streams). Each event source has its own invocation semantics — synchronous sources wait for a response, while asynchronous sources deliver events to the function and handle retries independently.
+2.  **Compute Layer** is where your Lambda functions (or equivalent FaaS) live. Each function is a single-purpose unit of work — validate an order, process a payment, resize an image. Functions read from the event payload, perform business logic, and produce side effects. They are stateless by design, meaning any state must be externalised to a database, cache, or event store. The cloud provider handles scaling automatically — if 500 events arrive simultaneously, 500 function instances are provisioned (subject to concurrency limits).
+3.  **Downstream Services** are the managed services your functions interact with — DynamoDB for persistence, S3 for storage, SQS and SNS for further message routing, Step Functions for workflow orchestration, and external APIs for third-party integrations. The key architectural principle is that every component in this flow is managed, scalable, and billed on usage.
+
+Event-driven architecture decouples producers from consumers. The service that creates an order does not need to know about the service that sends a confirmation email, the service that updates analytics, or the service that triggers fulfilment. Each consumer subscribes to the events it cares about and reacts independently. This decoupling is what enables serverless architectures to scale — each component can scale independently, fail independently, and be deployed independently.
+
+At scale, this architecture handles millions of events per day. An e-commerce platform might process order events through a chain of Lambda functions, each responsible for a discrete step: validation, payment, inventory, shipping, and notification. Each step communicates through events rather than direct calls, creating a resilient, loosely coupled system.
+
+---
+
+## Cold Starts — The Silent Performance Killer
+
+Cold starts are the most discussed performance concern in serverless computing, and for good reason. A cold start occurs when a Lambda function is invoked but no warm execution environment is available to handle the request. The provider must provision a new container, initialise the runtime, load your code, and execute your handler — all before returning a response to the caller.
+
+![Cold start lifecycle](/blog/deep-dive-serverless-at-scale/inline-2.png)
+
+Cold Start Lifecycle — Init → Handler → Reuse vs New Container
+
+The cold start lifecycle proceeds through the following stages:
+
+1.  **Container Provisioning** — The cloud provider allocates an execution environment (a lightweight micro-VM or container) with the CPU and memory you have configured. This step is managed entirely by the provider and is the baseline cost of a cold start.
+2.  **Runtime Initialisation** — The language runtime is loaded and initialised. For interpreted languages like Python and Node.js, this is relatively fast (tens of milliseconds). For compiled languages like Java and C#, this step includes JVM startup or CLR initialisation, which can add hundreds of milliseconds.
+3.  **Handler Code Loading** — Your deployment package is downloaded (if not already cached) and loaded into the execution environment. Larger deployment packages take longer to load. This is why keeping your function packages lean is critical for cold start performance.
+4.  **Dependency Initialisation** — Your function's init code runs outside the handler. This includes importing libraries, establishing database connections, reading configuration from SSM Parameter Store or Secrets Manager, and initialising SDK clients. This phase is often the largest contributor to cold start latency because developers inadvertently load heavy dependencies or perform network calls during initialisation.
+5.  **Handler Execution** — Finally, your handler function runs and processes the event. After execution, the container remains warm for subsequent invocations, skipping steps 1–4 entirely.
+
+For warm invocations, only step 5 runs — the container, runtime, code, and initialised dependencies are all reused. This is why warm Lambda functions typically respond in single-digit milliseconds for lightweight operations.
+
+### What Causes Cold Starts?
+
+Cold starts are triggered by several conditions: the first invocation after deployment, a spike in traffic that exceeds the number of warm containers, a function that has been idle long enough for the provider to reclaim its container (typically 5–15 minutes on AWS Lambda), and changes to function configuration that require new containers. At scale, cold starts become a statistical certainty — even with steady traffic, container recycling and traffic fluctuations mean a percentage of your invocations will always be cold.
+
+### Mitigation Strategies
+
+**Provisioned Concurrency** is the most direct solution. It tells AWS Lambda to keep a specified number of execution environments warm and initialised at all times. These environments are ready to respond instantly, eliminating cold starts for the configured capacity. The trade-off is cost — you pay for provisioned concurrency whether it is used or not.
+
+```bash
+# Configure provisioned concurrency
+aws lambda put-provisioned-concurrency-config \
+  --function-name payment-processor \
+  --qualifier production \
+  --provisioned-concurrent-executions 10
+
+# Enable SnapStart for Java functions
+aws lambda update-function-configuration \
+  --function-name order-processor \
+  --snap-start ApplyOn=PublishedVersions
+```
+
+```yaml
+# SAM template with provisioned concurrency
+Resources:
+  PaymentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/payment.handler
+      Runtime: nodejs20.x
+      MemorySize: 1024
+      Timeout: 30
+      AutoPublishAlias: production
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 10
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref PaymentsTable
+          ENVIRONMENT: production
+```
+
+**SnapStart** is AWS's solution for Java-based Lambda functions. Rather than performing a full JVM initialisation on every cold start, SnapStart takes a Firecracker snapshot of the initialised execution environment after the init phase. Subsequent cold starts restore from this snapshot rather than re-initialising, reducing Java cold start times from several seconds to a few hundred milliseconds.
+
+**Lightweight Runtimes and Mini-Containers** — Language choice has a material impact on cold start performance. Python and Node.js functions typically cold-start in 100–300 milliseconds. Java and .NET functions can take 1–3 seconds without optimisation. Rust and Go, being compiled to native binaries with minimal runtime overhead, cold-start in under 50 milliseconds in many cases. If cold start latency is critical for your use case, choosing a lightweight runtime is one of the most effective optimisations.
+
+**Keep-Warm Strategies** involve periodically invoking your functions to prevent the provider from reclaiming warm containers. A scheduled EventBridge rule that triggers your function every 5 minutes can keep containers warm. However, this approach has limitations — it only keeps one container warm per invocation, so it does not help with concurrent traffic spikes. It is also a workaround rather than a proper solution, and provisioned concurrency is generally preferred.
+
+**Minimise Deployment Package Size** — Remove unnecessary dependencies, use tree-shaking for Node.js bundles, use Lambda Layers for shared libraries, and avoid bundling development-only dependencies. A smaller package means faster code loading during cold starts.
+
+**Initialise Wisely** — Move expensive initialisation (database connections, SDK clients, configuration loading) outside the handler but be deliberate about what you initialise. Lazy-load dependencies that are not needed on every invocation. Cache configuration values rather than fetching them on every cold start.
+
+---
+
+## Event-Driven Patterns
+
+Event-driven architecture is not a single pattern — it is a family of patterns, each suited to different problems. At scale, choosing the right pattern for the right problem is one of the most important architectural decisions you will make.
+
+### Event Sourcing + CQRS
+
+Event Sourcing and Command Query Responsibility Segregation (CQRS) are two distinct patterns that pair together exceptionally well in serverless architectures.
+
+![Event sourcing + CQRS pattern](/blog/deep-dive-serverless-at-scale/inline-3.png)
+
+Event Sourcing + CQRS Pattern
+
+**Event Sourcing** is a pattern where every change to application state is captured as an immutable event in an append-only event store. Rather than storing the current state of an entity (like a traditional database row), you store the sequence of events that led to the current state. An order entity, for example, would be represented as a series of events: `OrderCreated`, `PaymentProcessed`, `InventoryReserved`, `OrderShipped`, `OrderDelivered`. To reconstruct the current state, you replay the events in order. This provides a complete audit trail, enables temporal queries ("what was the state of this order at 3pm yesterday?"), and supports event replay for debugging or rebuilding projections.
+
+The **Event Store** is the source of truth. In a serverless context, DynamoDB is a natural fit — it provides single-digit millisecond reads and writes at any scale, and DynamoDB Streams can broadcast events to downstream consumers in near real-time. Each event is stored with a partition key (the aggregate ID, such as the order ID), a sort key (the event sequence number or timestamp), and the event payload. Events are immutable — once written, they are never modified or deleted.
+
+**Projections** (also called read models or materialisations) are derived views of the event stream, optimised for specific query patterns. A Lambda function subscribes to DynamoDB Streams, reads new events, and updates one or more projection tables. For example, an `OrderSummary` projection might maintain a denormalised view of each order's current status, while an `CustomerOrderHistory` projection aggregates all orders for a given customer. Each projection is independently rebuildable by replaying the event stream from the beginning.
+
+**CQRS** separates the write model (commands) from the read model (queries) into distinct paths. The command side validates and processes writes, storing events in the event store. The query side reads from projections that are optimised for the specific access patterns your application needs. This separation enables independent scaling — the command side can be optimised for write throughput while the query side can be optimised for read latency, and each can use different data stores, indexing strategies, and caching layers.
+
+The combination of Event Sourcing and CQRS introduces **eventual consistency** — there is a propagation delay between when an event is written to the event store and when the corresponding projection is updated. In practice, this delay is typically measured in milliseconds to low seconds with DynamoDB Streams and Lambda, but your application must be designed to tolerate it. User interfaces should acknowledge writes optimistically and handle the brief window where the read model has not yet caught up.
+
+Why do these patterns pair so well in serverless? Because the event-driven nature of serverless architectures maps directly to the event-driven nature of Event Sourcing. DynamoDB Streams triggers Lambda functions automatically, projections are built by stateless functions that scale independently, and the entire pipeline is managed, scalable, and pay-per-use.
+
+### Saga Pattern
+
+Distributed transactions are one of the hardest problems in microservices. The Saga pattern provides an alternative to traditional two-phase commits by breaking a distributed transaction into a series of local transactions, each with a corresponding compensation action that can undo the work if a later step fails.
+
+![Saga pattern — orchestration vs choreography](/blog/deep-dive-serverless-at-scale/inline-4.png)
+
+Saga Pattern — Orchestration vs Choreography Comparison
+
+There are two approaches to implementing sagas: **orchestration** and **choreography**.
+
+**Orchestration** uses a central coordinator (the orchestrator) that directs the saga's execution. The orchestrator calls each participant in sequence, waits for the result, and decides whether to proceed to the next step or trigger compensating actions to roll back. AWS Step Functions is a natural orchestrator for serverless sagas — it manages the flow, handles retries, and provides built-in error handling and compensation logic.
+
+The advantages of orchestration are clear visibility into the saga's progress, centralised error handling, and straightforward compensation logic. The orchestrator maintains the saga's state, so you can inspect exactly where a saga is at any point. The trade-off is that the orchestrator becomes a centralised component — it must be highly available, and changes to the workflow require updating the orchestrator's definition.
+
+**Choreography** distributes the saga's coordination across the participants themselves. Each service performs its local transaction and publishes an event. Other services listen for that event and perform their own local transactions in response, publishing further events. There is no central coordinator — the saga's flow emerges from the chain of events.
+
+Choreography provides stronger decoupling — each service only knows about the events it publishes and consumes, not about the other services in the saga. This makes it easier to add new participants without modifying existing ones. However, the trade-offs are significant: the saga's flow is implicit and harder to visualise, error handling and compensation must be implemented in each participant, and debugging failures requires correlating events across multiple services and logs.
+
+**Compensation transactions** are the rollback mechanism in sagas. If the "Process Payment" step succeeds but the subsequent "Reserve Inventory" step fails, the saga must issue a compensating "Refund Payment" action. Each step in the saga must have a clearly defined compensation action. In orchestration, the orchestrator triggers compensations in reverse order. In choreography, each service must listen for failure events and trigger its own compensation.
+
+**When to use which?** Orchestration is generally preferred when the workflow is complex, has many steps, requires clear visibility, or needs sophisticated error handling and retries. Choreography is preferred when the workflow is simple, the services are highly independent, or you want to avoid a centralised dependency. Many production systems use a hybrid approach — orchestration for critical business workflows (like order processing) and choreography for supporting concerns (like analytics and notification).
+
+---
+
+## Step Functions for Orchestration
+
+AWS Step Functions is the primary serverless orchestration service on AWS. It enables you to coordinate multiple AWS services — Lambda functions, DynamoDB operations, SQS messages, SNS notifications, and more — into structured, visual workflows defined in Amazon States Language (ASL).
+
+![Step Functions workflow orchestration flow](/blog/deep-dive-serverless-at-scale/inline-5.png)
+
+Step Functions Workflow Orchestration Flow
+
+### Standard vs Express Workflows
+
+Step Functions offers two workflow types. **Standard Workflows** are designed for long-running, durable workflows that can run for up to one year. They provide exactly-once execution semantics, full execution history, and are priced per state transition. Standard Workflows are ideal for order processing, human approval workflows, and any process that may take minutes, hours, or days to complete.
+
+**Express Workflows** are designed for high-volume, short-duration workloads. They can run for up to five minutes and support at-least-once (asynchronous) or at-most-once (synchronous) execution semantics. Express Workflows are priced based on the number of executions, duration, and memory consumed, making them significantly cheaper for high-throughput use cases like real-time data processing, IoT event handling, and streaming transformations.
+
+### State Types
+
+Step Functions provides several state types that serve as building blocks for workflows:
+
+*   **Task** — Performs work by invoking a Lambda function, calling an AWS SDK API, or running an ECS task. This is the workhorse state type.
+*   **Choice** — Implements branching logic by evaluating conditions against the input and routing to different states based on the result. Equivalent to an if/else or switch statement.
+*   **Parallel** — Executes multiple branches simultaneously and waits for all branches to complete before proceeding. Essential for fan-out operations where independent tasks can run concurrently.
+*   **Map** — Iterates over an array in the input and runs a set of states for each element, either sequentially or in parallel. The Distributed Map mode can process millions of items from S3 with massive parallelism.
+*   **Wait** — Pauses the workflow for a specified duration or until a specific timestamp. Useful for implementing delays, polling intervals, or scheduling future actions.
+*   **Succeed** and **Fail** — Terminal states that mark the workflow as complete or failed.
+
+### Error Handling and Retry Strategies
+
+Step Functions provides robust error handling through `Retry` and `Catch` configurations on Task states. Retries can be configured with exponential backoff, maximum attempts, and specific error types. Catch blocks route to fallback states when retries are exhausted. This declarative error handling eliminates the need to implement retry logic in your Lambda functions.
+
+```json
+{
+  "Comment": "Order Processing Workflow",
+  "StartAt": "ValidateOrder",
+  "States": {
+    "ValidateOrder": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-southeast-2:123456789012:function:validate-order",
+      "Next": "CheckInventory",
+      "Retry": [
+        {
+          "ErrorEquals": ["ServiceException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["ValidationError"],
+          "Next": "OrderFailed"
+        }
+      ]
+    },
+    "CheckInventory": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-southeast-2:123456789012:function:check-inventory",
+      "Next": "ProcessPayment"
+    },
+    "ProcessPayment": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-southeast-2:123456789012:function:process-payment",
+      "Next": "ParallelFulfillment"
+    },
+    "ParallelFulfillment": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "UpdateInventory",
+          "States": {
+            "UpdateInventory": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:ap-southeast-2:123456789012:function:update-inventory",
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "SendConfirmation",
+          "States": {
+            "SendConfirmation": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:ap-southeast-2:123456789012:function:send-confirmation",
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "InitiateShipping",
+          "States": {
+            "InitiateShipping": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:ap-southeast-2:123456789012:function:initiate-shipping",
+              "End": true
+            }
+          }
+        }
+      ],
+      "Next": "OrderComplete"
+    },
+    "OrderComplete": {
+      "Type": "Succeed"
+    },
+    "OrderFailed": {
+      "Type": "Fail",
+      "Cause": "Order validation failed"
+    }
+  }
+}
+```
+
+This workflow demonstrates key Step Functions capabilities in a realistic order-processing scenario. The `ValidateOrder` state retries transient service exceptions with exponential backoff and catches validation errors, routing them to a dedicated failure state. After validation, inventory check, and payment processing run sequentially (each depending on the prior step's success). The `ParallelFulfillment` state then executes inventory update, confirmation email, and shipping initiation simultaneously — significantly reducing end-to-end processing time compared to sequential execution.
+
+### Beyond AWS — Other Orchestration Services
+
+**Google Cloud Workflows** provides similar orchestration capabilities on GCP. Workflows are defined in YAML or JSON, support HTTP-based service calls, conditional logic, parallel execution, and error handling. They are particularly well-integrated with Cloud Functions, Cloud Run, and GCP APIs.
+
+**Azure Durable Functions** takes a code-first approach to orchestration. Rather than defining workflows in a declarative language, you write orchestrator functions in C#, JavaScript, Python, or Java. Durable Functions supports fan-out/fan-in, function chaining, human interaction patterns, and long-running workflows. The code-first model appeals to developers who prefer the expressiveness and testability of a programming language over declarative state machine definitions.
+
+---
+
+## Message Patterns — Fan-Out, Fan-In, and Event Routing
+
+Messaging patterns are the backbone of scalable event-driven architectures. The way you route, distribute, and aggregate messages determines how well your system handles increasing load and how resilient it is to failures.
+
+![Fan-out/fan-in pattern with SNS/SQS](/blog/deep-dive-serverless-at-scale/inline-6.png)
+
+Fan-Out / Fan-In Pattern with SNS and SQS
+
+### Fan-Out with SNS and SQS
+
+The fan-out pattern distributes a single event to multiple consumers for parallel processing. Amazon SNS (Simple Notification Service) is the primary fan-out mechanism on AWS. When a message is published to an SNS topic, it is delivered to every subscriber — SQS queues, Lambda functions, HTTP endpoints, or email addresses.
+
+A common and resilient pattern is SNS → SQS → Lambda. The SNS topic fans out to multiple SQS queues, each with its own Lambda consumer. The SQS queue provides buffering, retry handling, and dead-letter queue (DLQ) support, decoupling the producer's publishing rate from each consumer's processing rate. If one consumer falls behind or fails, the others are unaffected — the failed consumer's messages remain safely in its queue until they can be processed or are moved to the DLQ after the maximum retry count is exceeded.
+
+### Fan-In with Aggregation
+
+The fan-in pattern is the counterpart to fan-out — collecting results from multiple parallel operations into a single aggregated result. In Step Functions, the Parallel and Map states provide built-in fan-in by collecting the outputs of all branches or iterations. For asynchronous fan-in without Step Functions, a common approach is to write partial results to DynamoDB with atomic counters, and trigger a finalisation Lambda when the counter reaches the expected total.
+
+### Dead Letter Queues
+
+Dead letter queues (DLQs) are critical at scale. When a Lambda function fails to process a message after the configured number of retries, the message is moved to the DLQ rather than being lost. DLQs give you a safety net for investigating and replaying failed messages. Every production SQS queue and Lambda event source mapping should have a configured DLQ. You should also set up CloudWatch alarms on DLQ depth to be alerted when failures are accumulating.
+
+### EventBridge for Event Routing
+
+Amazon EventBridge is a serverless event bus that routes events based on content-based rules. Unlike SNS (which broadcasts to all subscribers), EventBridge evaluates rules against event content and routes each event only to matching targets. This enables sophisticated event routing without requiring consumers to filter irrelevant events.
+
+```yaml
+# CDK EventBridge Rule
+Resources:
+  OrderEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: order-created-rule
+      EventBusName: orders-bus
+      EventPattern:
+        source:
+          - "com.example.orders"
+        detail-type:
+          - "OrderCreated"
+        detail:
+          orderValue:
+            - numeric:
+                - ">="
+                - 100
+      Targets:
+        - Arn: !GetAtt HighValueOrderFunction.Arn
+          Id: high-value-processor
+        - Arn: !GetAtt AnalyticsQueue.Arn
+          Id: analytics-queue
+        - Arn: !GetAtt NotificationTopic.Arn
+          Id: notification-topic
+```
+
+This EventBridge rule matches `OrderCreated` events where the order value is $100 or more, routing them simultaneously to a high-value order processing Lambda, an analytics SQS queue, and a notification SNS topic. Events with order values below $100 would not match this rule and could be handled by a separate rule with different targets. This content-based routing eliminates the need for consumer-side filtering and reduces unnecessary invocations.
+
+### Pipes and Filters
+
+The pipes and filters pattern chains processing steps together, where each step (filter) performs a single transformation and passes the result to the next step through a connecting channel (pipe). In serverless, this translates naturally to Lambda functions connected by SQS queues or EventBridge Pipes. Each function performs one task — enrich, validate, transform, or filter — and passes the result downstream. This pattern promotes reusability, testability, and independent scaling of each processing step.
+
+---
+
+## Serverless Databases
+
+A serverless architecture is only as scalable as its data layer. Traditional relational databases with connection pooling, fixed provisioning, and vertical scaling are often at odds with the ephemeral, highly concurrent nature of serverless compute. Serverless database offerings address this mismatch.
+
+### Amazon DynamoDB
+
+DynamoDB is the most widely used database in serverless architectures on AWS, and for good reason — it scales automatically, provides single-digit millisecond performance at any scale, and integrates natively with Lambda through DynamoDB Streams.
+
+**Single-Table Design** is the recommended data modelling approach for DynamoDB. Rather than creating separate tables for each entity type (as you would in a relational database), you store all entities in a single table using carefully designed partition keys and sort keys. An e-commerce application might store customers, orders, and order items in one table with a partition key of `PK` and sort key of `SK`, where customer records use `PK=CUSTOMER#123, SK=PROFILE`, orders use `PK=CUSTOMER#123, SK=ORDER#456`, and order items use `PK=ORDER#456, SK=ITEM#789`. This design enables efficient access patterns using a single query operation.
+
+**Global Secondary Indexes (GSIs)** provide alternative access patterns on the same table. If your primary access pattern is "get all orders for a customer" (partition key = customer ID), a GSI can support "get all orders by status" (partition key = status, sort key = date). DynamoDB supports up to 20 GSIs per table, each with its own partition and sort key.
+
+**On-Demand vs Provisioned Capacity** — On-demand mode automatically scales to handle any traffic level and charges per read/write request. Provisioned mode requires you to specify read and write capacity units, but is cheaper for predictable, steady-state workloads. On-demand is the natural choice for serverless applications with unpredictable or spiky traffic patterns, while provisioned mode with auto-scaling suits applications with more predictable load.
+
+### Other Serverless Database Options
+
+**Google Cloud Firestore** provides a document database with real-time synchronisation, offline support, and automatic scaling. It is well-suited to mobile and web applications that need real-time data updates.
+
+**Azure Cosmos DB Serverless Mode** offers a consumption-based pricing model for Cosmos DB, where you pay only for the request units consumed and storage used. It supports multiple data models (document, key-value, column-family, graph) and provides global distribution with configurable consistency levels.
+
+**Amazon Aurora Serverless v2** brings the serverless model to relational databases. It scales capacity automatically in fine-grained increments based on application demand, scaling from as low as 0.5 ACUs (Aurora Capacity Units) to hundreds of ACUs in seconds. Aurora Serverless v2 is a strong choice when your application requires relational data modelling, complex queries, or transactional consistency that DynamoDB's eventual consistency model cannot satisfy. It also supports the Data API, which provides an HTTP-based interface that eliminates the need for persistent database connections — solving one of the most painful problems with using relational databases from Lambda functions.
+
+### Data Modelling for Serverless
+
+The key principle in serverless data modelling is to design for your access patterns, not for normalisation. In a relational database, you normalise data to reduce redundancy and then join tables at query time. In DynamoDB and similar NoSQL databases, you denormalise data to serve your access patterns in a single query. This requires you to know your access patterns upfront — which is a significant shift from the relational mindset where you can query data in arbitrary ways using SQL.
+
+---
+
+## Observability Challenges
+
+Observability in serverless architectures is fundamentally harder than in traditional monolithic or container-based systems. Your application is distributed across dozens or hundreds of functions, each running in ephemeral containers with no persistent file system or long-lived process to attach monitoring agents to. A single user request might traverse an API Gateway, three Lambda functions, two SQS queues, a DynamoDB table, and an external API. Without proper observability, debugging failures in this environment is like searching for a needle in a haystack.
+
+![Serverless observability stack](/blog/deep-dive-serverless-at-scale/inline-7.png)
+
+Serverless Observability Stack — Traces, Metrics, and Logs
+
+### Distributed Tracing
+
+**AWS X-Ray** provides distributed tracing for serverless applications. When enabled, X-Ray traces requests as they flow through API Gateway, Lambda functions, DynamoDB, SQS, SNS, and other AWS services. Each trace provides a visual map of the request's path, the latency of each component, and any errors encountered. X-Ray integrates natively with Lambda — enabling it requires only a configuration change, not code changes.
+
+**OpenTelemetry** is the vendor-neutral, open-source alternative. The AWS Distro for OpenTelemetry (ADOT) provides a Lambda layer that collects traces, metrics, and logs and exports them to your observability backend of choice — X-Ray, Datadog, New Relic, Honeycomb, Grafana, or others. OpenTelemetry avoids vendor lock-in and provides consistent instrumentation across cloud providers.
+
+### Structured Logging
+
+Structured logging — emitting logs as JSON objects rather than free-text strings — is essential in serverless architectures. Structured logs are machine-parseable, making it possible to query, filter, and aggregate log data in CloudWatch Logs Insights, Elasticsearch, or other log analytics tools. Every log entry should include the function name, request ID, a correlation ID (for tracing a request across multiple functions), and relevant business context like order IDs or customer IDs.
+
+### Correlation IDs
+
+A **correlation ID** is a unique identifier that is generated at the entry point of a request (typically at the API Gateway) and propagated through every downstream service and function invocation. By including the correlation ID in every log entry, trace, and metric, you can reconstruct the complete lifecycle of a request across all components. Without correlation IDs, you are left searching through unrelated log streams trying to piece together what happened.
+
+### Powertools for AWS Lambda
+
+AWS Lambda Powertools is a suite of utilities that implements serverless best practices for logging, tracing, and metrics. It is available for Python, TypeScript, Java, and .NET, and dramatically reduces the boilerplate required for production-grade observability.
+
+```python
+from aws_lambda_powertools import Logger, Tracer, Metrics
+from aws_lambda_powertools.metrics import MetricUnit
+from aws_lambda_powertools.utilities.typing import LambdaContext
+
+logger = Logger(service="payment-service")
+tracer = Tracer(service="payment-service")
+metrics = Metrics(namespace="PaymentService")
+
+@logger.inject_lambda_context(log_event=True)
+@tracer.capture_lambda_handler
+@metrics.log_metrics(capture_cold_start_metric=True)
+def handler(event: dict, context: LambdaContext) -> dict:
+    order_id = event.get("order_id")
+    logger.append_keys(order_id=order_id)
+
+    logger.info("Processing payment", extra={"amount": event.get("amount")})
+
+    with tracer.provider.in_subsegment("process-payment") as subsegment:
+        subsegment.put_annotation("order_id", order_id)
+        result = process_payment(event)
+
+    metrics.add_metric(
+        name="PaymentProcessed",
+        unit=MetricUnit.Count,
+        value=1
+    )
+    metrics.add_metric(
+        name="PaymentAmount",
+        unit=MetricUnit.Count,
+        value=event.get("amount", 0)
+    )
+
+    return {"statusCode": 200, "body": result}
+```
+
+This example demonstrates three Powertools capabilities in a single function. The `Logger` decorator automatically includes the Lambda context (function name, request ID, memory allocation) in every log entry and logs the incoming event. The `Tracer` decorator creates X-Ray traces for the handler and any decorated subsegments. The `Metrics` decorator captures custom CloudWatch metrics, including an automatic cold start metric that tracks how often your function experiences cold starts. The `append_keys` method adds the order ID to every subsequent log entry, providing business context for debugging.
+
+### Custom Metrics
+
+Beyond Powertools, you should emit custom CloudWatch metrics for key business and operational indicators: payment amounts, order counts, processing durations, error rates by type, and queue depths. CloudWatch Embedded Metric Format (EMF) allows you to embed metrics directly in log entries, which CloudWatch automatically extracts and publishes as metrics — no separate API calls required. This is both simpler and more cost-effective than calling the CloudWatch PutMetricData API from within your functions.
+
+---
+
+## Cost Modelling at Scale
+
+One of the most compelling selling points of serverless is the pay-per-use pricing model. But at scale, serverless cost dynamics become nuanced, and the economics can shift dramatically depending on your workload patterns.
+
+### Lambda Pricing Model
+
+AWS Lambda pricing has two components: **request charges** and **duration charges**. You pay $0.20 per million requests and $0.0000166667 per GB-second of compute time (for x86 architecture). A function configured with 1024 MB of memory that runs for 200 milliseconds costs approximately $0.0000033 per invocation. At one million invocations per day, that is roughly $3.33 per day or $100 per month — remarkably cheap for the compute involved.
+
+But Lambda does not operate in isolation. A realistic serverless application also incurs costs for API Gateway ($3.50 per million requests), DynamoDB (on-demand read/write units), SQS ($0.40 per million requests), SNS, CloudWatch Logs, X-Ray traces, and data transfer. The Lambda compute cost is often a minority of the total bill — the surrounding services and data transfer can dominate.
+
+### Cost Comparison with Containers and VMs
+
+At low to moderate traffic levels, serverless is almost always cheaper than running equivalent container or VM infrastructure. The break-even point varies by workload, but as a rough guideline: when your Lambda functions are running at sustained high concurrency for the majority of the day, the cost advantage of serverless diminishes. A Lambda function running continuously at 1 GB of memory costs roughly $1,440 per month — compared to a Fargate task with equivalent resources at approximately $30–50 per month, or an EC2 instance at $20–40 per month.
+
+The crossover point is not just about raw compute cost, however. Serverless eliminates operational cost — no patching, no capacity planning, no on-call for infrastructure issues. When you factor in the engineering time saved, serverless often remains cost-effective well beyond the raw compute crossover point.
+
+### When Serverless Becomes Expensive
+
+Serverless costs can escalate in several scenarios. **High-throughput, long-duration workloads** — if your functions process large payloads, make multiple downstream API calls, and run for several seconds per invocation, the per-invocation cost adds up quickly. **Chatty architectures** — designs with excessive inter-service communication generate high request counts across API Gateway, SQS, SNS, and Lambda, where each hop adds incremental cost. **Uncontrolled fan-out** — a single event that triggers a cascade of hundreds of downstream invocations can generate unexpected cost spikes. **Provisioned concurrency** — keeping warm containers for latency-sensitive functions adds a fixed cost regardless of utilisation.
+
+### Cost Optimisation Strategies
+
+*   **Right-size memory** — Lambda allocates CPU proportionally to memory. A function configured with 256 MB gets half the CPU of a 512 MB function. Sometimes increasing memory actually reduces cost because the function completes faster, consuming fewer GB-seconds overall. Use AWS Lambda Power Tuning to find the optimal memory configuration.
+*   **Minimise execution duration** — Optimise your function code, parallelise independent I/O operations, and use connection reuse for HTTP clients and database connections.
+*   **Batch processing** — Use SQS batch processing (up to 10,000 messages per batch with Lambda) to reduce the number of invocations. Process multiple records per invocation rather than one record per invocation.
+*   **Use Graviton (ARM) processors** — Lambda functions running on ARM architecture (Graviton2) are 20% cheaper and often perform better than x86 equivalents. Switching is typically a one-line configuration change.
+*   **Cache aggressively** — Use DynamoDB DAX, ElastiCache, or Lambda execution environment caching to reduce downstream service calls and associated costs.
+*   **Review CloudWatch Logs** — Lambda functions automatically log to CloudWatch, and log ingestion costs ($0.50 per GB) can become significant at high throughput. Reduce log verbosity in production and consider sampling strategies for debug-level logs.
+*   **Use Step Functions Express Workflows** — For high-volume orchestration, Express Workflows are dramatically cheaper than Standard Workflows because they charge based on execution count and duration rather than per state transition.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming. Serverless at scale is a broad topic, and the best approach is to start with the fundamentals — understand the execution model, pick the right patterns for your use case, invest in observability from day one, and iterate. You do not need to adopt every pattern discussed here at once. Start simple, measure, and evolve your architecture as your scale demands it.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

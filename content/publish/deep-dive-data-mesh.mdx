@@ -1,0 +1,747 @@
+---
+title: "Deep Dive - Data Mesh Architecture"
+date: "2025-07-19"
+slug: "deep-dive-data-mesh"
+status: "publish"
+feature_image: "/blog/deep-dive-data-mesh/feature-image.png"
+tags: ["Data Mesh", "Data Architecture", "Domain-Driven Design", "Data as a Product", "Federated Governance", "Data Contracts", "Data Engineering", "dbt", "Data Catalog", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Data Mesh Architecture | Robert Leggett"
+  description: "A comprehensive deep dive into data mesh architecture — covering domain ownership, data as a product, self-serve infrastructure, federated governance, data contracts, and practical implementation patterns."
+  keywords: ["Data Mesh", "Data Architecture", "Domain Ownership", "Data as a Product", "Federated Governance", "Data Contracts", "dbt", "Data Catalog", "DataHub", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-data-mesh"
+  image: "https://robertleggett.com.au/blog/deep-dive-data-mesh/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Data Mesh Architecture"
+  description: "A comprehensive deep dive into data mesh architecture — covering domain ownership, data as a product, self-serve infrastructure, federated governance, data contracts, and practical implementation patterns."
+  image: "https://robertleggett.com.au/blog/deep-dive-data-mesh/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-data-mesh"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Data Mesh Architecture"
+  description: "A comprehensive deep dive into data mesh architecture — covering domain ownership, data as a product, self-serve infrastructure, federated governance, data contracts, and practical implementation patterns."
+  image: "https://robertleggett.com.au/blog/deep-dive-data-mesh/feature-image.png"
+---
+
+Welcome to the "Data Mesh Deep Dive" series! In this comprehensive exploration, we will immerse ourselves in one of the most significant paradigm shifts in how organisations think about data architecture. Data mesh challenges the deeply entrenched assumption that data must be owned, managed, and served by a single centralised team. Instead, it proposes a sociotechnical approach — one that treats data as a product, distributes ownership to domain teams, and applies platform thinking to data infrastructure. Whether you are a data engineer wrestling with monolithic pipelines, an architect evaluating your next-generation data strategy, or a technical leader trying to understand the organisational implications, our goal is to provide clear, thorough explanations that will deepen your understanding of data mesh. Join us on this enlightening journey as we unpack the principles, patterns, and practicalities of data mesh architecture. Let's dive in and demystify the world of data mesh together.
+
+---
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of data mesh architecture and its four foundational principles
+*   Practical knowledge of data contracts, schemas, and data product design
+*   Hands-on examples with dbt, Kafka, Avro, and data quality tooling
+*   A clear migration strategy from monolithic data platforms to data mesh
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## The Problem with Centralised Data Architectures
+
+To understand why data mesh exists, we first need to understand the pain it addresses. For the past two decades, organisations have gravitated towards centralised data architectures — a single data warehouse, a monolithic data lake, or a centralised data engineering team responsible for ingesting, transforming, and serving all analytical data across the business.
+
+On paper, centralisation makes sense. You get a single source of truth, consistent governance, and a dedicated team of specialists. In practice, however, this model breaks down spectacularly at scale.
+
+**The centralised data team becomes the bottleneck.** Every domain — orders, customers, inventory, payments, marketing — needs its data modelled, transformed, and made available for analytics. These requests all funnel through a single team. That team lacks deep domain knowledge, so they build pipelines based on second-hand understanding. They become ticket-takers, building ETL jobs as fast as they can, yet the backlog grows endlessly. The feedback loop between the people who understand the data (domain teams) and the people who build the pipelines (the central data team) is long, lossy, and frustrating for everyone involved.
+
+**Monolithic data platforms resist change.** A centralised data lake or warehouse becomes a tightly coupled monolith over time. Pipelines have hidden dependencies. Schema changes in one domain ripple unpredictably across downstream consumers. Nobody fully understands the lineage of a given dataset. The platform accumulates technical debt at an alarming rate, and each new pipeline adds to the fragility.
+
+**Data quality degrades.** When the people building the pipelines are disconnected from the domain, data quality inevitably suffers. The central team doesn't know that a `status` field recently gained a new enum value, or that the semantics of `total_amount` changed after a business rule update. They discover these issues reactively — often when a dashboard breaks or a report contains incorrect figures.
+
+**Scaling becomes organisational, not just technical.** You can throw more compute at a slow query, but you cannot throw more compute at a team that lacks the context to build the right pipeline. The bottleneck is organisational, and no amount of Spark clusters or Snowflake credits will fix it.
+
+Data mesh was conceived by Zhamak Dehghani in 2019 as a direct response to these challenges. It draws on lessons from domain-driven design, product thinking, platform engineering, and federated governance to propose a fundamentally different approach.
+
+---
+
+## Data Mesh vs Data Lake vs Data Warehouse vs Lakehouse
+
+Before diving into data mesh itself, it helps to understand where it sits relative to the architectures that came before it. Each of these approaches solves a real problem, but each also introduces new ones at scale.
+
+![Monolithic data platform vs data mesh comparison](/blog/deep-dive-data-mesh/inline-1.png)
+
+Monolithic Data Platform vs Data Mesh Comparison
+
+### Data Warehouse
+
+The data warehouse is the oldest pattern in the analytical data world. Think Teradata, Oracle, Snowflake, BigQuery, or Amazon Redshift. Data is extracted from operational systems, transformed to fit a predefined schema (schema-on-write), and loaded into a structured, SQL-queryable store.
+
+**Strengths:** Strong consistency, well-understood modelling patterns (star schema, snowflake schema), excellent query performance for structured data, mature tooling.
+
+**Weaknesses:** Rigid schemas make it slow to adapt to change. All data must be transformed before loading, which creates a bottleneck. Struggles with semi-structured or unstructured data. Centralised ownership creates the organisational bottleneck described above.
+
+### Data Lake
+
+The data lake emerged as a response to the rigidity of the data warehouse. Dump everything — structured, semi-structured, unstructured — into a cheap storage layer (typically HDFS or cloud object storage like S3). Apply schema-on-read when you actually need to query the data.
+
+**Strengths:** Cheap storage, handles any data format, enables machine learning workloads on raw data, flexible.
+
+**Weaknesses:** Without governance, data lakes quickly become "data swamps." Discoverability is poor. Quality is unknown. Schema-on-read pushes complexity to consumers. Performance is often suboptimal compared to a warehouse.
+
+### Data Lakehouse
+
+The lakehouse architecture — championed by technologies like Delta Lake, Apache Iceberg, and Apache Hudi — attempts to combine the best of both worlds. It provides ACID transactions, schema enforcement, and time travel on top of a data lake storage layer. You get the flexibility of a lake with the reliability of a warehouse.
+
+**Strengths:** Unified batch and streaming, ACID transactions on object storage, supports both BI and ML workloads, open formats.
+
+**Weaknesses:** Still typically owned by a centralised team. The technology is better, but the organisational structure remains the same. At scale, you still hit the centralised bottleneck.
+
+### Data Mesh
+
+Data mesh is not a technology — it is an architectural and organisational paradigm. It can be implemented on top of a warehouse, a lake, or a lakehouse. The key difference is **who owns the data**. In a data mesh, ownership is distributed to domain teams. Each domain publishes well-defined data products that other domains can discover and consume.
+
+**Strengths:** Scales with the organisation, aligns data ownership with domain expertise, reduces bottlenecks, treats data as a first-class product.
+
+**Weaknesses:** Requires significant organisational change, needs a mature platform team, governance is more complex, not suitable for small organisations with simple data needs.
+
+The critical insight is that data mesh is orthogonal to your storage technology choice. You can run a data mesh on Snowflake, on Delta Lake, on BigQuery, or on a combination of all three. The mesh is about ownership, interfaces, and governance — not about which database engine you use.
+
+---
+
+## The Four Principles of Data Mesh
+
+Data mesh is built upon four foundational principles. These are not optional features you can pick and choose from — they are interdependent and must be adopted together for the architecture to work.
+
+![Four principles of data mesh](/blog/deep-dive-data-mesh/inline-2.png)
+
+The Four Principles of Data Mesh
+
+### 1. Domain Ownership
+
+In a data mesh, the team that owns the operational system also owns the analytical data that flows from it. The orders team doesn't just own the orders microservice — they own the orders data product. They are responsible for ingesting, transforming, and publishing their domain's analytical data in a form that is useful to consumers.
+
+This is a significant shift. Traditionally, domain teams would "throw data over the wall" to a central data team, who would then try to make sense of it. In a data mesh, the domain team retains that responsibility. They have the deepest understanding of the data's semantics, quality, and edge cases — and they are the ones best positioned to model it correctly.
+
+Domain ownership does not mean every team builds everything from scratch. The self-serve platform (principle three) provides the tooling, templates, and infrastructure so that domain teams can publish data products without needing deep data engineering expertise.
+
+### 2. Data as a Product
+
+This principle borrows directly from product thinking. A data product is not just a table in a database — it is a well-defined, well-documented, actively maintained asset with clear ownership, quality guarantees, and a defined interface.
+
+A good data product is:
+
+*   **Discoverable** — consumers can find it in a data catalog without tribal knowledge
+*   **Addressable** — it has a stable, unique address (URI, table name, topic) that consumers can depend on
+*   **Trustworthy** — it comes with quality guarantees, freshness SLOs, and automated quality checks
+*   **Self-describing** — its schema, semantics, and lineage are documented alongside the data itself
+*   **Interoperable** — it follows global standards (naming conventions, data types, time zones) that make it composable with other data products
+*   **Secure** — access is controlled, and sensitive fields are classified and protected
+
+Each data product has a **data product owner** — typically someone within the domain team who acts as the product manager for the data. They prioritise consumer needs, define SLOs, and ensure the product meets quality standards.
+
+### 3. Self-Serve Data Platform
+
+If you distribute data ownership to dozens of domain teams without giving them proper tooling, you will create chaos. The self-serve data platform is the enabling layer that makes domain ownership practical.
+
+The platform team builds and maintains shared infrastructure that reduces the cognitive load on domain teams. This includes pipeline orchestration, data storage provisioning, schema management, monitoring, access control, and data cataloguing. Domain teams should be able to declare a data product using a configuration file or a simple interface, and the platform handles the rest — provisioning storage, setting up pipelines, registering schemas, and configuring monitoring.
+
+Think of it like a cloud platform: AWS doesn't write your application code, but it provides the building blocks (compute, storage, networking, observability) so that you can focus on your domain logic. A self-serve data platform does the same for data.
+
+### 4. Federated Computational Governance
+
+Decentralisation without governance leads to anarchy. Federated computational governance is the mechanism that ensures global interoperability and compliance while preserving domain autonomy.
+
+"Federated" means that governance is a collaboration between a central governance team and the domain teams. The central team defines global policies — naming conventions, data classification standards, retention policies, access control rules — and the domain teams implement those policies within their data products.
+
+"Computational" means that these policies are enforced automatically, not through manual review processes. Schema validation, quality checks, access policies, and lineage tracking are all automated and run as part of the data product's CI/CD pipeline. If a data product doesn't meet the governance standards, it cannot be published.
+
+---
+
+## Domain-Oriented Data Products
+
+Let's go deeper into what a data product actually looks like in practice. A data product is more than just a dataset — it is an autonomous unit with well-defined inputs, transformations, outputs, and metadata.
+
+![Data product anatomy](/blog/deep-dive-data-mesh/inline-3.png)
+
+Data Product Anatomy — Inputs, Transformation, Outputs, Metadata, and SLOs
+
+A data product consists of:
+
+1.  **Inputs** — the raw data sources that feed into the product. These might be operational databases (via CDC), event streams, API responses, or other data products.
+2.  **Transformation logic** — the code that cleanses, enriches, and models the raw data. This is owned by the domain team and typically implemented using tools like dbt, Spark, or Flink.
+3.  **Output ports** — the interfaces through which consumers access the data. A single data product might expose multiple output ports: a table in a warehouse for SQL queries, a Kafka topic for streaming consumers, and an API for programmatic access.
+4.  **Metadata** — schema definitions, documentation, lineage information, data quality metrics, and ownership details. This metadata is registered in a data catalog for discoverability.
+5.  **SLOs and quality guarantees** — freshness targets, availability percentages, completeness thresholds, and other measurable commitments that the data product makes to its consumers.
+
+### Types of Data Products
+
+Not all data products are created equal. They fall into three categories based on their relationship to the source data:
+
+**Source-aligned data products** are the closest to the operational system. They represent the analytical view of a single domain's data. For example, the orders domain publishes a `orders-latest` data product that contains cleansed, deduplicated order data.
+
+**Aggregate data products** combine data from multiple source-aligned products to create cross-domain insights. For example, a `customer-360` data product might join customer data, order data, and support ticket data to provide a holistic view of each customer.
+
+**Consumer-aligned data products** are tailored for a specific consumer use case. For example, a `marketing-attribution` data product might be specifically shaped for the marketing team's attribution modelling needs.
+
+---
+
+## Data Mesh Topology
+
+Understanding how domains interact in a data mesh is critical. Unlike a centralised architecture where everything flows through a single hub, a data mesh forms a network of interconnected data products.
+
+![Data mesh topology](/blog/deep-dive-data-mesh/inline-4.png)
+
+Data Mesh Topology — Domains Publishing and Consuming Data Products
+
+In a data mesh topology:
+
+1.  Each domain publishes one or more data products through well-defined output ports.
+2.  Domains can consume data products from other domains through those output ports.
+3.  A data catalog serves as the discovery layer, allowing consumers to find and understand available data products.
+4.  Data contracts define the interface between producers and consumers, ensuring stability and backward compatibility.
+5.  The self-serve platform provides the infrastructure layer that all domains build upon.
+6.  Federated governance policies are enforced computationally across all domains.
+
+The topology is inherently decentralised. There is no single "data hub" through which all data must flow. Instead, data flows directly between domains through their published interfaces. This eliminates the central bottleneck and allows domains to evolve independently — as long as they honour their data contracts.
+
+A key consideration in the topology is managing cross-domain dependencies. If the orders domain changes its data product schema, it could break consumers in the marketing or finance domains. This is where data contracts become critical.
+
+---
+
+## Data Contracts and Schemas
+
+Data contracts are arguably the most important operational mechanism in a data mesh. They formalise the agreement between a data product producer and its consumers, defining what the data looks like, how it behaves, and what guarantees are provided.
+
+![Data contract validation flow](/blog/deep-dive-data-mesh/inline-7.png)
+
+Data Contract Validation Flow
+
+A data contract typically includes:
+
+1.  **Schema definition** — the exact structure, field names, data types, and constraints of the data product.
+2.  **Quality expectations** — automated checks that validate freshness, completeness, uniqueness, and correctness.
+3.  **Service level objectives** — availability, latency, and retention commitments.
+4.  **Ownership and contact information** — who to reach out to when something goes wrong.
+5.  **Versioning and compatibility rules** — how the schema evolves over time without breaking consumers.
+
+### The Data Contract Specification
+
+The Data Contract Specification (datacontract.com) provides a standardised YAML format for defining data contracts. Here is a comprehensive example for an orders data product:
+
+```yaml
+# data-contract.yaml
+dataContractSpecification: 0.9.3
+id: urn:datacontract:orders:orders-latest
+info:
+  title: Orders Data Product
+  version: 1.2.0
+  description: Cleansed and enriched order data from the orders domain
+  owner: team-orders
+  contact:
+    name: Orders Team
+    url: https://teams.example.com/orders
+    email: orders-team@example.com
+
+servers:
+  production:
+    type: BigQuery
+    project: analytics-prod
+    dataset: orders_domain
+
+models:
+  orders:
+    description: One row per order placed
+    type: table
+    fields:
+      order_id:
+        type: string
+        description: Unique order identifier
+        required: true
+        unique: true
+        pattern: "^ORD-[0-9]{10}$"
+      customer_id:
+        type: string
+        description: Reference to customer domain
+        required: true
+      order_date:
+        type: timestamp
+        description: When the order was placed
+        required: true
+      total_amount:
+        type: decimal
+        description: Total order value in AUD
+        required: true
+        minimum: 0
+      status:
+        type: string
+        description: Current order status
+        required: true
+        enum:
+          - pending
+          - confirmed
+          - shipped
+          - delivered
+          - cancelled
+      items:
+        type: array
+        description: Line items in the order
+        items:
+          type: object
+          fields:
+            product_id:
+              type: string
+              required: true
+            quantity:
+              type: integer
+              minimum: 1
+            unit_price:
+              type: decimal
+
+quality:
+  type: SodaCL
+  specification:
+    checks for orders:
+      - row_count > 0
+      - missing_count(order_id) = 0
+      - missing_count(customer_id) = 0
+      - invalid_count(total_amount) = 0:
+          valid min: 0
+      - freshness(order_date) < 24h
+      - duplicate_count(order_id) = 0
+
+servicelevels:
+  availability:
+    description: Data available 99.9% of the time
+    percentage: 99.9
+  retention:
+    description: Data retained for 7 years
+    period: P7Y
+    unlimited: false
+  latency:
+    description: Data available within 1 hour of order placement
+    threshold: 1h
+    sourceTimestampField: orders.order_date
+    processedTimestampField: orders._loaded_at
+```
+
+This single YAML file captures the complete agreement between the orders team and its consumers. It can be validated automatically in CI/CD, and any breaking change will be caught before it reaches production.
+
+### Schema Evolution and Compatibility
+
+Schema evolution is inevitable. Business requirements change, new fields are needed, and old fields become obsolete. The key is managing this evolution without breaking downstream consumers.
+
+**Backward compatibility** means that a new schema can read data written with the old schema. This is achieved by only adding optional fields (with defaults) and never removing or renaming required fields.
+
+**Forward compatibility** means that the old schema can read data written with the new schema. This requires consumers to be tolerant of unknown fields.
+
+**Full compatibility** requires both backward and forward compatibility. This is the gold standard for data products in a mesh — it allows producers and consumers to evolve independently without coordination.
+
+The Avro serialisation format provides excellent support for schema evolution. Here is an Avro schema for the orders event:
+
+```json
+{
+  "type": "record",
+  "name": "OrderEvent",
+  "namespace": "com.example.orders",
+  "fields": [
+    {"name": "order_id", "type": "string"},
+    {"name": "customer_id", "type": "string"},
+    {"name": "order_date", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "total_amount", "type": {"type": "bytes", "logicalType": "decimal", "precision": 10, "scale": 2}},
+    {"name": "status", "type": {"type": "enum", "name": "OrderStatus", "symbols": ["PENDING", "CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED"]}},
+    {"name": "items", "type": {"type": "array", "items": {
+      "type": "record",
+      "name": "OrderItem",
+      "fields": [
+        {"name": "product_id", "type": "string"},
+        {"name": "quantity", "type": "int"},
+        {"name": "unit_price", "type": {"type": "bytes", "logicalType": "decimal", "precision": 10, "scale": 2}}
+      ]
+    }}}
+  ]
+}
+```
+
+When used with a schema registry (such as the Confluent Schema Registry), compatibility rules are enforced automatically. The registry will reject a new schema version that breaks the configured compatibility level, preventing accidental breakage.
+
+---
+
+## Self-Serve Data Platform
+
+The self-serve data platform is the enabling infrastructure that makes data mesh practical. Without it, distributing data ownership to domain teams would be an unmanageable burden — each team would need to become an expert in data infrastructure, pipeline orchestration, schema management, and governance tooling.
+
+![Self-serve data platform architecture layers](/blog/deep-dive-data-mesh/inline-5.png)
+
+Self-Serve Data Platform Architecture Layers
+
+A well-designed self-serve data platform is organised into layers:
+
+### Infrastructure Provisioning Layer
+
+This is the lowest layer. It handles provisioning and managing the underlying compute and storage resources. Domain teams should never need to manually create BigQuery datasets, S3 buckets, or Kafka topics. Instead, they declare what they need (typically in a configuration file or through a CLI), and the platform provisions it automatically.
+
+Infrastructure as code tools like Terraform, Pulumi, or Crossplane are commonly used here. The platform team maintains reusable modules that encapsulate best practices — encryption, tagging, access policies, cost controls — so that domain teams get secure, well-configured infrastructure by default.
+
+### Data Pipeline Tooling Layer
+
+This layer provides the tools that domain teams use to build their transformation logic. It might include:
+
+*   **dbt** for SQL-based transformations in the warehouse
+*   **Apache Spark** or **Apache Flink** for large-scale batch and streaming processing
+*   **Airflow** or **Dagster** for pipeline orchestration
+*   **Debezium** for change data capture from operational databases
+
+The platform team provides pre-configured templates, CI/CD pipelines, and standardised project structures so that domain teams can get started quickly.
+
+### Data Storage Abstraction Layer
+
+Different data products may require different storage backends — a relational warehouse for structured analytics, object storage for raw files, a streaming platform for real-time events. The platform abstracts these choices behind a consistent interface, so that domain teams can focus on their data modelling rather than infrastructure specifics.
+
+### Monitoring and Observability Layer
+
+Every data product needs monitoring. The platform provides standardised dashboards, alerting, and logging for:
+
+*   Pipeline execution status and duration
+*   Data freshness and latency metrics
+*   Data quality check results
+*   Schema validation outcomes
+*   Consumer access patterns and usage metrics
+
+Tools like Datadog, Grafana, Monte Carlo, or Elementary are integrated into the platform so that domain teams get observability out of the box.
+
+### Access Control Layer
+
+The platform manages authentication and authorisation for data products. This includes:
+
+*   Role-based access control (RBAC) for data products
+*   Column-level and row-level security for sensitive data
+*   Automated data masking and tokenisation
+*   Audit logging for compliance
+
+Domain teams declare their access policies (who can read which fields), and the platform enforces them consistently across all output ports.
+
+---
+
+## Federated Computational Governance
+
+Governance in a data mesh is a balancing act. Too little governance and you get inconsistency, poor quality, and compliance violations. Too much governance and you recreate the centralised bottleneck that data mesh was designed to eliminate.
+
+![Federated governance model](/blog/deep-dive-data-mesh/inline-6.png)
+
+Federated Governance Model — Global Policies + Domain Autonomy
+
+Federated computational governance splits governance into two layers:
+
+### Global Standards (Centrally Defined)
+
+The central governance team defines standards that apply across all domains:
+
+*   **Naming conventions** — consistent patterns for data product names, field names, topic names, and table names (e.g., `{domain}.{visibility}.{product-name}`)
+*   **Data classification** — a standard taxonomy for classifying data sensitivity (public, internal, confidential, restricted)
+*   **Retention policies** — minimum and maximum retention periods by data classification level
+*   **Interoperability standards** — standard data types, time zone conventions (UTC everywhere), currency handling, and identifier formats
+*   **Access policy templates** — reusable patterns for common access control scenarios
+*   **Quality baselines** — minimum quality standards that all data products must meet (e.g., no null primary keys, freshness within SLO)
+
+### Domain Autonomy (Locally Implemented)
+
+Within the boundaries set by global standards, domain teams have full autonomy over:
+
+*   How they model their data internally
+*   Which tools they use for transformation (as long as they integrate with the platform)
+*   How frequently they refresh their data products (as long as they meet their SLOs)
+*   How they structure their team and workflows
+
+### Computational Enforcement
+
+The "computational" aspect means that governance policies are encoded as automated checks, not manual review gates. When a domain team submits a new data product or a schema change, an automated pipeline:
+
+1.  Validates the schema against global naming conventions and data type standards.
+2.  Checks that all required metadata fields are populated (owner, description, classification).
+3.  Runs data quality checks against the quality baseline.
+4.  Verifies that access policies are correctly configured.
+5.  Validates backward compatibility with existing consumer contracts.
+6.  Registers the data product in the catalog and publishes lineage information.
+
+If any of these checks fail, the pipeline rejects the change — just like a failing unit test blocks a code deployment.
+
+---
+
+## Data Quality
+
+Data quality is not an afterthought in a data mesh — it is a first-class concern built into every data product. Each domain team is responsible for the quality of their published data, and quality is enforced computationally through automated testing.
+
+### dbt for Transformation and Testing
+
+dbt (data build tool) has become the de facto standard for SQL-based transformations in modern data stacks. It integrates naturally with data mesh because each domain team can maintain their own dbt project, publishing well-tested data products.
+
+Here is an example of a staging model for the orders domain:
+
+```sql
+-- models/orders/stg_orders.sql
+{{ config(
+    materialized='incremental',
+    unique_key='order_id',
+    tags=['orders-domain', 'data-product']
+) }}
+
+WITH source AS (
+    SELECT * FROM {{ source('orders_raw', 'orders') }}
+    {% if is_incremental() %}
+    WHERE updated_at > (SELECT MAX(updated_at) FROM {{ this }})
+    {% endif %}
+),
+
+cleaned AS (
+    SELECT
+        order_id,
+        customer_id,
+        CAST(order_date AS TIMESTAMP) AS order_date,
+        ROUND(CAST(total_amount AS DECIMAL(10,2)), 2) AS total_amount,
+        UPPER(TRIM(status)) AS status,
+        updated_at,
+        CURRENT_TIMESTAMP() AS _loaded_at
+    FROM source
+    WHERE order_id IS NOT NULL
+      AND total_amount >= 0
+)
+
+SELECT * FROM cleaned
+```
+
+And the corresponding schema tests:
+
+```yaml
+# models/orders/stg_orders.yml
+version: 2
+models:
+  - name: stg_orders
+    description: "Cleansed orders data product"
+    meta:
+      owner: team-orders
+      data_product: orders-latest
+      sla: "1 hour freshness"
+    columns:
+      - name: order_id
+        description: "Unique order identifier"
+        tests:
+          - not_null
+          - unique
+          - accepted_values:
+              values: ['ORD-%']
+              quote: false
+              regex: true
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id
+      - name: total_amount
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']
+```
+
+These tests run automatically on every pipeline execution. If any test fails, the pipeline halts, and the data product is not updated — ensuring that consumers never receive bad data.
+
+### SodaCL for Data Quality as Code
+
+SodaCL (Soda Checks Language) provides a declarative way to define data quality checks that integrate directly with your data contract. Checks like `freshness(order_date) < 24h` and `duplicate_count(order_id) = 0` are expressive and readable, making it easy for domain teams to define quality expectations without writing procedural test code.
+
+### Great Expectations
+
+Great Expectations is another powerful framework for data quality. It provides a rich library of "expectations" (e.g., `expect_column_values_to_not_be_null`, `expect_column_values_to_be_between`) and generates data documentation (data docs) automatically from your test suite. This documentation becomes part of your data product's self-describing metadata.
+
+The choice between dbt tests, SodaCL, and Great Expectations is not mutually exclusive. Many organisations use dbt tests for transformation-level validation, SodaCL for contract-level quality checks, and Great Expectations for comprehensive profiling and documentation.
+
+---
+
+## Data Catalog and Discovery
+
+A data mesh without a catalog is like a library without a card catalogue — the books exist, but nobody can find them. Data discovery is a foundational capability that makes the entire mesh usable.
+
+A data catalog serves as the central registry where all data products are listed, described, and searchable. It provides:
+
+*   **Search and discovery** — consumers can search for data products by name, domain, tags, or description
+*   **Schema exploration** — consumers can inspect the schema, data types, and sample data before committing to a dependency
+*   **Lineage visualisation** — consumers can trace where a data product's data comes from and where it flows to
+*   **Quality dashboards** — consumers can see the current quality score, freshness, and SLO compliance for each product
+*   **Ownership and contact info** — consumers know exactly who to reach out to with questions
+
+Several open-source and commercial tools serve this purpose:
+
+**DataHub** (by LinkedIn) is a popular open-source metadata platform that supports lineage, search, and governance. It integrates well with dbt, Kafka, Spark, and major cloud data warehouses.
+
+**Amundsen** (by Lyft) focuses on data discovery and provides a clean search experience for finding tables, dashboards, and data owners.
+
+**OpenMetadata** is an open-source standard for metadata, providing a unified API and UI for discovering and governing data assets.
+
+**Unity Catalog** (by Databricks) provides unified governance for data and AI assets across clouds and platforms, with fine-grained access control and lineage.
+
+Regardless of which tool you choose, the catalog must be populated automatically. When a domain team publishes a data product, the platform should automatically register it in the catalog, including its schema, quality metrics, ownership, and lineage. Manual catalog maintenance is a recipe for stale, unreliable metadata.
+
+---
+
+## Kafka for Data Mesh
+
+Apache Kafka plays a natural role in a data mesh as the backbone for event-driven data products. While batch data products are served through warehouse tables or files, streaming data products are served through Kafka topics.
+
+### Topic Naming Conventions
+
+In a data mesh, Kafka topics should follow a consistent naming convention that encodes domain ownership and visibility:
+
+```
+{domain}.{visibility}.{data-product-name}
+```
+
+For example:
+*   `orders.public.order-events` — publicly available order events from the orders domain
+*   `customers.internal.customer-updates` — internal customer updates, not intended for cross-domain consumption
+*   `inventory.public.stock-levels` — public stock level events from the inventory domain
+
+### Schema Registry
+
+The Confluent Schema Registry (or compatible alternatives like Apicurio) is essential for managing Avro, Protobuf, or JSON Schema definitions for Kafka topics. It enforces compatibility rules and provides a central registry of all event schemas.
+
+Here is how you would create a domain-namespaced topic and register its schema:
+
+```bash
+# Create domain-namespaced topics
+kafka-topics --create \
+  --bootstrap-server kafka:9092 \
+  --topic orders.public.order-events \
+  --partitions 12 \
+  --replication-factor 3 \
+  --config retention.ms=604800000 \
+  --config cleanup.policy=compact,delete \
+  --config min.insync.replicas=2
+
+# Register Avro schema
+curl -X POST http://schema-registry:8081/subjects/orders.public.order-events-value/versions \
+  -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  -d '{
+    "schemaType": "AVRO",
+    "schema": "{\"type\":\"record\",\"name\":\"OrderEvent\",\"namespace\":\"com.example.orders\",\"fields\":[{\"name\":\"order_id\",\"type\":\"string\"},{\"name\":\"event_type\",\"type\":{\"type\":\"enum\",\"name\":\"EventType\",\"symbols\":[\"CREATED\",\"UPDATED\",\"CANCELLED\"]}},{\"name\":\"timestamp\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}}]}"
+  }'
+```
+
+### Event-Driven Data Products
+
+Streaming data products differ from batch data products in several important ways:
+
+*   **Freshness is measured in seconds, not hours.** A streaming data product might guarantee sub-minute latency.
+*   **Consumers process events incrementally.** They don't re-read the entire dataset on each refresh — they consume new events as they arrive.
+*   **Ordering matters.** Kafka guarantees ordering within a partition, so data products must define their partitioning strategy carefully (typically by the primary entity key, such as `order_id`).
+*   **Backfill is complex.** When a new consumer joins, they may need to replay historical events. Compacted topics or a companion batch data product can address this.
+
+In a mature data mesh, many data products offer both a batch and a streaming output port — a "kappa" pattern where the event stream is the source of truth, and the batch table is a materialised view of that stream.
+
+---
+
+## Migration from Monolithic Data Platform
+
+Migrating from a centralised data platform to a data mesh is not a big-bang cutover. It is an incremental, domain-by-domain transformation that typically spans months or years. The strangler fig pattern — well-known in application modernisation — applies beautifully here.
+
+### Step 1: Identify the First Domain
+
+Choose a domain that is:
+
+*   **High-value** — its data is consumed by many downstream teams, so the impact of improvement is visible
+*   **Well-bounded** — its data has clear boundaries and minimal entanglement with other domains
+*   **Willing** — the domain team is motivated and has the engineering capacity to take on data ownership
+
+Common first candidates include orders, customers, or products — domains with clear business semantics and established teams.
+
+### Step 2: Define the Data Product Interface
+
+Work with the domain team and their consumers to define the data product's contract: schema, quality expectations, freshness SLOs, and access policies. This is a collaborative process — the producer needs to understand what consumers actually need.
+
+### Step 3: Build the Data Product
+
+The domain team builds the transformation logic (e.g., a dbt project), sets up quality checks, and publishes the data product through the self-serve platform. The platform team supports them with tooling and templates.
+
+### Step 4: Migrate Consumers
+
+Gradually redirect consumers from the old centralised pipeline to the new data product. This can be done incrementally — some consumers switch immediately, while others run in parallel until confidence is established.
+
+### Step 5: Decommission the Old Pipeline
+
+Once all consumers have migrated, decommission the old centralised pipeline for that domain's data. This removes technical debt and reduces the load on the central team.
+
+### Step 6: Repeat for the Next Domain
+
+Take the lessons learned, refine the platform and templates, and onboard the next domain. Each subsequent domain is faster because the platform matures with each iteration.
+
+### Measuring Success
+
+Track these metrics to gauge your migration progress:
+
+*   **Data product coverage** — what percentage of your organisation's analytical data is served through data products?
+*   **Time to create a new data product** — is the platform making it faster for domains to publish data?
+*   **Consumer satisfaction** — are data consumers finding what they need more easily?
+*   **Data quality trends** — are quality scores improving as domain teams take ownership?
+*   **Central team backlog** — is the centralised data team's backlog shrinking as domains become self-sufficient?
+
+---
+
+## Organisational Change
+
+Data mesh is as much an organisational transformation as it is a technical one. Conway's Law — "organisations design systems that mirror their own communication structures" — applies directly. If your organisation is structured around a centralised data team, your data architecture will be centralised. To achieve a decentralised data mesh, you need to decentralise data ownership in your org chart.
+
+### Team Structure Changes
+
+In a pre-mesh organisation, you typically have:
+
+*   **Domain teams** — own the operational system, know the business logic
+*   **Central data team** — owns all analytical data, builds all pipelines
+
+In a data mesh organisation, you restructure to:
+
+*   **Domain teams** — own both the operational system AND the analytical data products
+*   **Data platform team** — builds and maintains the self-serve platform that domain teams use
+*   **Governance team** — defines global standards and policies (often a virtual team with representatives from each domain)
+
+This doesn't mean every domain team needs a dedicated data engineer. The self-serve platform should be good enough that a backend engineer with SQL skills can publish a data product. For domains with complex data needs, embedding a data engineer within the domain team is appropriate.
+
+### Cultural Shift
+
+The biggest resistance to data mesh is cultural, not technical. Common pushback includes:
+
+*   **"We don't have time to own data."** — Domain teams are busy building features and may see data ownership as an unwanted burden. The counter-argument is that they already spend significant time answering data questions, debugging pipeline issues caused by the central team's misunderstanding of their domain, and dealing with inaccurate reports. Owning the data product directly is often less work in the long run.
+
+*   **"We'll lose control."** — The central data team may fear becoming irrelevant. In reality, they evolve into the platform team — a high-leverage role that enables the entire organisation rather than being a bottleneck.
+
+*   **"It's too complex."** — Data mesh does add organisational complexity. It is not suitable for small organisations with simple data needs. But for organisations at scale — those with multiple domains, hundreds of pipelines, and a growing backlog — the complexity of data mesh is less than the complexity of the status quo.
+
+### Executive Sponsorship
+
+Data mesh requires executive sponsorship to succeed. It involves changes to team structures, responsibilities, and incentives. Without leadership buy-in, domain teams will resist taking on data ownership, and the central data team will resist giving it up.
+
+The most successful data mesh adoptions have a clear executive sponsor (often a Chief Data Officer or VP of Engineering) who communicates the vision, aligns incentives, and provides the budget for the platform team.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

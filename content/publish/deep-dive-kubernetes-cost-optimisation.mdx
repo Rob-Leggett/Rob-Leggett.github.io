@@ -1,0 +1,748 @@
+---
+title: "Deep Dive - Kubernetes Cost Optimisation"
+date: "2025-07-05"
+slug: "deep-dive-kubernetes-cost-optimisation"
+status: "publish"
+feature_image: "/blog/deep-dive-kubernetes-cost-optimisation/feature-image.png"
+tags: ["Kubernetes", "Cost Optimisation", "FinOps", "Karpenter", "Autoscaling", "Spot Instances", "Resource Management", "Cloud Native", "HPA", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Kubernetes Cost Optimisation | Robert Leggett"
+  description: "A comprehensive deep dive into Kubernetes cost optimisation — covering resource requests and limits, QoS classes, autoscaling with HPA/VPA/Karpenter, spot instances, and FinOps practices."
+  keywords: ["Kubernetes Cost Optimisation", "K8s Resource Management", "Karpenter", "HPA", "VPA", "Cluster Autoscaler", "Spot Instances", "FinOps", "Kubecost", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-kubernetes-cost-optimisation"
+  image: "https://robertleggett.com.au/blog/deep-dive-kubernetes-cost-optimisation/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Kubernetes Cost Optimisation"
+  description: "A comprehensive deep dive into Kubernetes cost optimisation — from resource management and autoscaling to Karpenter, spot instances, and FinOps."
+  image: "https://robertleggett.com.au/blog/deep-dive-kubernetes-cost-optimisation/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-kubernetes-cost-optimisation"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Kubernetes Cost Optimisation"
+  description: "From resource requests to Karpenter — a complete technical reference for optimising Kubernetes costs at scale."
+  image: "https://robertleggett.com.au/blog/deep-dive-kubernetes-cost-optimisation/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Kubernetes cost optimisation, unraveling the strategies, tools, and architectural patterns that enable organisations to dramatically reduce their cloud spend without sacrificing performance or reliability. Whether you are a platform engineer, a DevOps practitioner, or a technical leader seeking to understand where your Kubernetes budget is going, our goal is to provide clear and actionable explanations that will enhance your understanding of the full cost optimisation landscape. Studies consistently show that organisations overprovision their Kubernetes clusters by 60–70%, paying for compute capacity they never use. Join us on this enlightening journey as we bridge the gap between running workloads and running them efficiently, empowering you to grasp the key concepts behind Kubernetes cost optimisation with ease. Let's dive in and demystify the world of efficient Kubernetes resource management together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of the Kubernetes resource model, autoscaling strategies, node provisioning with Karpenter, spot instance economics, and FinOps practices for tracking and allocating costs
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is the Kubernetes resource model?
+
+At the heart of every cost optimisation effort is the Kubernetes resource model. Kubernetes schedules and manages workloads based on two primary compute resources: **CPU** and **memory**. Every container in a pod can declare how much of each resource it needs through two mechanisms — **requests** and **limits**.
+
+**Requests** represent the minimum amount of a resource that the container is guaranteed. The scheduler uses requests to decide which node a pod should be placed on. If a container requests 250m (milliCPU) of CPU, the scheduler will only place it on a node that has at least 250m of allocatable CPU remaining.
+
+**Limits** represent the maximum amount of a resource a container is allowed to consume. If a container exceeds its memory limit, the kubelet will terminate it with an **OOMKill** (Out of Memory Kill). If a container attempts to exceed its CPU limit, it will be **throttled** — the kernel's Completely Fair Scheduler (CFS) will restrict it from consuming more CPU cycles than permitted within each scheduling period.
+
+Here is a typical resource specification in a pod manifest:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-application
+  namespace: production
+spec:
+  containers:
+    - name: app
+      image: my-org/my-application:1.4.2
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "256Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+```
+
+Understanding the consequences of getting these values wrong is critical:
+
+*   **Requests set too high** — The scheduler reserves more capacity than the container actually uses, resulting in wasted resources. Nodes appear full on paper but are idle in practice. This is the most common cause of overprovisioning.
+*   **Requests set too low** — The container is scheduled onto a node that may not have enough physical resources to serve it under load. The container competes with other workloads for resources, leading to CPU throttling or memory pressure.
+*   **Limits set too high** — The container can burst into resources that other co-located workloads may need, causing noisy-neighbour effects.
+*   **Limits set too low** — The container hits its ceiling during normal operation, resulting in OOMKill for memory or aggressive CPU throttling.
+
+The gap between what is requested and what is actually used is referred to as **slack**, and eliminating slack is the primary objective of right-sizing.
+
+---
+
+## What are Quality of Service (QoS) classes?
+
+Kubernetes assigns every pod a **Quality of Service class** based on the resource requests and limits defined on its containers. The QoS class directly influences how the kubelet handles eviction decisions when a node comes under resource pressure.
+
+There are three QoS classes:
+
+### Guaranteed
+
+A pod receives the **Guaranteed** QoS class when every container in the pod specifies both requests and limits for CPU and memory, and the requests are equal to the limits. Guaranteed pods are the last to be evicted under memory pressure.
+
+```yaml
+resources:
+  requests:
+    cpu: "500m"
+    memory: "512Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+```
+
+### Burstable
+
+A pod receives the **Burstable** QoS class when at least one container has requests or limits defined, but they are not equal. Burstable pods are evicted after BestEffort pods but before Guaranteed pods.
+
+```yaml
+resources:
+  requests:
+    cpu: "250m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+```
+
+### BestEffort
+
+A pod receives the **BestEffort** QoS class when no container in the pod specifies any requests or limits. BestEffort pods are the first to be evicted when a node runs out of resources.
+
+```yaml
+resources: {}
+```
+
+The decision tree for determining which QoS class applies is as follows:
+
+![Quality of Service class decision tree showing how Kubernetes assigns Guaranteed, Burstable, or BestEffort](/blog/deep-dive-kubernetes-cost-optimisation/inline-2.png)
+
+QoS Class Decision Tree
+
+1.  Does every container in the pod have both CPU and memory requests and limits defined?
+2.  If yes, are the requests equal to the limits for every container?
+3.  If yes, the pod is classified as **Guaranteed**.
+4.  If no (requests and limits are defined but not equal), the pod is classified as **Burstable**.
+5.  If no containers have any requests or limits defined at all, the pod is classified as **BestEffort**.
+
+From a cost optimisation perspective, the QoS class matters because **Guaranteed** pods lock in resources that cannot be reclaimed, while **Burstable** pods allow for more efficient bin packing at the cost of predictability under pressure.
+
+---
+
+## How does the Kubernetes scheduler use resources?
+
+The Kubernetes scheduler makes placement decisions based on **requests**, not limits. When a new pod needs to be scheduled, the scheduler evaluates each node's **allocatable capacity** — the total resources available for user workloads after system daemons and kubelet reservations are subtracted from the node's total capacity.
+
+The key formula is:
+
+```text
+Allocatable = Node Capacity - kube-reserved - system-reserved - eviction-threshold
+```
+
+When the scheduler considers a node, it sums the requests of all pods already running on that node and checks whether the remaining allocatable capacity can satisfy the new pod's requests. This is a critical distinction — even if a node's actual utilisation is only 20%, if the sum of pod requests has consumed 95% of allocatable capacity, no new pods can be scheduled there.
+
+This is why right-sizing requests is essential. Over-requesting leads to **fragmentation** — nodes that look full to the scheduler but are largely idle in reality. This triggers unnecessary scale-up events, provisioning additional nodes that are equally underutilised.
+
+![Kubernetes resource request vs limit visualisation showing pod resource allocation within a node](/blog/deep-dive-kubernetes-cost-optimisation/inline-1.png)
+
+Resource Requests vs Limits
+
+1.  The node has a total allocatable CPU and memory capacity after system reservations.
+2.  Pod A requests 250m CPU and 256Mi memory — these resources are reserved on the node.
+3.  Pod B requests 500m CPU and 512Mi memory — these resources are also reserved.
+4.  The scheduler sees the remaining allocatable capacity as the total minus the sum of all pod requests.
+5.  Pod A is actually only using 100m CPU and 128Mi memory — the difference between requested and used is slack.
+6.  Pod B may burst up to its limits (750m CPU) if capacity is available, but the scheduler does not account for limits when making placement decisions.
+
+To inspect resource allocation on your nodes, you can use:
+
+```bash
+kubectl describe node <node-name> | grep -A 10 "Allocated resources"
+kubectl top nodes
+kubectl top pods -n production
+```
+
+Efficient **bin packing** — fitting as many pods as possible onto the fewest number of nodes — is a direct function of how accurately requests reflect actual usage.
+
+---
+
+## What is Horizontal Pod Autoscaling (HPA)?
+
+The **Horizontal Pod Autoscaler (HPA)** automatically adjusts the number of pod replicas in a deployment, replica set, or stateful set based on observed metrics. Rather than manually scaling workloads, HPA continuously monitors metrics and scales out (adds pods) or scales in (removes pods) to match demand.
+
+### How does HPA work?
+
+HPA operates on a control loop that runs every 15 seconds by default. On each iteration it:
+
+1.  Fetches the current metric values for all pods in the target workload.
+2.  Calculates the desired number of replicas using the formula: `desiredReplicas = ceil(currentReplicas × (currentMetricValue / targetMetricValue))`.
+3.  Scales the workload up or down to match the desired replica count.
+
+HPA supports several metric sources:
+
+*   **Resource metrics** — CPU and memory utilisation (from the Metrics Server)
+*   **Custom metrics** — Application-specific metrics exposed via the Custom Metrics API (e.g., requests per second, queue depth)
+*   **External metrics** — Metrics from systems external to the cluster (e.g., an SQS queue length from CloudWatch)
+
+### HPA configuration example
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: my-app-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: my-application
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 120
+```
+
+The **behavior** section is particularly important for cost optimisation. The `stabilizationWindowSeconds` prevents flapping — rapid scale-up followed by immediate scale-down — which can be both disruptive and wasteful. The scale-down policy limits how aggressively replicas are removed, avoiding situations where a temporary dip in traffic triggers premature removal of capacity.
+
+To monitor your HPA in action:
+
+```bash
+kubectl get hpa -n production
+kubectl describe hpa my-app-hpa -n production
+kubectl top pods -n production
+```
+
+---
+
+## What is Vertical Pod Autoscaling (VPA)?
+
+While HPA adjusts the number of replicas, the **Vertical Pod Autoscaler (VPA)** adjusts the resource requests and limits of individual containers. VPA analyses historical and current resource usage and recommends (or automatically applies) more accurate resource values.
+
+### VPA components
+
+VPA consists of three components:
+
+*   **Recommender** — Monitors resource utilisation and computes recommended requests and limits.
+*   **Updater** — Evicts pods whose resources deviate significantly from the recommendations so they can be recreated with updated values.
+*   **Admission Controller** — Intercepts pod creation and mutates the resource requests to match the VPA recommendation.
+
+### VPA update modes
+
+*   **Off** — VPA only provides recommendations; it does not modify pods. This is the safest starting point.
+*   **Initial** — VPA sets resource requests only when pods are first created. Running pods are not modified.
+*   **Auto** — VPA can evict and recreate pods to apply updated resource values. Use with caution in production.
+
+### VPA configuration example
+
+```yaml
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: my-app-vpa
+  namespace: production
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: my-application
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: app
+        minAllowed:
+          cpu: "100m"
+          memory: "128Mi"
+        maxAllowed:
+          cpu: "2"
+          memory: "4Gi"
+        controlledResources: ["cpu", "memory"]
+```
+
+### When to use VPA vs HPA
+
+*   Use **HPA** for stateless workloads that handle variable request volumes — web servers, API gateways, microservices.
+*   Use **VPA** for workloads that do not scale horizontally well — single-instance databases, batch jobs, workers with fixed concurrency.
+*   **Do not use HPA and VPA on the same metric** for the same workload, as they will conflict. However, you can use HPA on custom metrics and VPA on CPU/memory simultaneously.
+
+To check VPA recommendations:
+
+```bash
+kubectl describe vpa my-app-vpa -n production
+```
+
+---
+
+## What is KEDA (Kubernetes Event-Driven Autoscaling)?
+
+**KEDA** (Kubernetes Event-Driven Autoscaling) extends Kubernetes autoscaling capabilities by enabling workloads to scale based on event sources — including the ability to scale to and from **zero replicas**. This is a significant cost optimisation lever for workloads that are idle for extended periods.
+
+KEDA works alongside HPA rather than replacing it. When KEDA detects events from a configured trigger, it activates the workload by scaling it from zero to one replica, and then hands off to the standard HPA mechanism for further scaling.
+
+### KEDA triggers
+
+KEDA supports over 60 built-in scalers (triggers), including:
+
+*   **AWS SQS** — Scale based on queue depth
+*   **Apache Kafka** — Scale based on consumer group lag
+*   **Prometheus** — Scale based on arbitrary Prometheus queries
+*   **Cron** — Scale on a time-based schedule
+*   **Redis** — Scale based on list length or stream pending entries
+
+### ScaledObject configuration example
+
+```yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: order-processor
+  namespace: production
+spec:
+  scaleTargetRef:
+    name: order-processor
+  pollingInterval: 15
+  cooldownPeriod: 120
+  idleReplicaCount: 0
+  minReplicaCount: 1
+  maxReplicaCount: 50
+  triggers:
+    - type: aws-sqs-queue
+      metadata:
+        queueURL: https://sqs.ap-southeast-2.amazonaws.com/123456789012/orders
+        queueLength: "5"
+        awsRegion: ap-southeast-2
+      authenticationRef:
+        name: aws-credentials
+```
+
+In this example, when the SQS queue has no messages, the workload scales to zero (`idleReplicaCount: 0`). When messages arrive, KEDA scales to at least one replica and then continues scaling based on the queue length — one additional pod for every five messages in the queue. The `cooldownPeriod` prevents premature scale-down after the queue drains.
+
+For workloads that are only active during business hours or during batch processing windows, KEDA can eliminate the cost of keeping idle pods running around the clock.
+
+---
+
+## How does cluster-level autoscaling work?
+
+Pod-level autoscalers (HPA, VPA, KEDA) adjust workloads, but they cannot add or remove **nodes**. When pods are pending because no existing node has sufficient allocatable capacity, a cluster-level autoscaler is needed to provision new nodes.
+
+There are two primary approaches: the **Cluster Autoscaler** and **Karpenter**.
+
+### Cluster Autoscaler
+
+The Cluster Autoscaler is the original Kubernetes-native solution for node autoscaling. It operates on the concept of **node groups** (Auto Scaling Groups in AWS, Managed Instance Groups in GCP, VM Scale Sets in Azure).
+
+**Scale-up**: When pods are in a Pending state because no node can satisfy their requests, the Cluster Autoscaler identifies which node group can accommodate the pending pods and increases the group's desired count.
+
+**Scale-down**: The Cluster Autoscaler periodically evaluates node utilisation. If a node's utilisation falls below a configurable threshold (default: 50%, controlled by `--scale-down-utilization-threshold`) and all pods on the node can be rescheduled elsewhere, the node is cordoned, drained, and terminated.
+
+Key limitations of the Cluster Autoscaler:
+
+*   It requires pre-defined node groups with fixed instance types. You must anticipate which instance types your workloads will need.
+*   Scaling decisions are made at the node group level, not the individual node level.
+*   It can be slow to react — the loop interval and cloud provider API latency can result in several minutes before new nodes are available.
+
+### Karpenter
+
+**Karpenter** is an open-source, high-performance node provisioning project originally developed by AWS and now a CNCF project. Unlike the Cluster Autoscaler, Karpenter is **groupless** — it provisions individual nodes directly based on the specific requirements of pending pods.
+
+![Karpenter provisioning flow from pod pending through evaluation to node provisioning and scheduling](/blog/deep-dive-kubernetes-cost-optimisation/inline-4.png)
+
+Karpenter Provisioning Flow
+
+1.  A pod enters the Pending state because no existing node can satisfy its resource requests, node selectors, tolerations, or affinity rules.
+2.  Karpenter's controller detects the unschedulable pod.
+3.  Karpenter evaluates the pod's requirements (CPU, memory, architecture, capacity type, topology constraints).
+4.  Karpenter selects the optimal instance type from the allowed set, considering price, availability, and fit.
+5.  Karpenter launches the instance directly via the cloud provider API (e.g., EC2 Fleet API).
+6.  The new node joins the cluster and the pod is scheduled onto it.
+
+#### Karpenter NodePool configuration
+
+```yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  template:
+    spec:
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand", "spot"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["m5.large", "m5.xlarge", "m6i.large", "m6i.xlarge", "c5.large", "c5.xlarge"]
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s
+```
+
+#### Karpenter consolidation
+
+One of Karpenter's most powerful cost optimisation features is **consolidation**. With the policy set to `WhenEmptyOrUnderutilized`, Karpenter continuously evaluates whether nodes can be consolidated:
+
+*   **Empty node removal** — If a node has no non-daemonset pods, it is terminated after the `consolidateAfter` period.
+*   **Node replacement** — If workloads on a node could fit on a smaller (cheaper) instance type, Karpenter launches the smaller instance, migrates the pods, and terminates the original node.
+*   **Multi-node consolidation** — Karpenter can merge pods from multiple underutilised nodes onto fewer nodes, reducing the total node count.
+
+This automated right-sizing at the node level is a significant advantage over the Cluster Autoscaler, which cannot replace a running node with a smaller instance type.
+
+![HPA, VPA, and Cluster Autoscaler interaction flow showing how each autoscaler operates](/blog/deep-dive-kubernetes-cost-optimisation/inline-3.png)
+
+Autoscaler Interaction Flow
+
+1.  HPA detects increased CPU utilisation and scales the deployment from 3 to 6 replicas.
+2.  Three new pods enter the Pending state because the existing nodes are fully allocated.
+3.  The cluster-level autoscaler (Cluster Autoscaler or Karpenter) detects the pending pods.
+4.  New nodes are provisioned to accommodate the pending pods.
+5.  When traffic decreases, HPA scales the deployment back to 3 replicas.
+6.  The now-underutilised nodes are identified and terminated by the cluster-level autoscaler.
+
+---
+
+## How do spot/preemptible instances reduce costs?
+
+**Spot instances** (AWS), **preemptible VMs** (GCP), and **spot VMs** (Azure) are spare cloud provider capacity offered at a significant discount — typically **60–90% less** than on-demand pricing. The trade-off is that the cloud provider can reclaim these instances with short notice (a two-minute interruption notice on AWS).
+
+For Kubernetes workloads that are fault-tolerant and can handle disruption, spot instances represent one of the largest single cost reduction opportunities available.
+
+### Spot instance best practices
+
+*   **Diversify across instance types and availability zones** — The more instance types and AZs you include in your NodePool or Auto Scaling Group, the lower the probability of simultaneous interruption across all capacity pools.
+*   **Use PodDisruptionBudgets (PDBs)** — PDBs ensure that a minimum number of replicas remain available during voluntary disruptions, including spot interruptions and node drains.
+*   **Separate workloads by criticality** — Run latency-sensitive or stateful workloads on on-demand instances, and batch processing, development environments, and stateless services on spot.
+*   **Handle interruptions gracefully** — Applications should respond to SIGTERM signals, drain connections, and checkpoint state where possible.
+
+### PodDisruptionBudget example
+
+```yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: my-app-pdb
+  namespace: production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: my-application
+```
+
+This PDB ensures that at least two replicas of `my-application` are always available, even during node drains triggered by spot interruptions.
+
+![Spot instance interruption handling flow showing notice, drain, and reschedule steps](/blog/deep-dive-kubernetes-cost-optimisation/inline-6.png)
+
+Spot Instance Interruption Handling
+
+1.  The cloud provider issues a two-minute interruption notice for the spot instance.
+2.  The node termination handler (e.g., AWS Node Termination Handler) detects the notice.
+3.  The node is cordoned to prevent new pods from being scheduled.
+4.  Pods on the node are gracefully drained, respecting PodDisruptionBudgets and termination grace periods.
+5.  The cluster-level autoscaler (Karpenter or Cluster Autoscaler) detects the unschedulable pods and provisions replacement capacity.
+6.  Pods are rescheduled onto healthy nodes, restoring the desired replica count.
+
+---
+
+## How do you implement namespace resource quotas and LimitRanges?
+
+In multi-tenant clusters where multiple teams share infrastructure, **ResourceQuotas** and **LimitRanges** provide guardrails that prevent any single team or workload from consuming more than its fair share of cluster resources.
+
+### ResourceQuota
+
+A **ResourceQuota** constrains the aggregate resource consumption within a namespace. It can limit CPU, memory, the number of pods, and other objects.
+
+```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: team-alpha-quota
+  namespace: team-alpha
+spec:
+  hard:
+    requests.cpu: "20"
+    requests.memory: "40Gi"
+    limits.cpu: "40"
+    limits.memory: "80Gi"
+    pods: "100"
+    services: "20"
+    persistentvolumeclaims: "30"
+```
+
+When a ResourceQuota is in effect, every pod in the namespace **must** specify resource requests and limits; otherwise, the pod will be rejected by the admission controller. This forces teams to think about their resource requirements upfront.
+
+### LimitRange
+
+A **LimitRange** sets default, minimum, and maximum resource constraints for individual containers or pods within a namespace. It is particularly useful for ensuring that no single container can request an excessive amount of resources.
+
+```yaml
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: team-alpha-limits
+  namespace: team-alpha
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: "500m"
+        memory: "512Mi"
+      defaultRequest:
+        cpu: "250m"
+        memory: "256Mi"
+      min:
+        cpu: "50m"
+        memory: "64Mi"
+      max:
+        cpu: "4"
+        memory: "8Gi"
+    - type: Pod
+      max:
+        cpu: "8"
+        memory: "16Gi"
+```
+
+The `default` values are applied when a container does not specify its own limits, and `defaultRequest` is applied when requests are omitted. The `min` and `max` values act as hard boundaries that cannot be exceeded.
+
+Together, ResourceQuotas and LimitRanges form a governance layer that enables cost control in shared clusters without requiring every developer to be an expert in Kubernetes resource management.
+
+---
+
+## How do you track and allocate Kubernetes costs?
+
+Optimising costs requires **visibility**. Without understanding where money is being spent, it is impossible to identify waste or attribute costs to the teams and services that generate them.
+
+### Cost visibility tools
+
+*   **Kubecost** — The most widely adopted Kubernetes cost monitoring tool. Kubecost integrates with your cloud billing data and the Kubernetes API to provide real-time cost allocation by namespace, label, deployment, and controller. It can surface idle costs, right-sizing recommendations, and projected savings.
+*   **OpenCost** — An open-source CNCF project (originally from Kubecost) that provides a standardised cost allocation model. OpenCost exposes cost data via a Prometheus-compatible API, making it easy to integrate into existing observability stacks.
+*   **Cloud provider tools** — AWS Cost Explorer with Kubernetes tags, GCP Cost Management with GKE cost allocation, and Azure Cost Management all provide cluster-level cost breakdowns.
+
+### Cost allocation models
+
+![Cost allocation model showing hierarchy from cluster to namespace to workload](/blog/deep-dive-kubernetes-cost-optimisation/inline-5.png)
+
+Cost Allocation Model
+
+1.  Total cluster cost is calculated from the sum of node compute costs, persistent storage costs, network transfer costs, and control plane costs.
+2.  Costs are distributed to namespaces based on the proportion of resource requests (or actual usage) each namespace consumes.
+3.  Within each namespace, costs are further attributed to individual workloads (deployments, stateful sets, jobs) based on their resource consumption.
+4.  Labels such as `team`, `cost-centre`, and `environment` enable grouping and reporting across organisational boundaries.
+
+### Showback vs chargeback
+
+*   **Showback** — Costs are calculated and displayed to each team for awareness, but teams are not billed. Showback is a good starting point for building cost awareness culture.
+*   **Chargeback** — Costs are actually billed to each team's budget or cost centre. Chargeback creates direct financial accountability and is the goal of mature FinOps practices.
+
+### FinOps principles for Kubernetes
+
+**FinOps** (Financial Operations) is a cultural practice that brings financial accountability to the variable spend model of cloud computing. Applied to Kubernetes:
+
+*   **Teams need to own their costs** — Cost visibility must be democratised. Engineers should be able to see the cost of their workloads in real time.
+*   **Centralised governance, decentralised execution** — Platform teams set guardrails (quotas, policies, standards), while application teams make day-to-day right-sizing decisions.
+*   **Optimisation is iterative** — Cost optimisation is not a one-time project. It requires continuous monitoring, regular reviews, and incremental improvements.
+*   **Decisions are driven by business value** — Not all cost reduction is beneficial. Optimisation should never compromise availability, performance, or security beyond acceptable thresholds.
+
+To check costs from the command line with Kubecost:
+
+```bash
+kubectl cost namespace --show-all-resources
+kubectl cost deployment -n production --show-efficiency
+```
+
+---
+
+## What practical optimisation strategies can you apply?
+
+With an understanding of the resource model, autoscaling, node provisioning, and cost visibility, here are the actionable strategies you can apply to your clusters.
+
+### Right-sizing workflow
+
+1.  **Observe** — Deploy VPA in `Off` mode and collect recommendations for at least 7 days to capture weekly traffic patterns.
+2.  **Analyse** — Compare VPA recommendations against current requests. Identify workloads with high slack (requested much more than used).
+3.  **Apply** — Update resource requests to match recommendations. Start with non-critical workloads and move to production after validation.
+4.  **Iterate** — Repeat monthly. Usage patterns change as features are released and traffic evolves.
+
+### Node pool strategy
+
+Organise your cluster into purpose-built node pools:
+
+*   **System pool** — On-demand instances running kube-system components, monitoring agents, and cluster-critical workloads. Use Guaranteed QoS.
+*   **Workload pool** — A mix of on-demand and spot instances for general application workloads. Use Karpenter with consolidation enabled.
+*   **Spot pool** — Spot-only instances for batch processing, CI/CD runners, development environments, and other interruption-tolerant workloads.
+
+### Scheduled scaling
+
+For workloads with predictable traffic patterns (e.g., business-hours applications), use KEDA's cron trigger or CronJobs to scale down during off-peak hours:
+
+```yaml
+triggers:
+  - type: cron
+    metadata:
+      timezone: Australia/Sydney
+      start: "0 8 * * 1-5"
+      end: "0 18 * * 1-5"
+      desiredReplicas: "10"
+```
+
+Outside business hours, the workload scales to its minimum (or zero with KEDA), saving significant compute cost overnight and on weekends.
+
+### Pod priority and preemption
+
+Use **PriorityClasses** to ensure that critical workloads are never evicted in favour of lower-priority work:
+
+```yaml
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Critical production workloads"
+```
+
+When cluster capacity is constrained, the scheduler can **preempt** (evict) lower-priority pods to make room for higher-priority ones, rather than provisioning additional nodes for every spike.
+
+### Bin packing efficiency
+
+*   Set resource requests as close to actual usage as possible — use VPA recommendations as your baseline.
+*   Avoid specifying only limits without requests (this defaults requests to limits, often over-allocating).
+*   Use Karpenter's consolidation to continuously right-size nodes.
+*   Monitor bin packing efficiency with: `kubectl describe nodes | grep -A 5 "Allocated resources"`.
+
+---
+
+## Okay, what terminology do I need to understand?
+
+### Requests
+
+The minimum amount of CPU or memory guaranteed to a container. Used by the scheduler for placement decisions.
+
+### Limits
+
+The maximum amount of CPU or memory a container is allowed to consume. Exceeding memory limits results in OOMKill; exceeding CPU limits results in throttling.
+
+### QoS Class
+
+The Quality of Service classification (Guaranteed, Burstable, BestEffort) assigned to a pod based on its resource configuration. Determines eviction priority.
+
+### HPA (Horizontal Pod Autoscaler)
+
+A Kubernetes controller that automatically scales the number of pod replicas based on observed metrics such as CPU utilisation, memory utilisation, or custom metrics.
+
+### VPA (Vertical Pod Autoscaler)
+
+A Kubernetes component that recommends or automatically adjusts the resource requests and limits of containers based on historical usage patterns.
+
+### KEDA (Kubernetes Event-Driven Autoscaling)
+
+An open-source project that enables event-driven autoscaling, including the ability to scale workloads to and from zero replicas based on external event sources.
+
+### Cluster Autoscaler
+
+The Kubernetes-native component that adjusts the number of nodes in the cluster by scaling node groups up or down based on pending pod demand and node utilisation.
+
+### Karpenter
+
+A CNCF open-source node provisioner that provisions individual nodes directly (groupless) based on pending pod requirements, with built-in consolidation and right-sizing capabilities.
+
+### NodePool
+
+A Karpenter resource that defines the constraints and requirements for nodes that Karpenter can provision, including instance types, capacity types, and disruption policies.
+
+### Spot Instance
+
+Spare cloud provider compute capacity offered at a steep discount (60–90% off on-demand pricing) with the caveat that it can be reclaimed with short notice.
+
+### Preemption
+
+The act of evicting lower-priority pods to free resources for higher-priority pods. Controlled by PriorityClasses and the scheduler's preemption policy.
+
+### PodDisruptionBudget (PDB)
+
+A policy that specifies the minimum number of replicas that must remain available during voluntary disruptions such as node drains, rolling updates, or spot interruptions.
+
+### ResourceQuota
+
+A Kubernetes object that constrains the total aggregate resource consumption (CPU, memory, pod count) within a namespace.
+
+### LimitRange
+
+A Kubernetes object that sets default, minimum, and maximum resource constraints for individual containers or pods within a namespace.
+
+### Bin Packing
+
+The practice of efficiently fitting as many pod workloads as possible onto the fewest number of nodes, minimising wasted resources and reducing overall node count.
+
+### FinOps
+
+A cultural practice and operational model that brings financial accountability to cloud spending through collaboration between engineering, finance, and business teams.
+
+### Showback
+
+A cost visibility model where resource costs are calculated and displayed to teams for awareness purposes, without actual billing.
+
+### Chargeback
+
+A cost allocation model where resource costs are billed directly to the consuming team's budget or cost centre, creating direct financial accountability.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)
