@@ -5,8 +5,8 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Mail, FileText, Linkedin } from "lucide-react";
 import { SiGithub } from "@icons-pack/react-simple-icons";
-import { ThemeSwitcher } from "@/components/theme-switcher";
-import { InteractiveTerminal } from "@/components/interactive-terminal";
+import { ThemeSwitcher } from "@/components/common/theme-switcher";
+import { InteractiveTerminal } from "@/components/common/interactive-terminal";
 
 export default function Header() {
   return (

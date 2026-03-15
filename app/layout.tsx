@@ -4,7 +4,7 @@ import React, { Suspense } from 'react';
 import Script from "next/script";
 import UnregisterSW from "@/app/unregister-sw";
 import AnalyticsListener from "@/app/analytics-listener";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider } from "@/components/common/theme-provider";
 import { themes } from "@/lib/themes";
 
 import "./globals.css";
