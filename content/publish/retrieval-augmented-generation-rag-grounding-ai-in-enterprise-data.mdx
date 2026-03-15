@@ -1,0 +1,234 @@
+---
+title: "Retrieval-Augmented Generation (RAG) - Grounding AI in Your Enterprise Data"
+date: "2026-02-22"
+slug: "retrieval-augmented-generation-rag-grounding-ai-in-enterprise-data"
+status: "publish"
+feature_image: "/blog/retrieval-augmented-generation-rag-grounding-ai-in-enterprise-data/feature-image.png"
+tags: ["AI", "RAG", "Vector Databases", "LLMs", "Enterprise AI", "Robert Leggett"]
+
+meta:
+  title: "Retrieval-Augmented Generation (RAG) | Robert Leggett"
+  description: "A technical yet accessible guide to Retrieval-Augmented Generation, vector databases, embedding models, chunking strategies, and RAG architecture patterns for enterprise AI."
+  keywords: ["RAG", "retrieval-augmented generation", "vector databases", "embeddings", "enterprise AI", "LLMs", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/retrieval-augmented-generation-rag-grounding-ai-in-enterprise-data"
+  image: "https://robertleggett.com.au/blog/retrieval-augmented-generation-rag-grounding-ai-in-enterprise-data/feature-image.png"
+
+og:
+  type: "article"
+  title: "Retrieval-Augmented Generation (RAG) - Grounding AI in Your Enterprise Data"
+  description: "A technical yet accessible guide to Retrieval-Augmented Generation, vector databases, embedding models, chunking strategies, and RAG architecture patterns for enterprise AI."
+  image: "https://robertleggett.com.au/blog/retrieval-augmented-generation-rag-grounding-ai-in-enterprise-data/feature-image.png"
+  url: "https://robertleggett.com.au/blog/retrieval-augmented-generation-rag-grounding-ai-in-enterprise-data"
+
+twitter:
+  card: "summary_large_image"
+  title: "Retrieval-Augmented Generation (RAG) - Grounding AI in Your Enterprise Data"
+  description: "A technical yet accessible guide to Retrieval-Augmented Generation, vector databases, embedding models, chunking strategies, and RAG architecture patterns for enterprise AI."
+  image: "https://robertleggett.com.au/blog/retrieval-augmented-generation-rag-grounding-ai-in-enterprise-data/feature-image.png"
+---
+
+Every organisation I speak to wants the same thing: harness the power of Large Language Models against their own proprietary data. They want employees asking natural-language questions about internal policies, customers receiving accurate answers grounded in product documentation, and analysts summarising thousands of pages of research in seconds. The ambition is clear. The challenge, however, is that general-purpose LLMs have never seen your data, and when they try to answer questions about it, they make things up.
+
+This problem — commonly known as **hallucination** — is the single biggest barrier to enterprise AI adoption. An LLM that confidently fabricates a compliance policy or invents a product specification is worse than no AI at all. Organisations need a pattern that lets them keep the fluency and reasoning capability of modern LLMs while grounding every response in verified, up-to-date, company-owned information.
+
+That pattern is **Retrieval-Augmented Generation**, or **RAG**. In this article, we will explore what RAG is, why it exists, and how every moving part — from embeddings and vector databases to chunking strategies and cloud services — fits together into a production-ready architecture. Whether you are evaluating RAG for the first time or looking to sharpen an existing implementation, there should be something here for you.
+
+---
+
+## Before you start
+
+About this post:
+
+*   8 – 13-min average reading time
+*   Suitable for beginner through to advanced
+
+What you will gain reading this post:
+
+*   A solid understanding of what RAG is and why it matters
+*   Knowledge of vector databases, embedding models, and chunking strategies
+*   Insight into RAG architecture patterns and how they fit together
+*   Awareness of cloud services that support RAG implementations
+*   Best practices for building production-ready RAG systems
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why is hallucination a problem?
+
+**Hallucination** is the tendency of an LLM to generate text that sounds plausible but is factually incorrect. The model is not lying on purpose — it is a next-token prediction engine, and sometimes the most statistically likely next token leads the response away from the truth.
+
+For a creative writing exercise this is harmless, even desirable. For an enterprise use case it is dangerous. Imagine an internal chatbot confidently telling an employee that the company's parental leave policy is twelve months when it is actually twelve weeks. Or a customer-facing assistant quoting a product price that does not exist. These are not hypothetical scenarios — they are the kinds of failures that erode trust and create real liability.
+
+You will find that **fine-tuning** — the process of further training an LLM on your own data — helps to an extent, but it does not solve the fundamental problem. Fine-tuning bakes knowledge into the model's weights at a point in time. The moment your data changes, the model is stale. Fine-tuning is also expensive, slow, and difficult to audit. You cannot easily trace a fine-tuned answer back to a specific source document.
+
+What organisations need is a way to supply the model with relevant, current context at query time — not at training time. That is precisely what RAG provides.
+
+---
+
+## What is Retrieval-Augmented Generation?
+
+**Retrieval-Augmented Generation (RAG)** is an architecture pattern that combines **information retrieval** with **text generation**. Instead of relying solely on what the LLM learned during pre-training, a RAG system first retrieves relevant documents or passages from an external knowledge base, then feeds those passages into the LLM's prompt as context. The model generates its answer grounded in that retrieved evidence.
+
+Think of RAG as giving an LLM an **open-book exam** rather than asking it to recall everything from memory. The LLM still brings its language understanding, reasoning, and summarisation skills to the table, but it no longer has to remember every fact — it just needs to read and synthesise the material in front of it.
+
+The concept was formalised by **Lewis et al. in 2020** in their paper *"Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"*. Since then, RAG has become the dominant pattern for grounding LLM outputs in enterprise data, largely because it offers three key advantages over fine-tuning alone:
+
+*   **Freshness** — your knowledge base can be updated continuously without retraining the model
+*   **Traceability** — every answer can cite the source documents it was built from
+*   **Cost efficiency** — you avoid the expense of repeated fine-tuning runs
+
+If I'm to be perfectly honest, RAG is not a silver bullet. It introduces its own complexity around retrieval quality, chunking, and latency. But it is far and away the most practical starting point for grounding AI in your enterprise data.
+
+---
+
+## What are embeddings and vector databases?
+
+At the heart of every RAG system is the concept of **embeddings**. An embedding is a numerical representation of a piece of text — a vector of floating-point numbers that captures the **semantic meaning** of that text. Two pieces of text that mean similar things will have vectors that are close together in this high-dimensional space, even if they use completely different words.
+
+For example, the sentences *"How do I reset my password?"* and *"I need to change my login credentials"* would produce embeddings that are very close to each other. This is what makes semantic search possible — you are no longer limited to exact keyword matches.
+
+**Embedding models** are the components that perform this transformation. Popular choices include OpenAI's `text-embedding-3-small`, Cohere's `embed-v3`, Google's `text-embedding-005`, and open-source options like `BGE` and `E5` from Hugging Face. The choice of embedding model directly impacts retrieval quality, so it is worth benchmarking against your own data.
+
+Once you have embeddings, you need somewhere to store and search them efficiently. That is where **vector databases** come in. A vector database is purpose-built for storing high-dimensional vectors and performing **nearest-neighbour search** — finding the vectors most similar to a given query vector. Key players in this space include:
+
+*   **Pinecone** — a fully managed vector database with a focus on simplicity
+*   **Weaviate** — open-source, supports hybrid search out of the box
+*   **Qdrant** — open-source, written in Rust, strong on performance
+*   **pgvector** — a PostgreSQL extension that adds vector search to your existing Postgres database
+*   **ChromaDB** — lightweight, popular in prototyping and smaller workloads
+
+The major cloud providers also offer managed vector search capabilities. **Amazon OpenSearch Serverless** supports k-NN vector search. **Google Vertex AI Vector Search** (formerly Matching Engine) is optimised for large-scale nearest-neighbour queries. **Azure AI Search** includes integrated vector indexing and hybrid retrieval. These managed options reduce operational overhead and integrate tightly with the rest of each cloud platform's AI stack.
+
+---
+
+## What are chunking strategies and why do they matter?
+
+Before your documents can be embedded and stored, they need to be broken down into smaller pieces called **chunks**. An LLM has a finite context window, and your source documents — PDFs, wikis, knowledge bases — can be hundreds of pages long. You cannot embed an entire document as a single vector and expect meaningful retrieval.
+
+The way you chunk your documents has a surprisingly large impact on the quality of your RAG system. Get it wrong and the retriever will return irrelevant or incomplete context. Get it right and the LLM will have exactly the information it needs to produce an accurate answer.
+
+Let's walk through the most common strategies.
+
+**Fixed-size chunking** is the simplest approach. You split text into chunks of a set number of tokens or characters — say, 512 tokens each. It is easy to implement and predictable, but it pays no attention to the structure of the content. A chunk boundary might land right in the middle of a paragraph or even a sentence, splitting a coherent idea across two chunks.
+
+**Recursive character splitting** improves on this by attempting to split on natural boundaries — paragraphs first, then sentences, then words — before falling back to a character count. This is the default strategy in frameworks like **LangChain** and works well as a general-purpose approach.
+
+**Semantic chunking** takes things further by using the embedding model itself to detect where the meaning of the text shifts. Rather than relying on character counts or structural markers, it groups sentences that are semantically related. This produces more coherent chunks but is slower and more computationally expensive.
+
+Regardless of the strategy you choose, **overlap** is important. By including a small overlap between consecutive chunks — typically 10 to 20 percent — you reduce the risk of important context being lost at a boundary. If a key fact sits at the very end of one chunk, the overlap ensures it also appears at the beginning of the next.
+
+As a rule of thumb, smaller chunks improve retrieval precision (you find the exact passage you need) but can reduce the amount of context the LLM has to work with. Larger chunks provide more context but may dilute relevance. Most production systems land somewhere between 256 and 1024 tokens per chunk, tuned through experimentation against their specific dataset.
+
+---
+
+## How does a RAG architecture work?
+
+A RAG system has two distinct pipelines: the **indexing pipeline** (offline) and the **query pipeline** (online). Let's walk through both, step by step.
+
+### The indexing pipeline
+
+This is the process of preparing your data for retrieval.
+
+*   **Ingest** — collect your source documents from wherever they live: S3 buckets, SharePoint, Confluence, databases, APIs. Parse them into clean text, stripping out formatting artefacts.
+*   **Chunk** — split the clean text into chunks using one of the strategies described above.
+*   **Embed** — pass each chunk through your embedding model to produce a vector representation.
+*   **Store** — write each vector, along with the original text and any metadata (source, date, author, category), into your vector database.
+
+This pipeline typically runs on a schedule or is triggered when source documents change.
+
+### The query pipeline
+
+This is what happens when a user asks a question.
+
+*   **Query** — the user submits a natural-language question.
+*   **Embed the query** — the same embedding model used during indexing converts the question into a vector.
+*   **Retrieve** — the vector database performs a nearest-neighbour search to find the top-k chunks most similar to the query vector.
+*   **Augment** — the retrieved chunks are injected into the LLM's prompt, typically as a system message or context block, alongside the original question.
+*   **Generate** — the LLM produces its answer, grounding its response in the supplied context.
+
+### Advanced patterns
+
+Once the basic flow is working, there are several patterns that can improve quality significantly.
+
+**Hybrid search** combines traditional keyword search (BM25) with semantic vector search. This catches cases where the user's query contains specific terms — product codes, policy numbers — that semantic search alone might miss.
+
+**Re-ranking** introduces a second model that scores and reorders the retrieved chunks based on their relevance to the query. Cross-encoder models from libraries like Cohere Rerank or open-source `ms-marco` models are commonly used here. Re-ranking is computationally heavier but can dramatically improve the precision of your top results.
+
+**Query transformation** rewrites or expands the user's original question before retrieval. Techniques include generating multiple query variations (multi-query retrieval), decomposing a complex question into sub-questions, or using a step-back prompt to generalise the query.
+
+---
+
+## What cloud services support RAG?
+
+Each of the major cloud providers now offers managed services that simplify building RAG systems. Let's compare them.
+
+### AWS
+
+*   **Amazon Bedrock Knowledge Bases** — the most streamlined option. You point it at an S3 bucket, choose an embedding model and a vector store, and Bedrock handles chunking, embedding, indexing, and retrieval automatically. It supports OpenSearch Serverless, Pinecone, and Amazon Aurora (pgvector) as backing stores.
+*   **Amazon Kendra** — an intelligent enterprise search service that can act as the retriever in a RAG pipeline. Strong on connectors to enterprise data sources like SharePoint, Salesforce, and ServiceNow.
+*   **Amazon OpenSearch** — for teams that want more control, OpenSearch provides k-NN vector search and can be used as a custom vector store alongside any orchestration framework.
+
+### GCP
+
+*   **Vertex AI Search** — Google's managed search and retrieval product. It handles document ingestion, chunking, and retrieval with built-in grounding for Gemini models.
+*   **Vertex AI RAG Engine** — a more recent addition that provides a turnkey RAG API, including corpus management, chunking configuration, and direct integration with Gemini for generation.
+
+### Azure
+
+*   **Azure AI Search** — the most mature option in the Azure ecosystem. It supports vector search, hybrid search, semantic ranking, and integrates natively with Azure OpenAI Service through the "On Your Data" feature.
+*   **Azure OpenAI on Your Data** — allows you to connect Azure OpenAI models directly to your Azure AI Search index, Blob Storage, or uploaded files for grounded generation with minimal code.
+
+### Managed vs DIY
+
+If I'm to be perfectly honest, the managed services have come a long way. For many use cases, they will get you to production faster with less operational burden. However, if you need fine-grained control over chunking logic, embedding model selection, re-ranking pipelines, or retrieval scoring, a DIY approach using frameworks like **LangChain**, **LlamaIndex**, or **Haystack** gives you that flexibility. Many teams start with a managed service to validate the use case, then migrate to a custom pipeline as requirements become more specific.
+
+---
+
+## What are the best practices for production RAG?
+
+Building a proof of concept is straightforward. Shipping a production system that users trust is another matter entirely. Here are the practices that separate a demo from a dependable product.
+
+**Evaluate relentlessly.** You cannot improve what you do not measure. Establish metrics for **retrieval relevance** (are the right chunks being returned?), **faithfulness** (is the generated answer supported by the retrieved context?), and **answer correctness** (is the final response actually right?). Frameworks like **Ragas**, **DeepEval**, and **TruLens** provide automated evaluation pipelines for RAG systems.
+
+**Use metadata filtering.** Not all chunks are equal. Tag your chunks with metadata — document type, department, date, product line — and apply filters at query time to narrow the search space. A question about the 2025 leave policy should not return chunks from the 2019 version.
+
+**Handle document freshness.** Enterprise data changes constantly. Build your indexing pipeline to detect updates, re-embed changed documents, and remove stale chunks. A RAG system is only as good as the data it retrieves from. Stale data leads to stale answers.
+
+**Add guardrails and citation.** Always instruct the LLM to cite its sources. If the retrieved context does not contain enough information to answer the question, the model should say so rather than guess. Implement output guardrails to detect and block hallucinated content, off-topic responses, or policy violations.
+
+**Monitor retrieval quality in production.** Log the queries, the retrieved chunks, and the generated answers. Review these logs regularly — or better, build automated quality checks — to catch retrieval drift before users do.
+
+**Optimise for cost.** Embedding and LLM inference costs add up at scale. Consider caching frequent queries and their results, using smaller embedding models where quality permits, and batching indexing operations during off-peak hours. Right-size your vector database for your actual query volume rather than provisioning for peak from day one.
+
+---
+
+## Conclusion
+
+Let's recap the key takeaways from this article:
+
+*   **Hallucination** is the core problem RAG solves — LLMs are fluent but not always factual when it comes to your data
+*   **RAG** grounds LLM responses by retrieving relevant context from your own knowledge base at query time
+*   **Embeddings** convert text into numerical vectors that capture semantic meaning, enabling similarity search
+*   **Vector databases** like Pinecone, Weaviate, Qdrant, pgvector, and ChromaDB store and search those vectors efficiently
+*   **Chunking strategies** — fixed-size, recursive, and semantic — directly impact retrieval quality and should be tuned to your data
+*   **The RAG architecture** consists of an indexing pipeline (ingest, chunk, embed, store) and a query pipeline (query, retrieve, augment, generate)
+*   **Advanced patterns** like hybrid search, re-ranking, and query transformation can significantly improve results
+*   **Cloud services** from AWS, GCP, and Azure offer managed RAG capabilities that accelerate time to production
+*   **Production best practices** — evaluation, metadata filtering, freshness, guardrails, monitoring, and cost optimisation — are what separate a demo from a dependable system
+
+RAG is not the final word in enterprise AI architecture, but it is the most practical and proven starting point available today. Start small, measure rigorously, and iterate.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

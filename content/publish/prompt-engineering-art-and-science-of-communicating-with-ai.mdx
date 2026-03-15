@@ -1,0 +1,268 @@
+---
+title: "Prompt Engineering - The Art and Science of Communicating with AI"
+date: "2026-02-01"
+slug: "prompt-engineering-art-and-science-of-communicating-with-ai"
+status: "publish"
+feature_image: "/blog/prompt-engineering-art-and-science-of-communicating-with-ai/feature-image.png"
+tags: ["AI", "Prompt Engineering", "Large Language Models", "Machine Learning", "Developer Tools", "Generative AI", "ChatGPT", "Productivity", "Robert Leggett"]
+
+meta:
+  title: "Prompt Engineering - The Art and Science of Communicating with AI | Robert Leggett"
+  description: "Master prompt engineering techniques including zero-shot, few-shot, and chain-of-thought prompting. Learn practical patterns, common mistakes, and tips for getting the best results from AI models."
+  keywords: ["Prompt Engineering", "Zero-Shot Prompting", "Few-Shot Prompting", "Chain-of-Thought", "System Prompts", "LLM", "AI Communication", "Generative AI", "Temperature", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/prompt-engineering-art-and-science-of-communicating-with-ai"
+  image: "https://robertleggett.com.au/blog/prompt-engineering-art-and-science-of-communicating-with-ai/feature-image.png"
+
+og:
+  type: "article"
+  title: "Prompt Engineering - The Art and Science of Communicating with AI"
+  description: "Learn how to communicate effectively with AI models. Explore prompting techniques, practical patterns, and expert tips for getting consistently high-quality results from large language models."
+  image: "https://robertleggett.com.au/blog/prompt-engineering-art-and-science-of-communicating-with-ai/feature-image.png"
+  url: "https://robertleggett.com.au/blog/prompt-engineering-art-and-science-of-communicating-with-ai"
+
+twitter:
+  card: "summary_large_image"
+  title: "Prompt Engineering - The Art and Science of Communicating with AI"
+  description: "From zero-shot to chain-of-thought prompting — master the techniques that unlock the full potential of large language models. Practical patterns and tips included."
+  image: "https://robertleggett.com.au/blog/prompt-engineering-art-and-science-of-communicating-with-ai/feature-image.png"
+---
+
+For those who know me, you will know that I am always looking for ways to work smarter and more effectively with the tools at our disposal. Over the past couple of years, large language models (LLMs) have fundamentally changed how we interact with technology — from writing code to analysing documents to generating creative content. But here is the thing: the quality of what you get out of an AI model is directly tied to the quality of what you put in. This is where prompt engineering comes in. It is both an art and a science, and mastering it can be the difference between a mediocre response and an extraordinary one. In this article, we will explore what prompt engineering is, the core techniques you need to know, practical patterns you can apply immediately, and the common mistakes to avoid. Let's dive in.
+
+---
+
+## Before you start
+
+About this post:
+
+*   8 – 10-min average reading time
+*   Suitable for beginner through to advanced
+
+What you will gain reading this post:
+
+*   A clear understanding of what prompt engineering is and why it matters
+*   Knowledge of key prompting techniques including zero-shot, few-shot, and chain-of-thought
+*   Familiarity with system prompts, temperature, and other model parameters
+*   Practical prompt patterns you can start using today
+*   Awareness of common mistakes and how to avoid them
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is prompt engineering?
+
+At its simplest, **prompt engineering** is the practice of crafting inputs (prompts) to AI models in a way that produces the desired output. Think of it as learning a new communication skill — just as you would tailor how you brief a colleague depending on their expertise and the task at hand, you need to tailor how you communicate with an AI model.
+
+A **prompt** can include:
+
+*   **Instructions** — What you want the model to do
+*   **Context** — Background information the model needs to understand the task
+*   **Input data** — The specific content you want the model to process
+*   **Output format** — How you want the response structured
+
+The reason prompt engineering has become so important is that modern LLMs like GPT-4, Claude, Gemini, and Llama are incredibly capable, but they are also sensitive to how requests are framed. A small change in wording can produce dramatically different results.
+
+---
+
+## Why does prompt engineering matter?
+
+If I'm to be perfectly honest with you, when I first started working with LLMs, I underestimated how much the prompt itself influenced the output. I would type a quick question and wonder why the response was vague or off-target. The reality is:
+
+*   **Precision drives quality** — Vague prompts produce vague answers. Specific, well-structured prompts produce focused, actionable results.
+*   **It saves time** — Getting the prompt right upfront means fewer iterations, less back-and-forth, and faster time to value.
+*   **It unlocks capabilities** — Many of the most powerful things LLMs can do (reasoning, structured analysis, code generation) only emerge when prompted correctly.
+*   **It is a transferable skill** — The principles of good prompt engineering apply across models and tools. Whether you are using ChatGPT, GitHub Copilot, Amazon Bedrock, or Google Vertex AI, the fundamentals remain the same.
+*   **It is becoming a professional skill** — Organisations are increasingly recognising prompt engineering as a competency. Teams that prompt well outperform those that do not.
+
+---
+
+## What are the core prompting techniques?
+
+Let's walk through the foundational techniques that every practitioner should understand.
+
+**Zero-Shot Prompting**
+
+This is the simplest technique — you ask the model to perform a task with no examples provided. You rely entirely on the model's pre-trained knowledge.
+
+*   **When to use** — Simple, well-understood tasks where the model is likely to already know the expected format
+*   **Example** — "Summarise the key benefits of microservices architecture in three bullet points."
+*   **Strength** — Quick and easy; no preparation needed
+*   **Limitation** — Less reliable for complex or ambiguous tasks
+
+Difficulty to adopt: **1** out of 10
+
+**Few-Shot Prompting**
+
+Here you provide the model with a small number of examples demonstrating the desired input-output pattern before asking it to perform the task.
+
+*   **When to use** — When you need the model to follow a specific format or reasoning style that is not obvious from the instruction alone
+*   **Example** — "Here are three examples of how to classify customer feedback as positive, negative, or neutral: [examples]. Now classify the following feedback..."
+*   **Strength** — Significantly improves consistency and accuracy
+*   **Limitation** — Uses more tokens (and thus cost); examples must be representative
+
+Difficulty to adopt: **2** out of 10
+
+**Chain-of-Thought (CoT) Prompting**
+
+This technique instructs the model to reason step by step before arriving at an answer. It is particularly powerful for tasks requiring logic, mathematics, or multi-step reasoning.
+
+*   **When to use** — Complex reasoning tasks, mathematical problems, decision-making scenarios
+*   **Example** — "Think through this step by step: A company has 500 servers. If they migrate 20% to the cloud each quarter, how many quarters until all servers are migrated?"
+*   **Strength** — Dramatically improves accuracy on reasoning tasks
+*   **Limitation** — Produces longer responses; not necessary for simple tasks
+
+Difficulty to adopt: **3** out of 10
+
+**Self-Consistency Prompting**
+
+An extension of chain-of-thought where you ask the model to generate multiple reasoning paths and then select the most consistent answer.
+
+*   **When to use** — High-stakes decisions where you want to validate the model's reasoning
+*   **Strength** — Reduces errors by cross-checking multiple approaches
+*   **Limitation** — Significantly increases token usage and cost
+
+Difficulty to adopt: **5** out of 10
+
+---
+
+## What are system prompts and why do they matter?
+
+A **system prompt** (also known as a system message) is an instruction set at the beginning of a conversation that defines the model's behaviour, personality, constraints, and context. Unlike user prompts, the system prompt persists across the entire conversation.
+
+System prompts are powerful because they allow you to:
+
+*   **Set the persona** — "You are a senior cloud architect with 15 years of experience in AWS and GCP."
+*   **Define constraints** — "Only provide answers based on the documentation I provide. Do not make assumptions."
+*   **Establish format** — "Always respond with a brief summary followed by detailed bullet points."
+*   **Control tone** — "Use a professional but approachable tone suitable for a technical blog."
+*   **Enforce guardrails** — "Do not provide medical advice. If asked, redirect the user to consult a professional."
+
+When building applications on top of LLMs, the system prompt is your primary mechanism for controlling model behaviour. It is where you encode your application's personality, rules, and boundaries.
+
+---
+
+## How do temperature and parameters affect output?
+
+Beyond the prompt itself, model parameters significantly influence the output:
+
+**Temperature**
+
+*   Controls the randomness of the model's output
+*   **Low temperature (0.0 – 0.3)** — More deterministic, focused, and consistent. Best for factual tasks, code generation, and structured output.
+*   **Medium temperature (0.4 – 0.7)** — Balanced creativity and accuracy. Good for general-purpose tasks.
+*   **High temperature (0.8 – 1.0+)** — More creative, diverse, and unpredictable. Best for brainstorming, creative writing, and exploration.
+
+**Top-P (Nucleus Sampling)**
+
+*   Controls the cumulative probability threshold for token selection
+*   A top-p of 0.9 means the model considers tokens that make up the top 90% of probability mass
+*   Lower values produce more focused output; higher values allow more diversity
+
+**Max Tokens**
+
+*   Sets the maximum length of the response
+*   Important for controlling costs and ensuring responses fit within your application's constraints
+
+**Frequency Penalty and Presence Penalty**
+
+*   **Frequency penalty** — Reduces repetition by penalising tokens that have already appeared frequently
+*   **Presence penalty** — Encourages the model to introduce new topics by penalising any token that has appeared at all
+
+A practical tip: for most professional and technical use cases, start with a **temperature of 0.2–0.4** and a **top-p of 0.9**. Adjust from there based on your results.
+
+---
+
+## What are the most useful prompt patterns?
+
+Here are practical patterns that I use regularly and recommend to teams:
+
+**The Persona Pattern**
+
+Tell the model who it is before asking the question. This primes the model to draw on relevant knowledge and adopt the appropriate communication style.
+
+*   "You are a solutions architect reviewing a system design. Identify the three biggest risks in the following architecture..."
+
+**The Template Pattern**
+
+Provide a structured template for the model to fill in. This is excellent for generating consistent, formatted output.
+
+*   "Using the following template, write a technical design document: Title: [title], Problem Statement: [problem], Proposed Solution: [solution], Risks: [risks], Timeline: [timeline]."
+
+**The Chain Pattern**
+
+Break a complex task into a sequence of smaller prompts, feeding the output of one into the next. This is particularly effective for multi-step workflows.
+
+*   Step 1: "Extract the key requirements from this document."
+*   Step 2: "Based on these requirements, propose three architecture options."
+*   Step 3: "Evaluate these options against cost, scalability, and time-to-market."
+
+**The Critique Pattern**
+
+Ask the model to evaluate or critique its own output, then improve it.
+
+*   "Review the response you just provided. Identify any weaknesses, gaps, or inaccuracies, then provide an improved version."
+
+**The Constraint Pattern**
+
+Set explicit boundaries on the response to focus the output.
+
+*   "Explain Kubernetes networking in exactly five bullet points, each no longer than two sentences. Assume the reader is a mid-level developer."
+
+---
+
+## What are the common mistakes to avoid?
+
+Having worked with prompt engineering across multiple projects and teams, these are the most frequent mistakes I see:
+
+*   **Being too vague** — "Tell me about cloud" will produce a generic essay. "Compare the compute pricing models of AWS EC2, GCP Compute Engine, and Azure Virtual Machines for a workload running 24/7" will produce something useful.
+*   **Not specifying the output format** — If you need JSON, a table, bullet points, or a specific structure, say so explicitly. Do not assume the model will guess correctly.
+*   **Ignoring context length** — LLMs have finite context windows. Overloading a prompt with irrelevant information dilutes the quality of the response.
+*   **Not iterating** — Your first prompt is rarely your best prompt. Treat prompt engineering as an iterative process. Refine based on the output.
+*   **Assuming the model knows your context** — The model does not know your organisation, your codebase, or your constraints unless you tell it. Provide relevant context explicitly.
+*   **Over-relying on a single prompt** — For complex tasks, break the work into multiple prompts rather than trying to do everything in one.
+*   **Neglecting to test across inputs** — A prompt that works for one example may fail for others. Test with diverse inputs to ensure robustness.
+
+---
+
+## What tools can help with prompt engineering?
+
+The tooling ecosystem around prompt engineering is growing rapidly:
+
+*   **OpenAI Playground / API** — Test prompts with different models and parameters in real time
+*   **Amazon Bedrock** — Provides access to multiple foundation models with a unified API, making it easy to compare prompt results across models
+*   **Google Vertex AI Studio** — Visual prompt design and testing environment for Gemini and other models
+*   **Azure AI Studio** — Integrated environment for prompt engineering with Azure OpenAI Service models
+*   **LangChain / LangSmith** — Open-source framework for building LLM applications with built-in prompt management, chaining, and observability
+*   **Prompt flow** — Microsoft's tool for building and evaluating prompt-based workflows
+*   **GitHub Copilot** — While primarily a coding assistant, understanding how to prompt Copilot effectively is itself an exercise in prompt engineering
+
+---
+
+## Conclusion
+
+Prompt engineering is rapidly becoming one of the most valuable skills in the AI era. Here are the key takeaways:
+
+*   **Prompt engineering is the practice of crafting effective inputs** to get high-quality outputs from AI models — it is both an art and a science
+*   **Core techniques include zero-shot, few-shot, chain-of-thought, and self-consistency prompting**, each suited to different levels of task complexity
+*   **System prompts are your control mechanism** for defining model behaviour, persona, constraints, and guardrails
+*   **Model parameters like temperature and top-p** significantly influence output quality and should be tuned to your use case
+*   **Practical patterns** — persona, template, chain, critique, and constraint — provide repeatable frameworks for common tasks
+*   **Avoid common mistakes** like being too vague, not specifying format, and failing to iterate
+*   **The tooling ecosystem is maturing**, with AWS, GCP, Azure, and open-source frameworks all providing prompt engineering capabilities
+
+The most effective AI practitioners are not necessarily those with the deepest machine learning knowledge — they are the ones who have learned to communicate clearly and precisely with AI models. Invest in this skill, and you will see the returns across everything you build.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

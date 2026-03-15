@@ -1,0 +1,220 @@
+---
+title: "The Rise of AI Agents - Autonomous Systems That Think and Act"
+date: "2026-03-01"
+slug: "the-rise-of-ai-agents"
+status: "publish"
+feature_image: "/blog/the-rise-of-ai-agents/feature-image.png"
+tags: ["AI", "AI Agents", "Autonomous Systems", "LLMs", "Robert Leggett"]
+
+meta:
+  title: "The Rise of AI Agents | Robert Leggett"
+  description: "Explore the world of AI agents, agentic architecture patterns, tool use, memory and planning, the ReAct pattern, and real-world applications of autonomous AI systems."
+  keywords: ["AI agents", "agentic AI", "autonomous systems", "ReAct pattern", "multi-agent systems", "tool use", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/the-rise-of-ai-agents"
+  image: "https://robertleggett.com.au/blog/the-rise-of-ai-agents/feature-image.png"
+
+og:
+  type: "article"
+  title: "The Rise of AI Agents - Autonomous Systems That Think and Act"
+  description: "Explore the world of AI agents, agentic architecture patterns, tool use, memory and planning, the ReAct pattern, and real-world applications of autonomous AI systems."
+  image: "https://robertleggett.com.au/blog/the-rise-of-ai-agents/feature-image.png"
+  url: "https://robertleggett.com.au/blog/the-rise-of-ai-agents"
+
+twitter:
+  card: "summary_large_image"
+  title: "The Rise of AI Agents - Autonomous Systems That Think and Act"
+  description: "Explore the world of AI agents, agentic architecture patterns, tool use, memory and planning, the ReAct pattern, and real-world applications of autonomous AI systems."
+  image: "https://robertleggett.com.au/blog/the-rise-of-ai-agents/feature-image.png"
+---
+
+If I'm to be perfectly honest, the pace at which artificial intelligence is evolving is nothing short of remarkable. Just a few years ago we were impressed by chatbots that could hold a basic conversation. Today we are witnessing the emergence of **AI agents**, autonomous systems that can reason through complex problems, formulate plans, reach out to external tools, and take real action in the world. This is happening right now, and it is reshaping the way we think about software, automation, and the role of humans in technology-driven workflows.
+
+What makes this shift so exciting is that we are moving beyond the simple request-response pattern. Instead of asking an AI a question and receiving a static answer, we can now give an agent a goal and watch it figure out how to achieve it. The implications for engineering, business, and everyday life are enormous.
+
+Let's embark on a journey through the world of AI agents. In this article, we will explore what they are, how they work under the hood, the architectural patterns that power them, and where they are being applied in the real world.
+
+---
+
+## Before you start
+
+**About this post:**
+
+*   7 – 11-min average reading time
+*   Suitable for beginner through to advanced
+
+**What you will gain reading this post:**
+
+*   A clear understanding of what AI agents are and how they differ from simple chatbots
+*   Knowledge of agentic architecture patterns including tool use, memory, and planning
+*   An introduction to the ReAct pattern and multi-agent systems
+*   Awareness of real-world applications, challenges, and risks
+
+**What you can do to help support:**
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is an AI agent?
+
+At its core, an **AI agent** is a system powered by a large language model that can autonomously pursue a goal by reasoning about the problem, deciding on a course of action, and executing that action using external tools. This is fundamentally different from a traditional chatbot.
+
+A **chatbot** is reactive. You ask it a question, it generates a response, and the interaction is done. It has no concept of goals and no ability to interact with the world beyond text generation.
+
+An **AI agent** is proactive and goal-directed. Think of an AI agent as a capable team member who can not only answer questions but also go out and complete tasks on your behalf. You might say, "Research the top three competitors in our market and summarise their pricing strategies." A chatbot would give you a generic answer. An agent would search the web, extract pricing information, and deliver a structured report.
+
+The key characteristics that distinguish an agent include:
+
+*   **Autonomy** — the ability to operate independently without step-by-step human instruction
+*   **Goal-directed behaviour** — working toward a defined objective rather than simply responding to prompts
+*   **Tool use** — the capacity to call external APIs, search databases, execute code, and interact with systems
+*   **Planning and reasoning** — breaking complex tasks into manageable steps and reasoning about the best approach
+*   **Observation and adaptation** — evaluating the results of actions and adjusting the approach accordingly
+
+You will find that once you understand these characteristics, you start seeing opportunities for agents everywhere.
+
+---
+
+## How do agentic architectures work?
+
+The magic behind AI agents lies in their **agentic architecture**, a loop that goes beyond a single inference call. The core loop follows four steps: **Perceive → Reason → Act → Observe**.
+
+The agent perceives the current state, which could be the user's request, conversation history, or the results of a prior action. It reasons about what to do next, acts by calling a tool or generating a response, and observes the outcome, feeding it back into the loop.
+
+This loop is managed by an **agent runtime** or **orchestrator** that maintains the agent's state, manages reasoning sequences, handles tool calls, and decides when the task is complete. It turns a stateless language model into a stateful, goal-pursuing system.
+
+Agents interact with the outside world through well-defined **tool interfaces**. The orchestrator presents available tools to the LLM, the LLM decides which tool to invoke, the orchestrator executes the call, and the result is fed back for the next reasoning step.
+
+Several frameworks make building agentic systems more accessible:
+
+*   **LangChain** and **LangGraph** — popular open-source frameworks for building agent pipelines and stateful workflows
+*   **CrewAI** — a framework designed specifically for multi-agent collaboration
+*   **AutoGen** — Microsoft's framework for building conversational multi-agent systems
+*   **Amazon Bedrock Agents** — a managed service for building and deploying agents in the AWS cloud
+
+---
+
+## What is tool use and why does it matter?
+
+If reasoning is the brain of an AI agent, then **tool use** is its hands. Tool use, sometimes called **function calling**, is the mechanism by which an LLM can invoke external capabilities during its reasoning process.
+
+Here is how it works. The LLM is provided with a set of tool definitions describing what each tool does, what parameters it accepts, and what it returns. When the model needs external information, it generates a structured tool call. The orchestrator executes the function and returns the result to the model.
+
+Examples of tools an agent might use include:
+
+*   **Searching a database** to retrieve customer records or product information
+*   **Calling an external API** such as a weather service, stock market feed, or CRM system
+*   **Executing code** in a sandboxed environment to perform calculations or data transformations
+*   **Browsing the web** to gather up-to-date information not in the model's training data
+
+The LLM decides which tool to use based on the task and the descriptions of available tools. Modern LLMs are trained to understand tool schemas and reason about when and how to use them.
+
+This is a game-changer. Without tool use, an LLM is limited to what it learned during training. With tool use, it becomes a dynamic system that interacts with live data and triggers real-world actions, transforming from a knowledge retrieval engine into an **action-oriented problem solver**.
+
+---
+
+## How do agents handle memory and planning?
+
+One of the biggest challenges with LLMs is that they are inherently stateless. Each call to the model is independent unless you explicitly provide context. Agents solve this through structured **memory** systems.
+
+**Short-term memory** is the conversation history passed to the model with each call. This allows the agent to remember what was said earlier, what tools were called, and what results were returned. However, short-term memory is limited by the model's context window.
+
+**Long-term memory** addresses this limitation by storing information externally, typically in **vector stores** or **knowledge bases**. When the agent needs to recall something from a previous session or reference a large body of knowledge, it performs a semantic search against the vector store and retrieves the most relevant information. This is the foundation of **Retrieval-Augmented Generation (RAG)**.
+
+Beyond memory, agents need the ability to **plan**. A well-designed agent will decompose complex goals into smaller sub-tasks, determine the execution order, and track progress. This is known as **task decomposition**.
+
+**Chain-of-thought reasoning** plays a critical role here. By prompting the model to think step by step, we encourage it to lay out reasoning explicitly before taking action, improving decision quality and transparency.
+
+If I'm to be perfectly honest, it is the combination of memory and planning that separates a toy demo from a production-grade agent.
+
+---
+
+## What is the ReAct pattern?
+
+The **ReAct pattern** stands for **Reasoning + Acting**, and it is one of the most effective and widely adopted patterns for building AI agents. It was introduced in a research paper demonstrating how interleaving reasoning traces with actions leads to significantly better performance on complex tasks.
+
+The pattern follows a simple but powerful loop:
+
+*   **Thought** — the agent reasons about the current situation and decides what to do next
+*   **Action** — the agent takes an action, typically calling a tool
+*   **Observation** — the agent observes the result of that action
+*   The loop repeats until the agent determines that the goal has been achieved
+
+Let's walk through a practical example. Suppose you ask an agent, "What was the revenue of Company X last quarter, and how does it compare to the previous quarter?"
+
+The agent might proceed as follows. **Thought:** I need to find the latest quarterly revenue for Company X. **Action:** Call the web search tool with "Company X Q4 2025 earnings report revenue." **Observation:** The search returns Q4 revenue of 4.2 billion dollars. **Thought:** Now I need the previous quarter. **Action:** Search for "Company X Q3 2025 revenue." **Observation:** Q3 revenue was 3.8 billion dollars. **Thought:** Revenue increased by approximately 10.5 percent quarter over quarter. The agent then generates a final response with the comparison.
+
+What makes ReAct so effective is that reasoning traces give the model a scratchpad to think through problems, while actions ground that reasoning in real-world data.
+
+---
+
+## What are multi-agent systems?
+
+As tasks grow more complex, a single agent may not be sufficient. This is where **multi-agent systems** come in. Rather than one monolithic agent, you create multiple specialised agents that collaborate toward a shared goal.
+
+The most common pattern is the **supervisor/worker model**. A supervisor agent receives the task, breaks it down, and delegates to specialised workers. Each worker has its own tools and expertise, and the supervisor aggregates results.
+
+Another pattern is the **debate and consensus model**, where multiple agents independently tackle the same problem and compare results. Disagreements are resolved through reasoning or voting, which is useful where accuracy is critical.
+
+There is also the **pipeline pattern**, where agents are arranged in sequence, each refining the previous one's output. A research agent gathers data, an analysis agent interprets it, and a writing agent produces the final report.
+
+When should you use multi-agent over a single agent? If the task requires distinct skill sets, if you want independent verification, or if the complexity exceeds a single context window, multi-agent is the way to go.
+
+---
+
+## What are the real-world applications?
+
+AI agents are already being deployed across a wide range of industries. Here are the most impactful areas:
+
+*   **Software development** — agents that generate code, write tests, debug issues, and create pull requests. Tools like GitHub Copilot are evolving in this direction.
+*   **Customer service automation** — agents that handle support tickets end to end, diagnosing issues and taking corrective actions without human intervention for routine cases.
+*   **Research and analysis** — agents that search academic papers, synthesise findings, and provide evidence-based recommendations across healthcare, finance, and law.
+*   **Business process automation** — agents that orchestrate workflows such as invoice processing, compliance checks, and onboarding across multiple enterprise systems.
+*   **Personal productivity** — agents that manage your calendar, draft emails, and summarise meeting notes.
+
+You will find that the common thread is that agents are not just answering questions. They are taking action and delivering outcomes.
+
+---
+
+## What are the challenges and risks?
+
+As exciting as AI agents are, they come with significant challenges that need careful management.
+
+**Reliability and hallucination** remain a core concern. When an agent operates autonomously, a hallucinated fact or incorrect tool call can have serious consequences. An agent might execute a bad database update or send a faulty email before anyone notices.
+
+**Security** is critical. An agent with access to external systems represents an expanded attack surface. Prompt injection, where malicious input tricks the agent into unintended actions, is a growing threat.
+
+**Cost** can escalate quickly. Each reasoning step involves LLM calls, and complex tasks require dozens of iterations. Multi-agent systems multiply this. Choosing the right model size for each task is essential.
+
+**Human-in-the-loop** is an important safety measure. Many production systems allow agents to reason autonomously but require human approval before executing critical steps.
+
+Finally, there is **alignment**. As agents become more capable, ensuring they act in accordance with human intentions is increasingly important. An agent optimising without proper guardrails might find undesirable ways to achieve its goal.
+
+---
+
+## Conclusion
+
+AI agents represent a fundamental shift in how we leverage artificial intelligence. Here are the key takeaways:
+
+*   **AI agents** go beyond chatbots by autonomously reasoning, planning, and acting to achieve goals
+*   **Agentic architectures** follow a Perceive → Reason → Act → Observe loop managed by an orchestrator
+*   **Tool use** gives agents the power to interact with live data, APIs, and external systems
+*   **Memory and planning** transform stateless LLMs into goal-pursuing systems for complex tasks
+*   **The ReAct pattern** interleaves reasoning and acting for more accurate, grounded results
+*   **Multi-agent systems** enable specialised agents to collaborate on complex problems
+*   **Real-world applications** span software development, customer service, research, and business automation
+*   **Challenges** including reliability, security, cost, and alignment must be actively managed
+
+The future of AI is not just about smarter models. It is about systems that can think, plan, and act. The rise of AI agents is one of the most significant developments in our industry, and understanding them is essential for building the next generation of intelligent systems.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

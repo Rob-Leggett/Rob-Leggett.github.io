@@ -1,0 +1,295 @@
+---
+title: "Fine-Tuning vs Foundation Models - Choosing the Right Approach for Your AI Strategy"
+date: "2026-01-18"
+slug: "fine-tuning-vs-foundation-models-choosing-right-approach"
+status: "publish"
+feature_image: "/blog/fine-tuning-vs-foundation-models-choosing-right-approach/feature-image.png"
+tags: ["AI", "Machine Learning", "Foundation Models", "Fine-Tuning", "LLM", "LoRA", "Cloud Architecture", "AWS", "GCP", "Azure", "Robert Leggett"]
+
+meta:
+  title: "Fine-Tuning vs Foundation Models - Choosing the Right Approach for Your AI Strategy | Robert Leggett"
+  description: "Understand when to use foundation models off-the-shelf vs fine-tuning vs building custom models. Covers LoRA, QLoRA, transfer learning, cost tradeoffs, and a practical decision framework."
+  keywords: ["Foundation Models", "Fine-Tuning", "LoRA", "QLoRA", "Transfer Learning", "LLM Strategy", "AI Architecture", "AWS Bedrock", "Vertex AI", "Azure OpenAI", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/fine-tuning-vs-foundation-models-choosing-right-approach"
+  image: "https://robertleggett.com.au/blog/fine-tuning-vs-foundation-models-choosing-right-approach/feature-image.png"
+
+og:
+  type: "article"
+  title: "Fine-Tuning vs Foundation Models - Choosing the Right Approach for Your AI Strategy"
+  description: "A practical guide to choosing between off-the-shelf foundation models, fine-tuning, and custom training. Includes decision framework, cost analysis, and cloud service comparison."
+  image: "https://robertleggett.com.au/blog/fine-tuning-vs-foundation-models-choosing-right-approach/feature-image.png"
+  url: "https://robertleggett.com.au/blog/fine-tuning-vs-foundation-models-choosing-right-approach"
+
+twitter:
+  card: "summary_large_image"
+  title: "Fine-Tuning vs Foundation Models - Choosing the Right AI Approach"
+  description: "Should you use a foundation model as-is, fine-tune it, or train from scratch? A decision framework covering LoRA, cost tradeoffs, and cloud services."
+  image: "https://robertleggett.com.au/blog/fine-tuning-vs-foundation-models-choosing-right-approach/feature-image.png"
+---
+
+For those who know me, you will know that I am passionate about helping teams make informed architectural decisions — the kind that balance capability, cost, and long-term maintainability. One of the most consequential decisions organisations face in their AI journey today is this: should we use a foundation model off the shelf, fine-tune an existing model, or train something from scratch? Each approach comes with its own set of tradeoffs, and choosing the wrong one can result in wasted time, inflated costs, or underwhelming performance. In this article, we will break down what foundation models are, explore the spectrum of approaches from off-the-shelf to fully custom, dive into the technical details of fine-tuning techniques like LoRA and QLoRA, and provide a practical decision framework you can apply to your own AI strategy. Let's get into it.
+
+---
+
+## Before you start
+
+About this post:
+
+*   8 – 10-min average reading time
+*   Suitable for beginner through to advanced
+
+What you will gain reading this post:
+
+*   A clear understanding of what foundation models are and how they work
+*   Knowledge of the spectrum from off-the-shelf to fine-tuned to custom models
+*   An understanding of fine-tuning techniques including transfer learning, LoRA, and QLoRA
+*   Insight into data requirements, cost, and performance tradeoffs
+*   Familiarity with cloud services for fine-tuning across AWS, GCP, and Azure
+*   A practical decision framework for choosing the right approach
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What are foundation models?
+
+**Foundation models** are large AI models trained on vast and diverse datasets that can be adapted to a wide range of downstream tasks. The term was popularised by Stanford's Center for Research on Foundation Models and reflects a fundamental shift in how AI systems are built.
+
+Key characteristics of foundation models:
+
+*   **Trained on massive datasets** — Billions of tokens of text, images, code, or multimodal data from across the internet and curated sources
+*   **General-purpose capabilities** — They can perform a broad range of tasks (summarisation, translation, code generation, reasoning) without task-specific training
+*   **Transferable knowledge** — The knowledge learned during pre-training can be transferred and adapted to specific domains and use cases
+*   **Scale** — These models range from billions to hundreds of billions of parameters, requiring significant compute for training
+
+Examples of foundation models include:
+
+*   **GPT-4 / GPT-4o** (OpenAI) — General-purpose language and multimodal models
+*   **Claude** (Anthropic) — Language model with a focus on safety and helpfulness
+*   **Gemini** (Google) — Multimodal model capable of reasoning across text, images, and code
+*   **Llama** (Meta) — Open-weight language models available for commercial use
+*   **Mistral** (Mistral AI) — Efficient, high-performing open models
+
+The critical insight is that foundation models have **already learned** an enormous amount about language, reasoning, and the world. The question is whether that general knowledge is sufficient for your use case, or whether you need to specialise it further.
+
+---
+
+## What are the different approaches?
+
+Think of the approaches as a spectrum from least customisation to most:
+
+**1. Off-the-Shelf (Prompt Engineering Only)**
+
+*   Use a foundation model exactly as provided, guiding its behaviour through prompts
+*   **Investment** — Low. No training data or compute required beyond inference costs.
+*   **When to use** — The model already performs well on your task with good prompting
+*   **Example** — Using GPT-4 via API to summarise customer support tickets with a well-crafted system prompt
+*   Difficulty to adopt: **2** out of 10
+
+**2. Retrieval-Augmented Generation (RAG)**
+
+*   Combine a foundation model with an external knowledge base. The model retrieves relevant documents at query time and uses them to inform its response.
+*   **Investment** — Moderate. Requires building a vector store and retrieval pipeline.
+*   **When to use** — You need the model to access up-to-date or proprietary information without modifying the model itself
+*   **Example** — An internal chatbot that answers questions based on your company's documentation stored in a vector database
+*   Difficulty to adopt: **4** out of 10
+
+**3. Fine-Tuning**
+
+*   Take a pre-trained foundation model and further train it on your own domain-specific data
+*   **Investment** — Moderate to high. Requires curated training data, compute resources, and ML expertise.
+*   **When to use** — The model needs to learn domain-specific language, formats, or behaviours that cannot be achieved through prompting alone
+*   **Example** — Fine-tuning a model on thousands of your organisation's legal contracts to generate contract summaries in your specific format
+*   Difficulty to adopt: **6** out of 10
+
+**4. Training from Scratch**
+
+*   Build and train a model from the ground up on your own data
+*   **Investment** — Very high. Requires massive datasets, extensive compute, and deep ML expertise.
+*   **When to use** — Extremely rare. Only justified when no existing model is suitable and you have unique data and requirements at scale.
+*   **Example** — A pharmaceutical company training a specialised model on proprietary molecular data
+*   Difficulty to adopt: **9** out of 10
+
+---
+
+## What is transfer learning and why does it matter?
+
+**Transfer learning** is the foundational concept that makes fine-tuning so powerful. The idea is straightforward: a model trained on a large, general dataset has already learned useful representations of language, concepts, and reasoning patterns. Rather than starting from zero, you take this pre-trained knowledge and adapt it to your specific domain.
+
+Think of it like this — if you are an experienced software engineer learning a new programming language, you do not start from scratch. You transfer your understanding of variables, loops, functions, and design patterns. You just need to learn the syntax and idioms of the new language. Transfer learning works the same way for AI models.
+
+The benefits are significant:
+
+*   **Dramatically less training data required** — Instead of millions of examples, you may only need hundreds or thousands
+*   **Faster training** — Fine-tuning takes hours or days, not weeks or months
+*   **Lower compute costs** — You are updating a fraction of the model, not training the entire thing
+*   **Better performance** — Starting from a strong foundation almost always produces better results than training from scratch with limited data
+
+---
+
+## What are LoRA and QLoRA?
+
+As foundation models have grown to hundreds of billions of parameters, the practical challenge of fine-tuning them has grown too. Full fine-tuning — updating every parameter in the model — is prohibitively expensive for most organisations. This is where parameter-efficient fine-tuning techniques come in.
+
+**LoRA (Low-Rank Adaptation)**
+
+*   Instead of updating all model parameters during fine-tuning, LoRA freezes the original model weights and injects small, trainable low-rank matrices into specific layers
+*   The result is that you only train a tiny fraction of the total parameters (often less than 1%)
+*   **Benefits** — Dramatically reduces compute requirements and memory usage. Fine-tuning a 7-billion parameter model becomes feasible on a single GPU.
+*   **Tradeoff** — Slightly less expressive than full fine-tuning, but in practice the performance difference is minimal for most use cases
+
+**QLoRA (Quantised LoRA)**
+
+*   Builds on LoRA by additionally quantising the base model weights to 4-bit precision during fine-tuning
+*   This further reduces memory requirements, making it possible to fine-tune very large models on consumer-grade hardware
+*   **Benefits** — A 65-billion parameter model can be fine-tuned on a single 48GB GPU. This was previously unthinkable.
+*   **Tradeoff** — Additional quantisation can introduce minor accuracy loss, but recent research shows this is often negligible
+
+These techniques have democratised fine-tuning. What once required a cluster of expensive GPUs and a team of ML engineers can now be accomplished by a small team with modest hardware.
+
+---
+
+## What data do you need for fine-tuning?
+
+The data requirements for fine-tuning depend on your approach and goals:
+
+**Quality over quantity**
+
+*   For most fine-tuning tasks, you need **hundreds to a few thousand** high-quality examples, not millions
+*   Each example should be representative of the task you want the model to perform
+*   Data quality is far more important than data volume — a small set of excellent examples outperforms a large set of noisy ones
+
+**Data format**
+
+*   Training data is typically structured as **input-output pairs** (prompt and expected completion)
+*   For instruction-following fine-tuning, the format is often: instruction, input context, and desired output
+*   Consistency in format across your training data is critical
+
+**Data preparation considerations**
+
+*   **Deduplication** — Remove duplicate or near-duplicate examples
+*   **Bias audit** — Review your training data for biases that could be amplified during fine-tuning
+*   **Holdout set** — Reserve 10-20% of your data for evaluation to measure whether fine-tuning actually improved performance
+*   **Diversity** — Ensure your training data covers the range of scenarios the model will encounter in production
+
+**A practical tip**: start with 500-1000 high-quality examples. Fine-tune, evaluate, and iterate. You can always add more data in subsequent rounds. The most common mistake I see is teams spending months preparing a perfect dataset before ever running a single fine-tuning experiment.
+
+---
+
+## What are the cost and performance tradeoffs?
+
+Let's compare the approaches across the key dimensions that matter for decision-making:
+
+**Off-the-Shelf with Prompt Engineering**
+
+*   **Upfront cost** — Minimal (no training)
+*   **Ongoing cost** — Per-token inference pricing
+*   **Time to value** — Hours to days
+*   **Performance** — Good for general tasks; may struggle with domain-specific nuances
+*   **Maintenance** — Low; model updates handled by the provider
+
+**RAG**
+
+*   **Upfront cost** — Moderate (vector store setup, embedding pipeline)
+*   **Ongoing cost** — Inference + embedding + storage costs
+*   **Time to value** — Days to weeks
+*   **Performance** — Excellent for knowledge-intensive tasks with proprietary data
+*   **Maintenance** — Moderate; knowledge base needs to be kept current
+
+**Fine-Tuning**
+
+*   **Upfront cost** — Moderate to high (training compute, data preparation)
+*   **Ongoing cost** — Inference costs (often lower per-token than larger general models)
+*   **Time to value** — Weeks to months
+*   **Performance** — Superior for domain-specific tasks and consistent output formatting
+*   **Maintenance** — Moderate; requires retraining as data and requirements evolve
+
+**Training from Scratch**
+
+*   **Upfront cost** — Very high (millions of dollars in compute)
+*   **Ongoing cost** — Full infrastructure management
+*   **Time to value** — Months to years
+*   **Performance** — Potentially best for highly specialised domains
+*   **Maintenance** — High; full model lifecycle management
+
+---
+
+## What cloud services are available for fine-tuning?
+
+Each major cloud provider offers managed services that simplify the fine-tuning process:
+
+**Amazon Web Services (AWS)**
+
+*   **Amazon Bedrock** — Provides fine-tuning capabilities for models including Anthropic Claude, Meta Llama, and Amazon Titan. Upload your training data and Bedrock handles the infrastructure.
+*   **Amazon SageMaker** — Full ML platform with support for custom fine-tuning jobs, distributed training, and model deployment. Supports LoRA and QLoRA through Hugging Face integrations.
+*   **Pricing** — Pay for training compute (GPU instance hours) plus model hosting
+
+**Google Cloud Platform (GCP)**
+
+*   **Vertex AI** — Offers fine-tuning for Gemini, PaLM, and open models. Provides supervised tuning with a simple API and managed compute.
+*   **Vertex AI Model Garden** — Access to open-source models that can be fine-tuned and deployed within the Vertex AI ecosystem
+*   **Pricing** — Pay for training compute plus prediction serving
+
+**Microsoft Azure**
+
+*   **Azure OpenAI Service** — Fine-tuning support for GPT models with managed infrastructure. Upload your training data through the Azure portal or API.
+*   **Azure Machine Learning** — Full ML platform supporting custom fine-tuning with any framework. Integrates with Hugging Face and supports distributed training.
+*   **Pricing** — Pay for training compute (GPU hours) plus model hosting
+
+All three providers are converging on a similar experience: **upload your data, select a base model, configure training parameters, and let the platform handle the infrastructure**. The choice of provider often comes down to which ecosystem you are already invested in and which models you want to use.
+
+---
+
+## How do you decide which approach to take?
+
+Here is a practical decision framework I recommend to teams:
+
+**Start with prompting.** Always begin with the simplest approach. Take the best available foundation model, invest time in prompt engineering, and evaluate whether the results meet your requirements. In my experience, this solves 60-70% of use cases.
+
+**Add RAG if you need proprietary knowledge.** If the model needs access to your specific data — internal documentation, product catalogues, customer records — implement RAG before considering fine-tuning. RAG lets you augment the model's knowledge without changing the model itself.
+
+**Fine-tune when prompting and RAG are not enough.** Consider fine-tuning when:
+
+*   The model needs to consistently produce output in a specific format or style that prompting cannot reliably achieve
+*   Your domain has specialised terminology or concepts that the foundation model handles poorly
+*   You need to reduce inference costs by using a smaller, specialised model instead of a large general one
+*   Latency is critical and you need a smaller, faster model that performs as well as a larger one on your specific task
+
+**Train from scratch only as a last resort.** Unless you are a large organisation with truly unique data and requirements that no existing model can address, training from scratch is almost certainly not the right choice.
+
+**Key questions to guide your decision:**
+
+*   Does the foundation model already perform well on our task with good prompting? → **Use off-the-shelf**
+*   Does the model need access to our proprietary data? → **Add RAG**
+*   Does the model need to learn our specific domain, format, or style? → **Fine-tune**
+*   Is our domain so specialised that no existing model can be adapted? → **Consider training from scratch** (but really, try fine-tuning first)
+
+---
+
+## Conclusion
+
+Choosing the right approach for your AI strategy is one of the most important architectural decisions you will make. Here are the key takeaways:
+
+*   **Foundation models provide an extraordinary starting point** — they encode vast knowledge that can be leveraged through prompting, RAG, or fine-tuning
+*   **The spectrum runs from off-the-shelf to custom**, with each step adding cost, complexity, and customisation capability
+*   **Transfer learning is the key insight** — fine-tuning lets you specialise a general model with far less data and compute than training from scratch
+*   **LoRA and QLoRA have democratised fine-tuning**, making it accessible to teams without massive GPU budgets
+*   **Data quality matters more than quantity** — start with hundreds of high-quality examples, not millions of noisy ones
+*   **All major cloud providers offer managed fine-tuning services** — AWS Bedrock, GCP Vertex AI, and Azure OpenAI Service simplify the infrastructure
+*   **Always start simple** — prompt engineering first, then RAG, then fine-tuning, then custom training. Each step should be justified by evidence that the simpler approach is insufficient.
+
+The teams that get this decision right will build AI capabilities that are cost-effective, maintainable, and genuinely valuable. The ones that jump straight to the most complex approach will spend months and dollars learning lessons that could have been avoided by starting simple and iterating.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

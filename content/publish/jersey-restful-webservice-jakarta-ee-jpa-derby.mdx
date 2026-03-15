@@ -1,0 +1,197 @@
+---
+title: "Jersey 4 RESTful Web Service - Modern Jakarta EE with JPA and Derby"
+date: "2026-02-03"
+slug: "jersey-restful-webservice-jakarta-ee-jpa-derby"
+status: "publish"
+feature_image: "/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/feature-image.png"
+tags: ["Java 21", "Jersey 4", "RESTful API", "Jakarta EE", "JPA", "Derby", "EclipseLink", "Jackson", "Web Services", "Robert Leggett"]
+
+meta:
+  title: "Jersey 4 RESTful Web Service with Jakarta EE 11, JPA, and Derby In-Memory Database | Java Tutorial by Robert Leggett"
+  description: "A hands-on Java 21 tutorial building a modern RESTful API using Jersey 4.0 (Jakarta EE 11), Jakarta Persistence 3.1 with EclipseLink 4.0, and an in-memory Derby database — includes GitHub project link."
+  keywords: ["Jersey 4 REST API", "Jakarta EE 11", "Jakarta Persistence", "JPA 3.1", "Derby In-Memory Database", "EclipseLink 4.0", "Jackson", "RESTful Web Services", "Java 21", "JUnit 5", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/jersey-restful-webservice-jakarta-ee-jpa-derby"
+  image: "https://robertleggett.com.au/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/feature-image.png"
+
+og:
+  type: "article"
+  title: "Jersey 4 RESTful Web Service - Modern Jakarta EE with JPA and Derby"
+  description: "Build a modern RESTful API using Jersey 4.0 (Jakarta EE 11), Jakarta Persistence 3.1 (EclipseLink 4.0), and an in-memory Derby database — complete example with GitHub source."
+  image: "https://robertleggett.com.au/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/feature-image.png"
+  url: "https://robertleggett.com.au/blog/jersey-restful-webservice-jakarta-ee-jpa-derby"
+
+twitter:
+  card: "summary_large_image"
+  title: "Jersey 4 RESTful Web Service - Modern Jakarta EE with JPA and Derby"
+  description: "Learn to build modern RESTful APIs in Java 21 using Jersey 4, Jakarta Persistence 3.1, and Derby — includes source code, JUnit 5 tests, and setup guide."
+  image: "https://robertleggett.com.au/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/feature-image.png"
+---
+
+RESTful is a key term that remains central to modern API development.
+
+Previous services used to be created implementing JAX-WS with the communication protocol being SOAP, various implementations were and are still used but from my own experience they all have fallen short especially in the area of code generation, these technologies included Axis 1 & 2, Apache CXF as well as the java generation tools.
+
+Since RESTful implements **Jakarta RESTful Web Services** (formerly JAX-RS) with the communication protocol being HTTP, it has allowed for rapid development with the ability to send data in different formats, typically it is JSON however it can also be sent as XML or even plain text.
+
+This project has been fully modernised to use **Jersey 4.0.0**, **Jakarta EE 11** (the `jakarta.*` namespace), **Java 21**, and modern testing with **JUnit 5** and **Mockito 5.6**. The build includes **CI/CD with GitHub Actions** for automated testing on every push.
+
+---
+
+## Before you start
+
+About this post:
+
+*   2 – 7-min average reading time
+*   Suitable for beginner's through to advanced
+
+What you will gain reading this post:
+
+*   A starter project ready for use
+*   An overview of the technology choices for the starter project
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Jersey 4.0.0
+
+### Why choose this technology
+
+For this example I wanted to have a lightweight RESTful service that could perform functions/operations and return the appropriate response to the calling client.
+
+**Jersey 4.0.0** is the reference implementation for **Jakarta RESTful Web Services** under **Jakarta EE 11**. It is a lightweight framework that allows for simple and rapid development of RESTful web services, and can easily be integrated with many other technologies to add additional bells and whistles.
+
+The major change from earlier versions is the migration from the `javax.*` namespace to the `jakarta.*` namespace, reflecting the transition from Java EE to Jakarta EE.
+
+### What is currently used
+
+*   **Jakarta Servlets** with the `jakarta.*` namespace
+*   RESTful interface via **Jakarta RESTful Web Services**
+*   HTTP protocol communication
+*   Custom Application Configuration using **ResourceConfig**
+*   **HK2** dependency injection
+*   Annotations throughout
+*   **JUnit 5.10** and **Mockito 5.6** testing framework
+
+### What can you add
+
+*   HTTP methods that are not being used but make sense to enhance existing functionality these include DELETE, PUT etc.
+*   Validation of data received in the RESTful interface using **Jakarta Bean Validation**.
+
+---
+
+## Jackson (via jersey-media-json-jackson)
+
+### Why choose this technology
+
+For this example I was required to use data binding e.g. JSON to Java and back.
+
+**Jackson** is integrated via the **jersey-media-json-jackson** module, which provides seamless JSON data binding for Jersey 4. Jackson is the industry-standard JSON library for Java and provides powerful serialisation and deserialisation capabilities out of the box.
+
+This replaces the previously used Genson library, aligning the project with the most widely adopted JSON binding solution in the Java ecosystem.
+
+### What is currently used
+
+*   **Automatic JSON data binding** via Jackson
+*   Configured through the Jersey Jackson module — no manual POJO mapping required
+
+---
+
+## EclipseLink 4.0.2
+
+### Why choose this technology
+
+For the example I found it important to have the data stored like you would in the industry.
+
+I am a big fan of Object Relational Mapping and wanted to utilise **Jakarta Persistence 3.1**.
+
+**EclipseLink 4.0.2** is the reference implementation of Jakarta Persistence 3.1, providing full support for the modern JPA specification under the `jakarta.persistence.*` namespace. While you can use many other technologies I found this one was still active, lightweight and had the support required.
+
+### What is currently used
+
+*   **Jakarta Persistence 3.1** support
+*   Annotations are used and encouraged to configure your Entities using `jakarta.persistence.*`
+*   Persistence configuration via **persistence.xml**
+*   Entity-to-table mapping
+*   **EntityManager** and transaction management
+
+### What can you add
+
+*   Additional unit tests for the DAO layer and entities using JUnit 5.
+
+---
+
+## Derby 10.16
+
+### Why choose this technology
+
+For the example I wanted to have a simple in-memory database that did not require additional configuration once this demo is checked out.
+
+**Derby 10.16** has great support for an in-memory relational database and is simple to configure. It remains a solid choice for development and testing scenarios where you want zero external database setup.
+
+### What is currently used
+
+*   **In-memory database** — no external database installation required
+*   Automatic table creation via JPA schema generation
+*   Compatible with Jakarta Persistence 3.1
+
+### What can you add
+
+*   Unit tests with pre-populated data for detailed DAO tests.
+
+---
+
+## Java 21 and Modern Tooling
+
+### Why choose this technology
+
+**Java 21** is the current Long-Term Support release and brings modern language features such as pattern matching, records, sealed classes, and virtual threads.
+
+The project uses **Maven** as the build tool and includes **CI/CD via GitHub Actions** for automated testing on every push and pull request.
+
+### What is currently used
+
+*   **Java 21** LTS runtime
+*   **Maven** build with dependency management
+*   **JUnit 5.10** for unit testing
+*   **Mockito 5.6** for mocking in tests
+*   **GitHub Actions** for continuous integration
+
+---
+
+## Example
+
+You can check out the project from the following location below:
+
+**Project URL**: [https://github.com/Rob-Leggett/jersey_restful_webservice](https://github.com/Rob-Leggett/jersey_restful_webservice)
+
+What you can learn:
+
+*   RESTful web services with **Jersey 4.0** (Jakarta RESTful Web Services)
+*   **Jakarta EE 11** with the `jakarta.*` namespace
+*   JSON data binding with **Jackson**
+*   **Jakarta Persistence 3.1** with EclipseLink 4.0
+*   **Derby 10.16** in-memory database
+*   **JUnit 5** and **Mockito 5.6** unit testing
+*   **Maven** build tooling
+*   **CI/CD with GitHub Actions**
+
+---
+
+## Conclusion
+
+This project demonstrates how a lightweight RESTful web service can be built using modern **Jakarta EE 11** technologies on **Java 21**. The combination of **Jersey 4.0**, **EclipseLink 4.0**, **Derby 10.16**, and **Jackson** provides a solid foundation for building and testing RESTful APIs that align with current industry standards.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

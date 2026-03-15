@@ -1,0 +1,212 @@
+---
+title: "Angular 19 and Bootstrap 5 with Spring Boot 3 and Spring Security 6"
+date: "2026-02-04"
+slug: "angular-bootstrap-spring-boot-security"
+status: "publish"
+feature_image: "/blog/angular-bootstrap-spring-boot-security/feature-image.png"
+tags: ["Angular", "Spring Boot", "Spring Security", "Bootstrap", "Java 21", "JWT", "TypeScript", "REST API", "Full Stack Development", "Open Source"]
+
+meta:
+  title: "Angular 19 & Bootstrap 5 with Spring Boot 3 and Spring Security 6 | Robert Leggett"
+  description: "A complete full-stack example integrating Angular 19, Bootstrap 5.3, Spring Boot 3.3, Spring Security 6, HSQLDB, and JWT stateless authentication. Learn how to build a secure, modern Java web application end to end."
+  keywords: ["Angular 19", "Spring Boot 3", "Spring Security 6", "Bootstrap 5", "JWT Authentication", "Java 21", "TypeScript 5.7", "REST API", "Full Stack", "HSQLDB", "JUnit 5", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/angular-bootstrap-spring-boot-security"
+  image: "https://robertleggett.com.au/blog/angular-bootstrap-spring-boot-security/feature-image.png"
+
+# Open Graph (LinkedIn/Facebook)
+og:
+  type: "article"
+  title: "Angular 19 and Bootstrap 5 with Spring Boot 3 and Spring Security 6"
+  description: "Explore how to integrate Angular 19, Bootstrap 5, Spring Boot 3, and Spring Security 6 into a secure, production-ready full-stack web application with JWT authentication. Includes GitHub example and best practices."
+  image: "https://robertleggett.com.au/blog/angular-bootstrap-spring-boot-security/feature-image.png"
+  url: "https://robertleggett.com.au/blog/angular-bootstrap-spring-boot-security"
+
+# Twitter Card
+twitter:
+  card: "summary_large_image"
+  title: "Angular 19 + Spring Boot 3 + Spring Security 6: A Modern Full Stack Example"
+  description: "Full-stack example combining Angular 19, Bootstrap 5, Spring Boot 3, Spring Security 6, and JWT stateless authentication into a cohesive modern web app."
+  image: "https://robertleggett.com.au/blog/angular-bootstrap-spring-boot-security/feature-image.png"
+---
+
+Folks have been asking me if I knew of any good examples of a modern full-stack web application that utilises the following technologies: **Angular 19**, **Bootstrap 5.3**, **Spring Boot 3.3**, **Spring Security 6**, **HSQLDB**, and **JWT stateless authentication**, and after searching around I decided that it would be best to create an example project that would demonstrate the integration of all these technologies as well as describe some of the specifics.
+
+This project has been fully modernised from its original AngularJS and Spring 4 roots to reflect current industry standards, running on **Java 21** and **TypeScript 5.7** with a **Maven multi-module** structure.
+
+---
+
+## Before you start
+
+About this post:
+
+*   2 - 7-min average reading time
+*   Suitable for beginner's through to advanced
+
+What you will gain reading this post:
+
+*   A starter project ready for use
+*   An overview of the technology choices for the starter project
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Angular 19
+
+### Why choose this technology
+
+For the example I wanted to create a client-rich web application that uses a modern, widely adopted front-end framework.
+
+**Angular 19** with **standalone components** provides a powerful, type-safe development experience with built-in routing, dependency injection, and reactive forms — all without the overhead of NgModules.
+
+Angular continues to be one of the most sought-after frameworks on the market, and the move to standalone components represents the modern way to build Angular applications.
+
+### Technology focus areas
+
+*   **Angular 19** with standalone components
+    *   Component-based architecture
+    *   Angular Router with lazy loading
+    *   Template-driven and reactive forms
+    *   HttpClient with interceptors for JWT token injection
+    *   RxJS observables and reactive patterns
+    *   Services and dependency injection
+    *   HTTP response interceptors to catch 401 responses and redirect to login
+    *   Event-driven communication between components
+*   **TypeScript 5.7** for type safety
+*   **Angular CLI** for build tooling and development server
+*   **JWT token management** on the client side
+
+---
+
+## Bootstrap 5.3
+
+### Why choose this technology
+
+For the example I wanted to create a web application that looks professional and is quick to style.
+
+**Bootstrap 5.3** is a responsive web library allowing for ideal UI display across different devices and resolutions. The move from Bootstrap 3 to 5 drops the jQuery dependency entirely, aligning with Angular's component-driven approach.
+
+### Technology focus areas
+
+*   **Bootstrap 5.3**
+    *   NavBar
+    *   Header
+    *   Dropdown
+    *   Cards (replacing the old Panel component)
+*   Responsive Web Layouts
+*   No jQuery dependency
+
+---
+
+## Spring Boot 3.3
+
+### Why choose this technology
+
+For the example I wanted to create the functionality scenarios to best emulate industry best practices and for the reader to be able to walk away understanding how they can utilise modern server-side technologies that are currently strong in the market.
+
+I decided to use **Spring Boot 3.3** to create a **RESTful API** in which the client could GET, POST, PUT, DELETE data as required. Spring Boot provides auto-configuration, embedded Tomcat, and a streamlined development experience compared to the traditional XML-heavy Spring configuration of the past.
+
+### Technology focus areas
+
+*   **Spring Boot 3.3** with auto-configuration and embedded Tomcat
+*   **Java 21** as the runtime, taking advantage of modern language features
+*   Annotations are used throughout to configure controllers, services, transactions, and components
+*   RESTful entry points are defined through controllers and produce JSON responses
+*   CRUD operations
+*   **JUnit 5** test support
+
+---
+
+## Spring Security 6
+
+### Why choose this technology
+
+For the example I wanted to have the RESTful API endpoints protected as sensitive information can be accessed and sensitive operations performed.
+
+**Spring Security 6** with **JWT stateless authentication** provides a modern, token-based approach to securing your API. Instead of session-based authentication, the server issues a JWT on login and validates it on each subsequent request.
+
+### Technology focus areas
+
+*   **Stateless JWT authentication** — no server-side session required
+*   **SecurityFilterChain** bean-based configuration (replacing the legacy WebSecurityConfigurerAdapter)
+*   Method-level security with @PreAuthorize and @PostAuthorize annotations
+*   Token-based authentication flow (login → receive JWT → include in Authorization header)
+*   An entry point that returns HTTP 401 for unauthenticated requests
+*   **BCrypt** password encoding
+*   JUnit 5 test support
+
+---
+
+## HSQLDB
+
+### Why choose this technology
+
+For the example I wanted to demonstrate a complete end-to-end solution where transaction operations could be executed that would show industry-based standards.
+
+**HSQLDB** provides a lightweight, in-memory relational database that requires no external setup, making it ideal for a starter project that anyone can clone and run immediately.
+
+### Technology focus areas
+
+*   **Spring Data JPA** with HSQLDB in-memory database
+*   Auto-configuration via Spring Boot — no persistence.xml required
+*   Entity Manager and simple transactions managed by Spring
+*   Zero configuration for database setup
+*   JUnit 5 test support
+
+---
+
+## Maven Multi-Module Structure
+
+The project is organised as a **Maven multi-module** build with two modules:
+
+*   **api** — the Spring Boot 3.3 back-end with REST endpoints, Spring Security 6, and JPA persistence
+*   **client** — the Angular 19 front-end, built via Angular CLI and served alongside the API
+
+This structure provides a clean separation of concerns while allowing a single build command to produce the full application.
+
+---
+
+## Example
+
+You can check out the project from the following location below:
+
+**Project URL**: [https://github.com/Rob-Leggett/angular_bootstrap_spring](https://github.com/Rob-Leggett/angular_bootstrap_spring)
+
+Here is what you can learn:
+
+*   Maven multi-module project structure
+*   Angular 19 standalone components
+*   TypeScript 5.7
+*   Angular Router with multiple views
+*   JWT stateless authentication
+*   Filtering and sorting lists
+*   Reactive data binding with RxJS
+*   Data retrieval via HttpClient
+*   Integration of client-side framework with server-side RESTful API
+*   Stateless API design
+*   RESTful entry points with Spring Boot 3.3
+*   Spring Security 6 with JWT tokens
+*   Data operations using Spring Data JPA
+*   HSQLDB in-memory database
+*   JUnit 5 unit tests
+*   Integration tests
+
+---
+
+## Conclusion
+
+This project demonstrates how a full-stack application can be built using modern technologies that are in demand across the industry. The combination of **Angular 19**, **Bootstrap 5.3**, **Spring Boot 3.3**, **Spring Security 6**, and **JWT authentication** running on **Java 21** provides a solid foundation for building secure, responsive web applications.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

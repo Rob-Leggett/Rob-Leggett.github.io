@@ -1,0 +1,197 @@
+---
+title: "Secure WebSockets with Spring Boot 3 and Spring Security 6 - Token-Based Authentication"
+date: "2026-02-03"
+slug: "secure-websockets-spring-boot-spring-security"
+status: "publish"
+feature_image: "/blog/secure-websockets-spring-boot-spring-security/feature-image.png"
+tags: ["Spring Boot", "Spring Security", "WebSockets", "STOMP", "SockJS", "Angular", "JWT", "Java 21", "Token Security", "Robert Leggett"]
+
+meta:
+  title: "Secure WebSockets with Spring Boot 3 and Spring Security 6 | JWT Token-Based STOMP Authentication Guide"
+  description: "Learn how to secure WebSockets with Spring Boot 3.4 and Spring Security 6.4 using JWT token-based authentication. Includes complete Java 21 and Angular 19 examples for secure STOMP messaging."
+  keywords: ["Spring Security WebSockets", "STOMP Authentication", "JWT Authentication", "SockJS", "Angular 19 WebSockets", "Spring Boot 3 Security", "Java 21 WebSocket Config", "Secure WebSocket Connection", "WebSocketTokenInterceptor", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security"
+  image: "https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/feature-image.png"
+
+og:
+  type: "article"
+  title: "Secure WebSockets with Spring Boot 3 and Spring Security 6 - Token-Based Authentication"
+  description: "A detailed guide to implementing secure WebSocket connections using Spring Boot 3.4, Spring Security 6.4, JWT tokens, and Angular 19. Includes WebSocketTokenInterceptor setup and STOMP message-level security."
+  image: "https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/feature-image.png"
+  url: "https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security"
+
+twitter:
+  card: "summary_large_image"
+  title: "Secure WebSockets with Spring Boot 3 + Spring Security 6: JWT Authentication"
+  description: "Implement JWT token-based authentication for WebSockets using Spring Boot 3.4, Spring Security 6.4, and STOMP. Learn interceptor setup, CORS config, and secure message handling with Angular 19."
+  image: "https://robertleggett.com.au/blog/secure-websockets-spring-boot-spring-security/feature-image.png"
+---
+
+WebSockets with custom message security is not a topic that appears widely online, let alone examples on how to make it happen, therefore I decided to present on WebSockets and in particular allowing custom security on the socket level.
+
+This project has been fully modernised from its original AngularJS and Spring 4 implementation. Below is a summary of what has changed:
+
+| Component | Before | After |
+| --- | --- | --- |
+| **Frontend** | AngularJS 1.4 | **Angular 19** (standalone components) |
+| **Backend** | Spring 4 | **Spring Boot 3.4.1** (embedded Tomcat JAR) |
+| **Security** | Spring Security 4, custom HMAC tokens | **Spring Security 6.4**, **JWT (jjwt 0.12.6)** |
+| **Database** | In-memory (custom) | **H2 in-memory database** |
+| **Java** | Java 8 | **Java 21** |
+| **Build (client)** | Gulp 3, Bower | **Angular CLI**, Node.js 20+ |
+| **Build (server)** | Maven, WAR deployment | **Maven**, embedded Tomcat JAR |
+| **Password Encoding** | Plain text / custom | **BCrypt** |
+| **WebSocket Auth** | Custom token interceptor | **WebSocketTokenInterceptor** with JWT validation on CONNECT |
+
+---
+
+## Before you start
+
+About this post:
+
+*   5 – 10-min average reading time
+*   Suitable for beginner's through to advanced
+
+What you will gain reading this post:
+
+*   An explanation about how to add an additional security layer to your WebSockets using **JWT tokens**
+*   A starter project that is ready to use
+*   An overview of the technology choices for the starter project
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## How does JWT authentication work with WebSockets?
+
+In this implementation, **JWT (JSON Web Token)** authentication is used to secure both the REST API and the WebSocket connections. The flow works as follows:
+
+1.  The client authenticates via the REST API login endpoint and receives a **JWT token**
+2.  When establishing a WebSocket connection, the client includes the JWT token as a **STOMP header** on the CONNECT frame
+3.  The **WebSocketTokenInterceptor** intercepts the CONNECT frame, extracts the JWT token, validates it, and establishes the **SecurityContext** for the connection
+4.  All subsequent SUBSCRIBE and MESSAGE frames are authenticated against the established security context
+
+This approach using **jjwt 0.12.6** replaces the custom HMAC token mechanism from the original implementation, providing a standards-based, stateless authentication flow.
+
+---
+
+## Spring Security 6.4
+
+**Spring Security 6.4** provides the foundation for securing both the REST endpoints and WebSocket connections. The modern approach uses **SecurityFilterChain** beans instead of the legacy WebSecurityConfigurerAdapter.
+
+### What is supported out of the box
+
+Spring Security by default has security for WebSockets and can use the message header simpUser to authenticate, but when you want to authenticate on a different identifier — in this example a JWT token — then custom configuration is required.
+
+### How JWT validation works on CONNECT
+
+The **WebSocketTokenInterceptor** implements `ChannelInterceptor` and intercepts inbound STOMP messages. On a **CONNECT** frame, it:
+
+1.  Extracts the JWT token from the STOMP native headers
+2.  Validates the token using the **jjwt** library
+3.  Loads the user details and creates an **Authentication** object
+4.  Sets the **SecurityContext** for the WebSocket session
+
+This means that any **CONNECT**, **SUBSCRIBE**, or **MESSAGE** frame requires a valid JWT token to be passed as part of the STOMP headers, otherwise the response will be AccessDenied. **UNSUBSCRIBE** and **DISCONNECT** frames are permitted without authentication as headers cannot be attached to these frame types.
+
+### Additional security features
+
+*   **BCrypt password encoding** for secure password storage
+*   **CORS configuration** to allow the Angular development server to communicate with the API
+*   **Stateless session management** — no server-side HTTP sessions
+*   **Method-level security** with @PreAuthorize annotations
+
+---
+
+## Spring Boot 3.4.1
+
+**Spring Boot 3.4.1** provides auto-configuration, embedded Tomcat, and a streamlined development experience. The move from a traditional WAR deployment to an **embedded Tomcat JAR** simplifies both development and deployment.
+
+### Technology focus areas
+
+*   **Spring Boot 3.4.1** with auto-configuration
+*   **Embedded Tomcat** — run as a standalone JAR, no external application server required
+*   **Spring WebSocket** with **STOMP** over **SockJS** for real-time messaging
+*   **Spring Data JPA** with **H2 in-memory database** for persistence
+*   **Java 21** as the runtime
+*   **Maven multi-module** build (api + client)
+
+---
+
+## Angular 19 Client
+
+The client is built with **Angular 19** using **standalone components** and the **Angular CLI**. It connects to the WebSocket endpoint using **SockJS** and **STOMP**, passing the JWT token as a STOMP header for authentication.
+
+### Technology focus areas
+
+*   **Angular 19** with standalone components (no NgModules)
+*   **TypeScript** with strict type checking
+*   **SockJS** and **@stomp/stompjs** for WebSocket communication
+*   JWT token included in STOMP CONNECT headers for authentication
+*   **Angular CLI** for build and development server
+*   **Node.js 20+** runtime requirement
+*   Component-based architecture with services and dependency injection
+
+---
+
+## STOMP Message-Level Security
+
+**STOMP (Simple Text Oriented Messaging Protocol)** provides a frame-based protocol on top of WebSockets, allowing for structured messaging with headers, destinations, and subscriptions.
+
+The security rules are configured so that:
+
+*   **CONNECT** — requires a valid JWT token in the STOMP headers
+*   **SUBSCRIBE** — requires authentication (user must have connected with a valid token)
+*   **MESSAGE** — requires authentication
+*   **UNSUBSCRIBE** — permitted for all (no headers can be attached)
+*   **DISCONNECT** — permitted for all (no headers can be attached)
+*   **All other messages** — denied by default
+
+This provides a layered security model where the REST API is secured by Spring Security's HTTP filter chain, and the WebSocket connections are additionally secured at the STOMP message level.
+
+---
+
+## Example
+
+You can check out the project from the following location below:
+
+**Project URL**: [https://github.com/Rob-Leggett/angular_websockets_security](https://github.com/Rob-Leggett/angular_websockets_security)
+
+What you can learn:
+
+*   Maven multi-module project structure
+*   Angular 19 standalone components
+*   SockJS / STOMP WebSocket communication
+*   **JWT token-based authentication** with jjwt 0.12.6
+*   **WebSocketTokenInterceptor** for JWT validation on CONNECT
+*   STOMP message-level security
+*   Spring Boot 3.4.1 with embedded Tomcat
+*   Spring Security 6.4 with SecurityFilterChain
+*   **BCrypt** password encoding
+*   **CORS configuration** for Angular dev server
+*   H2 in-memory database with Spring Data JPA
+*   RESTful entry points
+*   WebSocket entry points
+*   Stateless API design
+*   Integration of Angular front-end with Spring Boot back-end
+*   Unit tests and integration tests
+
+---
+
+## Conclusion
+
+This project demonstrates how to build a **secure real-time web application** using modern technologies. The combination of **Spring Boot 3.4.1**, **Spring Security 6.4**, **JWT authentication**, and **Angular 19** provides a production-ready pattern for securing WebSocket connections at the STOMP message level. The **WebSocketTokenInterceptor** approach gives you fine-grained control over which message types require authentication, while the standards-based JWT tokens ensure stateless, scalable security.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

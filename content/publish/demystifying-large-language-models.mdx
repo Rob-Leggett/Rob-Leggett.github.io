@@ -1,0 +1,192 @@
+---
+title: "Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI"
+date: "2026-03-15"
+slug: "demystifying-large-language-models"
+status: "publish"
+feature_image: "/blog/demystifying-large-language-models/feature-image.png"
+tags: ["AI", "Large Language Models", "Machine Learning", "Transformers", "Robert Leggett"]
+
+meta:
+  title: "Demystifying Large Language Models | Robert Leggett"
+  description: "A comprehensive guide to understanding Large Language Models, how transformers work, tokens, context windows, and practical use cases for modern AI."
+  keywords: ["large language models", "LLMs", "transformers", "AI", "machine learning", "tokens", "context windows", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/demystifying-large-language-models"
+  image: "https://robertleggett.com.au/blog/demystifying-large-language-models/feature-image.png"
+
+og:
+  type: "article"
+  title: "Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI"
+  description: "A comprehensive guide to understanding Large Language Models, how transformers work, tokens, context windows, and practical use cases for modern AI."
+  image: "https://robertleggett.com.au/blog/demystifying-large-language-models/feature-image.png"
+  url: "https://robertleggett.com.au/blog/demystifying-large-language-models"
+
+twitter:
+  card: "summary_large_image"
+  title: "Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI"
+  description: "A comprehensive guide to understanding Large Language Models, how transformers work, tokens, context windows, and practical use cases for modern AI."
+  image: "https://robertleggett.com.au/blog/demystifying-large-language-models/feature-image.png"
+---
+
+It feels like almost overnight, **Large Language Models** went from a niche topic in machine learning research to something your parents are asking about at the dinner table. Whether it is ChatGPT drafting an email, Copilot helping you write code, or a chatbot resolving your query, LLMs have woven themselves into how we work, create, and communicate.
+
+If I'm to be perfectly honest, the pace of change has been staggering. Just a few years ago, having a fluent conversation with an AI felt like science fiction. Today, millions interact with these models daily, often without giving it a second thought. Yet despite their widespread adoption, there is still a great deal of mystery around how these systems actually work.
+
+In this article, we will peel back the layers of Large Language Models and explore what makes them tick. We will walk through the transformer architecture, break down tokens and context windows, look at how inference parameters shape output, and discuss practical use cases alongside important limitations. Whether you are a developer, a business leader, or simply curious, this guide is for you.
+
+---
+
+## Before you start
+
+About this post:
+
+*   7 – 12-min average reading time
+*   Suitable for beginner through to advanced
+
+What you will gain reading this post:
+
+*   An understanding of what Large Language Models are and how they work
+*   Knowledge of the transformer architecture at a conceptual level
+*   Clarity on tokens, context windows, and inference parameters
+*   Practical guidance on when to use and when not to use LLMs
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is a Large Language Model?
+
+A **Large Language Model** (LLM) is a type of artificial neural network that has been trained on vast quantities of text data. We are talking about billions of pages of books, articles, code repositories, websites, and more. Through this training process, the model learns the statistical patterns and relationships within language, enabling it to generate coherent, contextually relevant text.
+
+Think of an LLM as a very well-read assistant who has consumed an enormous library of human knowledge. It has not memorised every word verbatim, but it has developed an understanding of how language works, how ideas connect, and how to express concepts clearly. When you ask it a question, it draws on those learned patterns to construct a response.
+
+The "large" in Large Language Model refers to the sheer scale of these systems. Modern LLMs contain billions of **parameters**, the adjustable values learned during training. More parameters generally means the model can capture more nuance and complexity. For context, **GPT-4** is estimated to have over a trillion parameters, while open-source models like **Llama** from Meta offer powerful alternatives at various sizes.
+
+You will find that the landscape is rich with options today. **Claude** from Anthropic emphasises safety and helpfulness, **Gemini** from Google DeepMind brings multimodal capabilities, and many other models are emerging from both established companies and startups. Each has its own strengths, but they all share the same foundational architecture: the **transformer**.
+
+---
+
+## How do transformers work?
+
+The **transformer** is the architectural breakthrough that made modern LLMs possible. It was introduced in a landmark 2017 paper titled "Attention is All You Need" by researchers at Google. Before transformers, language models relied on architectures that processed text sequentially, one word at a time, making them slow and limited in understanding long-range relationships in text.
+
+The key innovation of the transformer is a mechanism called **self-attention**. Let's break this down with an intuitive example.
+
+Consider the sentence: "The cat sat on the mat because it was tired." As a human, you immediately understand that "it" refers to "the cat" and not "the mat." Self-attention gives the model a similar ability. When processing each word, the model looks at every other word in the sentence and decides how much attention to pay to each one. The word "it" learns to attend strongly to "cat" because the surrounding context makes that relationship meaningful.
+
+This happens across multiple **attention heads** running in parallel, each learning to focus on different types of relationships. Some heads might specialise in grammatical structure, others in semantic meaning, and others in positional relationships. The combined result is a rich understanding of how words relate to one another.
+
+Transformers also process all words in a sequence simultaneously rather than one at a time. This **parallelism** is what makes them efficient to train on modern GPU hardware and a big part of why we have been able to scale these models to the sizes we see today.
+
+The architecture consists of stacked layers of these attention mechanisms, interleaved with **feed-forward neural networks** that transform and refine the model's understanding at each layer. By the time input text has passed through dozens or even hundreds of these layers, the model has built a deep representation of meaning and relationships within that text.
+
+If I'm to be perfectly honest, the elegance of the transformer is in its simplicity. The core idea of letting every word attend to every other word seems straightforward, yet the emergent capabilities that arise from scaling this simple mechanism are nothing short of extraordinary.
+
+---
+
+## What are tokens and context windows?
+
+When you type a prompt into an LLM, the model does not actually see words the way you and I do. Instead, your text is broken down into smaller units called **tokens** through a process known as **tokenisation**.
+
+A token might be a whole word, a part of a word, or even a single character. For example, the word "understanding" might be split into "under" and "standing" as two separate tokens. Common words like "the" or "is" are typically single tokens, while less common or longer words get broken into subword pieces. On average, one token corresponds to roughly three-quarters of a word in English.
+
+This tokenisation approach gives the model flexibility. Rather than needing a separate entry for every word it has ever seen, it can construct any word from a vocabulary of subword tokens. Most modern LLMs use a vocabulary of between 30,000 and 100,000 tokens.
+
+Now, here is where things get interesting. The **context window** is the maximum number of tokens the model can process in a single interaction. This includes both your input prompt and the model's response. Think of it as the model's working memory, the amount of text it can "see" and reason about at any one time.
+
+Context window sizes have grown dramatically. Early models had windows of just a few thousand tokens. Today, models like **Claude** offer context windows of up to **200,000 tokens**, and **Gemini** has pushed even further. A window of 200,000 tokens is roughly equivalent to a 500-page book, meaning you can feed entire documents or codebases into a single prompt.
+
+Why does context window size matter in practice? Consider these scenarios:
+
+*   **Document analysis**: A larger context window means you can analyse entire reports or contracts without needing to break them into chunks
+*   **Code review**: You can provide a whole module or multiple related files for the model to reason about holistically
+*   **Long conversations**: The model can maintain coherence and recall earlier parts of an extended dialogue
+*   **Multi-document synthesis**: You can compare and contrast information across several sources simultaneously
+
+However, it is worth noting that a larger context window does not automatically mean better performance. Models can struggle with information buried in the middle of very long contexts, a phenomenon researchers call the "lost in the middle" problem. Understanding these nuances helps you use LLMs more effectively.
+
+---
+
+## What is temperature and how does inference work?
+
+When an LLM generates a response, it does so one token at a time through a process called **inference**. At each step, the model calculates a probability distribution over its entire vocabulary, ranking every possible next token by likelihood. It then selects the next token, appends it to the sequence, and repeats until the response is complete.
+
+This is where **temperature** comes in. Temperature is a parameter that controls how the model selects from that probability distribution, and it fundamentally shapes the character of the output.
+
+A **low temperature** (close to 0) makes the model highly deterministic. It will almost always pick the most probable next token, producing focused, consistent, and predictable responses. This is ideal for factual questions, structured data, or writing code.
+
+A **high temperature** (closer to 1 or above) introduces more randomness. Less probable tokens get a better chance of being chosen, leading to more creative, diverse, and sometimes surprising output. This is useful for brainstorming and creative writing.
+
+Beyond temperature, there are two other important sampling parameters worth understanding:
+
+*   **Top-p (nucleus sampling)**: Rather than considering all possible tokens, top-p sampling only considers the smallest set of tokens whose cumulative probability exceeds a threshold (for example, 0.9). This dynamically adjusts the pool of candidate tokens based on how confident the model is at each step
+*   **Top-k sampling**: This restricts the model to choosing from only the k most probable tokens at each step. Setting top-k to 50 means the model picks from the 50 most likely next tokens, ignoring everything else
+
+In practice, these parameters work together. Let's look at some practical guidance:
+
+*   **Factual Q&A or data extraction**: Use a low temperature (0.0 to 0.3) for consistent, reliable output
+*   **Professional writing or summarisation**: A moderate temperature (0.3 to 0.7) balances coherence with natural-sounding variation
+*   **Creative writing or brainstorming**: A higher temperature (0.7 to 1.0) encourages novelty and diversity
+*   **Code generation**: Start with a low temperature (0.0 to 0.2) and increase slightly if you want the model to explore alternative approaches
+
+You will find that getting the right combination of these parameters for your use case is part art, part science. My recommendation is to start conservative and adjust incrementally until you find the sweet spot.
+
+---
+
+## What are the practical use cases for LLMs?
+
+The versatility of LLMs is one of their most compelling qualities. Here are the areas where they are delivering genuine value today:
+
+*   **Content generation**: From blog posts and marketing copy to technical documentation, LLMs produce high-quality written content at remarkable speed, adapting tone and style to match different audiences
+*   **Summarisation and analysis**: Feed an LLM a lengthy document and it can distil the key points into a concise summary. Invaluable for research, legal review, and financial analysis
+*   **Translation and localisation**: Modern LLMs handle translation between dozens of languages with impressive fluency, capturing nuance and idiomatic expressions that earlier systems often missed
+*   **Code generation and assistance**: Tools like GitHub Copilot demonstrate how LLMs accelerate development. They write boilerplate, suggest implementations, explain complex logic, debug issues, and generate tests
+*   **Data extraction and transformation**: LLMs are effective at parsing unstructured text and extracting structured information, such as converting free-text into JSON or categorising support tickets
+*   **Customer service and chatbots**: LLM-powered chatbots handle complex queries, maintain conversational context, and escalate to human agents when needed
+*   **Education and training**: LLMs make excellent tutors, explaining concepts at different levels of complexity and providing personalised feedback
+*   **Research assistance**: From literature reviews to hypothesis generation, LLMs accelerate research by synthesising information across large bodies of work
+
+The common thread is that LLMs are at their best when the task involves understanding, generating, or transforming language. They augment human capability, handling repetitive aspects of knowledge work so you can focus on higher-order thinking.
+
+---
+
+## When should you not use LLMs?
+
+As powerful as LLMs are, they are not the right tool for every job. Understanding their limitations is just as important as knowing their strengths.
+
+*   **Real-time factual accuracy**: LLMs do not have access to live information unless connected to external data sources. Their training data has a cutoff date, and they can confidently generate plausible-sounding information that is incorrect. This is known as **hallucination**, and it remains one of the most significant challenges. If your use case demands guaranteed factual accuracy, you need robust verification in place
+*   **Deterministic calculations**: If you need precise mathematical computation, financial modelling, or exact numerical accuracy, an LLM is the wrong tool. These models are probabilistic by nature. Use a calculator, spreadsheet, or purpose-built software instead
+*   **Sensitive data without guardrails**: Feeding confidential or regulated data into an LLM requires careful consideration. You need to understand where the data goes, whether it is used for training, and what compliance obligations apply. Without proper data governance, using LLMs with sensitive information introduces real risk
+*   **Safety-critical decisions**: In domains like healthcare, aviation, or legal judgements, LLM output should never be the sole basis for a decision. Always keep a human in the loop for high-stakes scenarios
+*   **When simpler solutions suffice**: If a regex, a database query, or a rule-based system can solve your problem reliably, there is no need for the complexity and cost of an LLM. Not every problem needs AI, and recognising when a simpler approach is better is a sign of good engineering judgement
+
+Let's be clear: these are not reasons to avoid LLMs altogether. They are reasons to use them thoughtfully. The most successful implementations combine LLM strengths with appropriate safeguards, validation layers, and human oversight. **Retrieval-Augmented Generation** (RAG), for example, addresses hallucination by grounding responses in verified external data sources, and it has become a widely adopted pattern for enterprise use cases.
+
+---
+
+## Conclusion
+
+We have covered a lot of ground. Let's summarise the key takeaways:
+
+*   **Large Language Models** are neural networks trained on massive text datasets that learn the statistical patterns of language, enabling them to generate coherent and contextually relevant text
+*   The **transformer architecture**, introduced in 2017, is the foundation of all modern LLMs. Its self-attention mechanism allows the model to understand relationships between words regardless of their position in a sequence
+*   **Tokens** are the fundamental units LLMs work with. Your text is broken into subword pieces, and the **context window** determines how many tokens the model can process at once
+*   **Temperature**, **top-p**, and **top-k** are inference parameters that control the creativity and determinism of the model's output. Lower values produce more focused responses, while higher values encourage diversity
+*   LLMs excel at language-centric tasks including **content generation**, **summarisation**, **code assistance**, **translation**, and **data extraction**
+*   LLMs have real limitations including **hallucination**, lack of real-time knowledge, and probabilistic rather than deterministic behaviour. Use them thoughtfully with appropriate safeguards
+*   The most effective approach is to treat LLMs as powerful tools that **augment human capability** rather than replace human judgement
+
+The field of Large Language Models is evolving at an extraordinary pace. By understanding the fundamentals covered in this article, you are well-equipped to evaluate new developments, make informed decisions about adoption, and use these tools effectively in your work.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

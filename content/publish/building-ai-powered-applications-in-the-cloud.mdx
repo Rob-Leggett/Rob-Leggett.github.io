@@ -1,0 +1,210 @@
+---
+title: "Building AI-Powered Applications in the Cloud - A Practical Guide for Engineers"
+date: "2026-03-08"
+slug: "building-ai-powered-applications-in-the-cloud"
+status: "publish"
+feature_image: "/blog/building-ai-powered-applications-in-the-cloud/feature-image.png"
+tags: ["AI", "Cloud", "AWS", "GCP", "Azure", "MLOps", "Robert Leggett"]
+
+meta:
+  title: "Building AI-Powered Applications in the Cloud | Robert Leggett"
+  description: "A practical guide to building AI-powered applications using cloud services from AWS, GCP, and Azure, covering managed services, MLOps pipelines, and cost strategies."
+  keywords: ["AI applications", "cloud AI", "AWS SageMaker", "AWS Bedrock", "GCP Vertex AI", "Azure AI", "MLOps", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/building-ai-powered-applications-in-the-cloud"
+  image: "https://robertleggett.com.au/blog/building-ai-powered-applications-in-the-cloud/feature-image.png"
+
+og:
+  type: "article"
+  title: "Building AI-Powered Applications in the Cloud - A Practical Guide for Engineers"
+  description: "A practical guide to building AI-powered applications using cloud services from AWS, GCP, and Azure, covering managed services, MLOps pipelines, and cost strategies."
+  image: "https://robertleggett.com.au/blog/building-ai-powered-applications-in-the-cloud/feature-image.png"
+  url: "https://robertleggett.com.au/blog/building-ai-powered-applications-in-the-cloud"
+
+twitter:
+  card: "summary_large_image"
+  title: "Building AI-Powered Applications in the Cloud - A Practical Guide for Engineers"
+  description: "A practical guide to building AI-powered applications using cloud services from AWS, GCP, and Azure, covering managed services, MLOps pipelines, and cost strategies."
+  image: "https://robertleggett.com.au/blog/building-ai-powered-applications-in-the-cloud/feature-image.png"
+---
+
+It feels like every conversation in technology today circles back to the same topic — artificial intelligence. Whether it is a startup trying to embed intelligent features into their product or a large enterprise looking to modernise legacy workflows, the push to integrate AI into applications has never been stronger. The opportunity is enormous, but so is the complexity. With three major cloud providers each offering their own sprawling ecosystem of AI and ML services, choosing the right path forward can feel overwhelming.
+
+If I'm to be perfectly honest, the hardest part is rarely the AI itself. It is navigating the landscape of services, understanding where managed solutions end and custom engineering begins, and making smart decisions about cost before your cloud bill spirals out of control. The good news is that all three major providers — **AWS**, **GCP**, and **Azure** — have invested heavily in making AI accessible, and there has never been a better time to get started.
+
+In this article, we will walk through the AI services available across the major cloud providers, explore the patterns behind production-ready **MLOps pipelines**, and discuss practical strategies for managing costs. Join us as we explore what it takes to build AI-powered applications in the cloud, from first prototype through to production at scale.
+
+---
+
+## Before you start
+
+About this post:
+
+*   8 – 14-min average reading time
+*   Suitable for beginner through to advanced
+
+What you will gain reading this post:
+
+*   An overview of AI and ML services across AWS, GCP, and Azure
+*   Guidance on choosing between managed and custom AI solutions
+*   Understanding of MLOps pipeline patterns for production workloads
+*   Practical cost considerations for running AI in the cloud
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why build AI applications in the cloud?
+
+Before diving into specific services, it is worth stepping back and asking the fundamental question — why the cloud at all?
+
+The answer comes down to three things: **scalability**, **specialised hardware**, and **speed to market**.
+
+Training and serving AI models is computationally expensive. You will find that running inference on a large language model or training a custom vision model requires access to **GPUs** or **TPUs** that would be prohibitively expensive to purchase and maintain on-premises. Cloud providers give you access to this specialised hardware on demand, and you only pay for what you use.
+
+Beyond raw compute, cloud platforms offer **managed AI and ML services** that dramatically reduce the engineering effort required to go from idea to production. Instead of building your own model serving infrastructure, you can deploy to a managed endpoint. Instead of stitching together your own training pipeline, you can use a fully orchestrated service. This is the real unlock — not just the hardware, but the layers of abstraction that let your team focus on the problem domain rather than the plumbing.
+
+The **pay-as-you-go** model also means you can experiment cheaply. Spin up a prototype, test it with real data, and tear it down if it does not work. The barrier to entry has never been lower.
+
+---
+
+## What AI services does AWS offer?
+
+*   Difficulty to adopt: **4** out of 10 (managed services), **7** out of 10 (custom training pipelines)
+
+AWS has arguably the broadest portfolio of AI and ML services, and they continue to expand aggressively. Let's break down the key offerings.
+
+**Amazon SageMaker** is the cornerstone of AWS's ML platform. It provides an **end-to-end environment** for building, training, and deploying machine learning models. You can use **SageMaker Studio** as your development environment, launch **training jobs** on managed compute clusters, store and serve features through **SageMaker Feature Store**, and deploy models to **real-time or batch endpoints** with built-in auto-scaling. SageMaker also supports **SageMaker Pipelines** for orchestrating your ML workflows as repeatable, versioned pipelines.
+
+**Amazon Bedrock** is AWS's answer to the foundation model wave. It gives you access to a range of **managed foundation models** including **Anthropic's Claude**, **Meta's Llama**, and **Amazon's own Titan** models — all through a unified API. You do not need to manage any infrastructure. You simply call the API, and Bedrock handles the rest. For teams looking to add generative AI capabilities without training their own models, Bedrock is an excellent starting point.
+
+**Amazon Q** rounds out the portfolio as AWS's **AI assistant for business**. It integrates with your internal data sources and can answer questions, generate content, and assist with tasks across your organisation.
+
+You will find that the AWS ecosystem is deep but can be complex. The sheer number of options means you need to invest time understanding which service fits your use case, but once you do, the flexibility is unmatched.
+
+---
+
+## What AI services does GCP offer?
+
+*   Difficulty to adopt: **3** out of 10 (managed services), **6** out of 10 (custom training pipelines)
+
+Google Cloud has a strong heritage in AI and ML, and it shows in the quality of their platform.
+
+**Vertex AI** is GCP's **unified ML platform** and it brings together everything you need under one roof. From data preparation and model training through to deployment and monitoring, Vertex AI provides a cohesive experience. **Vertex AI Pipelines** allow you to orchestrate your ML workflows using either **Kubeflow Pipelines** or **TFX**, and the **Model Garden** gives you access to a curated collection of foundation models that you can deploy or fine-tune.
+
+**Gemini API** provides access to **Google's Gemini family of foundation models**. These models are competitive with the best in the industry and are available through a straightforward API. For teams building generative AI features — chatbots, content generation, code assistance — Gemini is a powerful option, particularly if you are already invested in the Google ecosystem.
+
+**AutoML** deserves a special mention. It allows teams with limited ML expertise to train **high-quality custom models** through a largely **no-code interface**. You provide your labelled data, and AutoML handles feature engineering, model selection, hyperparameter tuning, and deployment. It is genuinely impressive for use cases like image classification, text classification, and tabular data prediction.
+
+If I'm to be perfectly honest, GCP often feels like the most developer-friendly of the three providers when it comes to AI. The documentation is excellent, the APIs are clean, and the integration between services is tight. The trade-off is that the ecosystem is narrower than AWS, so for very niche requirements you may find fewer options.
+
+---
+
+## What AI services does Azure offer?
+
+*   Difficulty to adopt: **4** out of 10 (managed services), **7** out of 10 (custom training pipelines)
+
+Azure has carved out a strong position in enterprise AI, largely driven by its partnership with **OpenAI**.
+
+**Azure AI Studio** is Microsoft's platform for building **generative AI applications**. It provides a visual environment for prompt engineering, model evaluation, and deployment. You can connect your own data sources through **Azure AI Search** to build **retrieval-augmented generation (RAG)** applications, and it integrates seamlessly with the rest of the Azure ecosystem.
+
+**Azure OpenAI Service** is the headline offering. It gives you access to **OpenAI's GPT models**, including **GPT-4** and beyond, running on Azure's infrastructure with enterprise-grade security, compliance, and networking. For organisations that want the power of OpenAI's models but need them deployed within their own cloud tenant and behind their own network boundaries, this is a compelling choice.
+
+**Azure Machine Learning** is the broader **enterprise ML platform**, comparable to SageMaker and Vertex AI. It supports the full ML lifecycle — data preparation, training, model registry, deployment, and monitoring. The platform integrates well with popular open-source tools like **MLflow** and supports **responsible AI dashboards** for model explainability and fairness assessment.
+
+**Azure Cognitive Services** (now largely folded into **Azure AI Services**) provides a suite of pre-built AI capabilities including **vision**, **speech**, **language**, and **decision** APIs. These are excellent for teams that want to add AI features without building custom models.
+
+You will find that Azure's strength lies in its enterprise integration. If your organisation is already running on Microsoft 365 and Azure Active Directory, the path to adopting Azure AI services is remarkably smooth.
+
+---
+
+## Should you choose managed or custom AI solutions?
+
+This is one of the most important decisions you will make, and there is no one-size-fits-all answer.
+
+**Choose managed services when:**
+
+*   You want to move **fast** and get to production quickly
+*   Your use case aligns well with an **existing foundation model** or pre-built API
+*   You do not have a large team of ML engineers
+*   **Cost predictability** is important — managed APIs typically charge per request or per token
+*   You are building features like **chatbots**, **content generation**, **summarisation**, or **classification** where general-purpose models perform well
+
+**Choose custom solutions when:**
+
+*   You have **proprietary data** that gives you a competitive advantage
+*   Your use case requires **fine-tuning** or training a model from scratch
+*   You need **full control** over the model architecture, training process, and serving infrastructure
+*   **Latency** or **throughput** requirements demand a custom deployment strategy
+*   You are operating in a **regulated industry** where you need complete auditability of the model
+
+In practice, many organisations adopt a **hybrid approach**. They start with managed foundation models to validate the use case and build initial prototypes, then progressively move to fine-tuned or custom models as the product matures and the data moat grows. This is a pragmatic strategy that balances speed with long-term flexibility.
+
+---
+
+## What does an MLOps pipeline look like?
+
+Once you move beyond prototypes and into production, you need a robust **MLOps pipeline**. Think of MLOps as the ML equivalent of DevOps — it is the set of practices and tools that enable you to reliably and efficiently deploy and maintain ML models in production.
+
+A typical MLOps pipeline consists of the following stages:
+
+**Data ingestion and preparation** is where it all begins. Raw data is collected from various sources, cleaned, transformed, and stored in a **feature store** or data warehouse. This stage is often the most time-consuming and the most critical — garbage in, garbage out.
+
+**Model training and evaluation** is where you train your model on the prepared data and evaluate its performance against a set of metrics. This should be **automated** and **repeatable**. Every training run should produce a versioned artefact that can be traced back to the exact data and code that produced it.
+
+**Model registry and versioning** provides a central repository for your trained models. Tools like **MLflow Model Registry**, **SageMaker Model Registry**, or **Vertex AI Model Registry** allow you to track model versions, manage approvals, and promote models through environments (dev, staging, production).
+
+**Deployment and monitoring** is where the model is served to consumers, either as a **real-time endpoint**, a **batch job**, or embedded within an application. Once deployed, you need to monitor for **model drift** — the gradual degradation of model performance as the real-world data distribution shifts away from the training data.
+
+**Continuous training loops** close the circle. As new data arrives and model performance degrades, automated pipelines retrain the model, evaluate it against the current production version, and deploy it if it performs better. This is the gold standard of MLOps maturity.
+
+In terms of tooling, the landscape is rich:
+
+*   **MLflow** is the most popular open-source platform for experiment tracking and model management
+*   **Kubeflow** provides Kubernetes-native ML pipeline orchestration
+*   **SageMaker Pipelines**, **Vertex AI Pipelines**, and **Azure ML Pipelines** offer cloud-native alternatives
+*   **Weights & Biases** is excellent for experiment tracking and collaboration
+*   **Great Expectations** and **Evidently AI** help with data validation and model monitoring
+
+The key takeaway here is that building the model is often the easy part. The hard part is building the system around the model that keeps it running reliably in production.
+
+---
+
+## How do you manage costs for AI in the cloud?
+
+Let's talk about the elephant in the room — cost. AI workloads can be expensive, and without careful management, your cloud bill can escalate quickly.
+
+**GPU instance costs** are the biggest line item for teams training custom models. A single **NVIDIA A100** instance on AWS can cost upwards of **$30 per hour**. Multiply that by days or weeks of training and the numbers add up fast. The first lever to pull is **spot instances** (AWS) or **preemptible VMs** (GCP) or **spot VMs** (Azure). These offer the same hardware at **60-90% discounts** in exchange for the possibility of interruption. For training jobs that support checkpointing, this is an excellent strategy.
+
+**Right-sizing compute** is equally important. Do not default to the largest GPU instance available. Profile your workload and choose the instance type that matches your requirements. Many inference workloads can run efficiently on smaller instances or even on **CPU** if latency requirements allow it.
+
+**Managed API pricing** follows a different model. Services like **Amazon Bedrock**, **Gemini API**, and **Azure OpenAI** charge **per token** (for text) or **per request** (for other modalities). These costs are predictable and scale linearly with usage, which makes budgeting straightforward. However, at high volumes the per-token costs can become significant, so it is worth monitoring usage closely and considering whether a fine-tuned smaller model could achieve similar results at lower cost.
+
+**Reserved capacity and committed use discounts** are available across all three providers. If you know your baseline usage, committing to **1-year or 3-year reserved instances** can save **30-60%** compared to on-demand pricing. GCP's **committed use discounts** and Azure's **reservations** offer similar savings.
+
+Finally, invest in **monitoring and alerting** on your AI spend. Set up budget alerts, track cost per inference request, and regularly review your usage patterns. Tools like **AWS Cost Explorer**, **GCP Cost Management**, and **Azure Cost Management** provide the visibility you need to catch runaway costs before they become a problem.
+
+---
+
+## Conclusion
+
+*   The cloud is the natural home for AI applications, offering **scalable compute**, **specialised hardware**, and **managed services** that accelerate development
+*   **AWS**, **GCP**, and **Azure** each have comprehensive AI portfolios — choose based on your existing ecosystem, team expertise, and specific use case
+*   **Managed foundation models** (Bedrock, Gemini, Azure OpenAI) are the fastest path to production for generative AI use cases
+*   **Custom model training** is justified when you have proprietary data or unique requirements that general-purpose models cannot meet
+*   A mature **MLOps pipeline** is essential for production workloads — invest in automation, versioning, monitoring, and continuous training
+*   **Cost management** requires active attention — leverage spot instances, right-size compute, monitor per-token costs, and use reserved capacity where it makes sense
+*   Start with managed services to **validate your use case**, then progressively move to custom solutions as your needs evolve
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

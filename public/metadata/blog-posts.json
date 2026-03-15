@@ -1,5 +1,96 @@
 [
   {
+    "slug": "demystifying-large-language-models",
+    "title": "Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI",
+    "date": "2026-03-15",
+    "excerpt": "It feels like almost overnight, **Large Language Models** went from a niche topic in machine learning research to something your parents are asking about at the dinner table. Whether it is ChatGPT drafting an email, Copilot helping you write code, or a chatbot resolving your quer…",
+    "feature_image": "/blog/demystifying-large-language-models/feature-image.png"
+  },
+  {
+    "slug": "building-ai-powered-applications-in-the-cloud",
+    "title": "Building AI-Powered Applications in the Cloud - A Practical Guide for Engineers",
+    "date": "2026-03-08",
+    "excerpt": "It feels like every conversation in technology today circles back to the same topic — artificial intelligence. Whether it is a startup trying to embed intelligent features into their product or a large enterprise looking to modernise legacy workflows, the push to integrate AI int…",
+    "feature_image": "/blog/building-ai-powered-applications-in-the-cloud/feature-image.png"
+  },
+  {
+    "slug": "the-rise-of-ai-agents",
+    "title": "The Rise of AI Agents - Autonomous Systems That Think and Act",
+    "date": "2026-03-01",
+    "excerpt": "If I'm to be perfectly honest, the pace at which artificial intelligence is evolving is nothing short of remarkable. Just a few years ago we were impressed by chatbots that could hold a basic conversation. Today we are witnessing the emergence of **AI agents**, autonomous systems…",
+    "feature_image": "/blog/the-rise-of-ai-agents/feature-image.png"
+  },
+  {
+    "slug": "retrieval-augmented-generation-rag-grounding-ai-in-enterprise-data",
+    "title": "Retrieval-Augmented Generation (RAG) - Grounding AI in Your Enterprise Data",
+    "date": "2026-02-22",
+    "excerpt": "Every organisation I speak to wants the same thing: harness the power of Large Language Models against their own proprietary data. They want employees asking natural-language questions about internal policies, customers receiving accurate answers grounded in product documentation…",
+    "feature_image": "/blog/retrieval-augmented-generation-rag-grounding-ai-in-enterprise-data/feature-image.png"
+  },
+  {
+    "slug": "responsible-ai-building-trust-through-ethical-systems",
+    "title": "Responsible AI - Building Trust Through Ethical and Transparent Systems",
+    "date": "2026-02-15",
+    "excerpt": "For those who know me, you will know that I have spent a great deal of time thinking about the intersection of technology and leadership. The rapid adoption of AI across every industry has been nothing short of extraordinary. From automating routine tasks to driving strategic dec…",
+    "feature_image": "/blog/responsible-ai-building-trust-through-ethical-systems/feature-image.png"
+  },
+  {
+    "slug": "ai-at-the-edge-bringing-intelligence-closer",
+    "title": "AI at the Edge - Bringing Intelligence Closer to Where It Matters",
+    "date": "2026-02-08",
+    "excerpt": "For those who know me, you will know that I have always been fascinated by the intersection of cloud computing and real-world problem-solving. Over recent years, one of the most exciting shifts I have witnessed is the movement of artificial intelligence away from centralised data…",
+    "feature_image": "/blog/ai-at-the-edge-bringing-intelligence-closer/feature-image.png"
+  },
+  {
+    "slug": "angular-bootstrap-spring-boot-security",
+    "title": "Angular 19 and Bootstrap 5 with Spring Boot 3 and Spring Security 6",
+    "date": "2026-02-04",
+    "excerpt": "Folks have been asking me if I knew of any good examples of a modern full-stack web application that utilises the following technologies: **Angular 19**, **Bootstrap 5.3**, **Spring Boot 3.3**, **Spring Security 6**, **HSQLDB**, and **JWT stateless authentication**, and after sea…",
+    "feature_image": "/blog/angular-bootstrap-spring-boot-security/feature-image.png"
+  },
+  {
+    "slug": "secure-websockets-spring-boot-spring-security",
+    "title": "Secure WebSockets with Spring Boot 3 and Spring Security 6 - Token-Based Authentication",
+    "date": "2026-02-03",
+    "excerpt": "WebSockets with custom message security is not a topic that appears widely online, let alone examples on how to make it happen, therefore I decided to present on WebSockets and in particular allowing custom security on the socket level. This project has been fully modernised from…",
+    "feature_image": "/blog/secure-websockets-spring-boot-spring-security/feature-image.png"
+  },
+  {
+    "slug": "jersey-restful-webservice-jakarta-ee-jpa-derby",
+    "title": "Jersey 4 RESTful Web Service - Modern Jakarta EE with JPA and Derby",
+    "date": "2026-02-03",
+    "excerpt": "RESTful is a key term that remains central to modern API development. Previous services used to be created implementing JAX-WS with the communication protocol being SOAP, various implementations were and are still used but from my own experience they all have fallen short especia…",
+    "feature_image": "/blog/jersey-restful-webservice-jakarta-ee-jpa-derby/feature-image.png"
+  },
+  {
+    "slug": "prompt-engineering-art-and-science-of-communicating-with-ai",
+    "title": "Prompt Engineering - The Art and Science of Communicating with AI",
+    "date": "2026-02-01",
+    "excerpt": "For those who know me, you will know that I am always looking for ways to work smarter and more effectively with the tools at our disposal. Over the past couple of years, large language models (LLMs) have fundamentally changed how we interact with technology — from writing code t…",
+    "feature_image": "/blog/prompt-engineering-art-and-science-of-communicating-with-ai/feature-image.png"
+  },
+  {
+    "slug": "the-ai-ready-organisation-preparing-teams-for-ai",
+    "title": "The AI-Ready Organisation - Preparing Your Teams and Culture for an AI-Driven Future",
+    "date": "2026-01-25",
+    "excerpt": "For those who know me, you will know that I have always believed technology transformation is fundamentally a people challenge, not a technology one. I have seen firsthand how organisations with average technology but exceptional culture outperform those with cutting-edge tools b…",
+    "feature_image": "/blog/the-ai-ready-organisation-preparing-teams-for-ai/feature-image.png"
+  },
+  {
+    "slug": "fine-tuning-vs-foundation-models-choosing-right-approach",
+    "title": "Fine-Tuning vs Foundation Models - Choosing the Right Approach for Your AI Strategy",
+    "date": "2026-01-18",
+    "excerpt": "For those who know me, you will know that I am passionate about helping teams make informed architectural decisions — the kind that balance capability, cost, and long-term maintainability. One of the most consequential decisions organisations face in their AI journey today is thi…",
+    "feature_image": "/blog/fine-tuning-vs-foundation-models-choosing-right-approach/feature-image.png"
+  },
+  {
+    "slug": "ai-powered-developer-tools-transforming-software-development",
+    "title": "AI-Powered Developer Tools - How AI is Transforming the Way We Build Software",
+    "date": "2026-01-11",
+    "excerpt": "For those who know me, you will know that I have always been passionate about developer experience and the tools that make engineering teams more productive. Throughout my career, I have seen paradigm shifts — from manual deployments to CI/CD, from monoliths to microservices, fro…",
+    "feature_image": "/blog/ai-powered-developer-tools-transforming-software-development/feature-image.png"
+  },
+  {
     "slug": "seizing-the-future-an-eager-approach-to-digital-identity-migration-strategies",
     "title": "Seizing the Future - An Eager Approach to Digital Identity Migration Strategies",
     "date": "2024-10-17",
@@ -161,31 +252,10 @@
     "feature_image": "/blog/agile-high-performing-team/feature-image.png"
   },
   {
-    "slug": "websockets-with-spring-spring-security",
-    "title": "WebSockets Security with Spring and Spring Security",
-    "date": "2015-05-27",
-    "excerpt": "WebSockets with custom message security is not a topic that appears widely online, let alone example on how to make it happen, therefore I decided to present on web sockets and in particular allowing custom security on the socket level. --- ## Before you start…",
-    "feature_image": "/blog/websockets-with-spring-spring-security/feature-image.png"
-  },
-  {
-    "slug": "jersey-restful-webservice-jax-rs-with-jpa-and-derby-in-memory-database",
-    "title": "Jersey RESTful WebService JAX-RS with JPA and Derby In Memory Database",
-    "date": "2014-01-29",
-    "excerpt": "RESTful is a key term that is popular in the market. Previous services use to be created implementing JAX-WS with the communication protocol being SOAP, various implementation were and are still used but from my own experience they all have fallen short especially in the area of…",
-    "feature_image": "/blog/jersey-restful-webservice-jax-rs-with-jpa-and-derby-in-memory-database/feature-image.png"
-  },
-  {
     "slug": "agile-in-the-industry",
     "title": "Agile Empowerment - Realizing the Benefits of Agile in Information Technology",
     "date": "2014-01-20",
     "excerpt": "In today's post, we will explore the remarkable success of Agile methodology in the realm of Information Technology and Business. Since its introduction, Agile has revolutionized the way projects are executed, delivering tremendous benefits to all parties involved. From stakehold…",
     "feature_image": "/blog/agile-in-the-industry/feature-image.png"
-  },
-  {
-    "slug": "angular-js-and-bootstrap-with-spring-and-spring-security-and-hibernate",
-    "title": "Angular JS and Bootstrap with Spring, Spring Security and Hibernate",
-    "date": "2013-12-20",
-    "excerpt": "Folks have been asking me if I knew of any good examples of a J2EE web application that utilizes the following technologies: Angular JS, Bootstrap, Spring 4, Spring Security 4 and Hibernate 5.2.4, and after searching around I decided that it would be best to create an example pro…",
-    "feature_image": "/blog/angular-js-and-bootstrap-with-spring-and-spring-security-and-hibernate/feature-image.png"
   }
 ]
