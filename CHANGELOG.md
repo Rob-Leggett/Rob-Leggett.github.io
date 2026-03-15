@@ -1,3 +1,11 @@
+## [1.0.10](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.9...v1.0.10) (2026-03-15)
+
+
+### Bug Fixes
+
+* analytics, layout and code structure ([cd798b9](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/cd798b957a15bba1d032bd01268c8d52708e3258))
+* analytics, layout and code structure ([e3e7717](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/e3e771764eff40d8bb38835d99f60c0e1a83ab53))
+
 ## [1.0.9](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.8...v1.0.9) (2026-03-15)
 
 
