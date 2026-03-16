@@ -5,7 +5,7 @@
     <link>https://robertleggett.com.au/blog</link>
     <description><![CDATA[Technology strategy, engineering, and AI platform insights.]]></description>
     <language>en</language>
-    <lastBuildDate>Mon, 16 Mar 2026 00:32:55 GMT</lastBuildDate>
+    <lastBuildDate>Mon, 16 Mar 2026 08:31:59 GMT</lastBuildDate>
     
     <item>
       <title><![CDATA[Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI]]></title>
@@ -126,6 +126,14 @@
       <pubDate>Sun, 11 Jan 2026 00:00:00 GMT</pubDate>
       <description><![CDATA[For those who know me, you will know that I have always been passionate about developer experience and the tools that make engineering teams more productive. Throughout my career, I have seen paradigm shifts — from manual deployments to CI/CD, from monoliths to microservices, from on-premises to clo]]></description>
       <enclosure url="https://robertleggett.com.au/blog/ai-powered-developer-tools-transforming-software-development/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Real-Time Computer Vision Platforms]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-real-time-computer-vision/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-real-time-computer-vision/</guid>
+      <pubDate>Mon, 21 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of building real-time computer vision platforms — unravelling how video streams are ingested, how GPU-accelerated models perform inference at scale, how detection events flow through stre]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-real-time-computer-vision/feature-image.png" type="image/png" />
     </item>
     <item>
       <title><![CDATA[Deep Dive - Data Mesh Architecture]]></title>

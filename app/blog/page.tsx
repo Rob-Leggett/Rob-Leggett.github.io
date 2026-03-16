@@ -4,11 +4,42 @@ import { getAllPosts } from "@/lib/posts";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import Footer from "@/components/layout/footer";
+import type { Metadata } from "next";
+import JsonLd, { breadcrumbSchema } from "@/components/seo/json-ld";
+
+export const metadata: Metadata = {
+  title: "Blog",
+  description:
+    "Technical deep dives, cloud architecture patterns, AI platform insights, and engineering leadership articles by Rob Leggett.",
+  openGraph: {
+    title: "Blog | Robert Leggett",
+    description:
+      "Technical deep dives, cloud architecture patterns, AI platform insights, and engineering leadership articles.",
+    url: "https://robertleggett.com.au/blog/",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Blog | Robert Leggett",
+    description:
+      "Technical deep dives, cloud architecture, AI platforms, and engineering leadership.",
+    images: ["/og-image.png"],
+  },
+  alternates: {
+    canonical: "https://robertleggett.com.au/blog/",
+  },
+};
 
 export default function BlogIndex() {
   const posts = getAllPosts();
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: "Home", url: "https://robertleggett.com.au/" },
+          { name: "Blog", url: "https://robertleggett.com.au/blog/" },
+        ])}
+      />
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1">
         <div className="flex items-center justify-between mb-8 border-b border-border pb-2">
           <h1 className="text-3xl font-bold tracking-tight">Blog</h1>

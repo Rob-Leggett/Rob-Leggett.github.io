@@ -1,21 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Twitter, Linkedin, Facebook, Link2, Check } from "lucide-react";
 
+const SITE_URL = "https://robertleggett.com.au";
+
 type ShareBarProps = {
   title: string;
+  slug: string;
 };
 
-export default function ShareBar({ title }: ShareBarProps) {
-  const [url, setUrl] = useState("");
+export default function ShareBar({ title, slug }: ShareBarProps) {
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    setUrl(window.location.href);
-  }, []);
-
+  const url = `${SITE_URL}/blog/${slug}/`;
   const encodedUrl = encodeURIComponent(url);
   const encodedTitle = encodeURIComponent(title);
 
@@ -43,7 +42,6 @@ export default function ShareBar({ title }: ShareBarProps) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older browsers
       const input = document.createElement("input");
       input.value = url;
       document.body.appendChild(input);
@@ -54,8 +52,6 @@ export default function ShareBar({ title }: ShareBarProps) {
       setTimeout(() => setCopied(false), 2000);
     }
   };
-
-  if (!url) return null;
 
   return (
     <div className="flex items-center gap-2 flex-wrap">

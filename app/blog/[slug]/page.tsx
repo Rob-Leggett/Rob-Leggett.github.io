@@ -10,6 +10,7 @@ import BlogLayout from "@/components/blog/blog-layout";
 import { mdxComponents } from "@/lib/mdx-components";
 import { notFound } from "next/navigation";
 import { Metadata } from 'next';
+import JsonLd, { articleSchema, breadcrumbSchema } from "@/components/seo/json-ld";
 
 const PUBLISH_DIR = path.join(process.cwd(), "content/publish");
 
@@ -77,7 +78,24 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
     .replace(/<\s*>/g, "&lt;&gt;");
 
   return (
-    <BlogLayout title={data.title} date={data.date} feature_image={data.feature_image}>
+    <>
+      <JsonLd
+        data={articleSchema({
+          title: data.title,
+          description: data.meta?.description ?? "",
+          slug,
+          date: data.date,
+          image: data.feature_image,
+        })}
+      />
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: "Home", url: "https://robertleggett.com.au/" },
+          { name: "Blog", url: "https://robertleggett.com.au/blog/" },
+          { name: data.title, url: `https://robertleggett.com.au/blog/${slug}/` },
+        ])}
+      />
+      <BlogLayout title={data.title} date={data.date} slug={slug} feature_image={data.feature_image}>
       <article
         className="
           prose prose-neutral dark:prose-invert max-w-none
@@ -85,6 +103,12 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
           prose-code:before:content-none prose-code:after:content-none
           [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-1.5
           [&_p]:my-4 prose-headings:mt-8 prose-headings:mb-3
+
+          /* Table wrapping */
+          [&_table]:w-full [&_table]:table-fixed
+          [&_td]:break-words [&_th]:break-words
+          [&_td]:text-sm [&_th]:text-sm
+          [&_div.overflow-x-auto]:max-w-full
 
           /* Always-visible link styling */
           [&_p>a]:text-primary [&_li>a]:text-primary
@@ -112,6 +136,7 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
           }}
         />
       </article>
-    </BlogLayout>
+      </BlogLayout>
+    </>
   );
 }

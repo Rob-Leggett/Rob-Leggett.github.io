@@ -1,0 +1,236 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║           ROBERT LEGGETT'S DEEP-DIVE BLOG POST - QUICK REFERENCE               ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+📋 ARTICLE STRUCTURE (Copy-Paste Order)
+════════════════════════════════════════════════════════════════════════════════
+
+┌─ 1. FRONTMATTER ────────────────────────────────────────────────────────────┐
+│ Must include: title, date, slug, status, feature_image, tags, meta, og,   │
+│ twitter. Title MUST be "Deep Dive - [Topic]". Last tag ALWAYS "Robert     │
+│ Leggett". slug MUST be "deep-dive-[kebab-case]".                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ 2. OPENING PARAGRAPH ──────────────────────────────────────────────────────┐
+│ Start with: "Welcome to the deep dive series!"                            │
+│ Then: describe topic, address 2 audiences, state value, inspiring close   │
+│ Length: 3-4 flowing sentences. NO bullet points. Use "we," "us," "you"   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ 3. SEPARATOR ──────────────────────────────────────────────────────────────┐
+│ --- (three hyphens on their own line)                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ 4. BEFORE YOU START SECTION ──────────────────────────────────────────────┐
+│ ## Before you start                                                        │
+│                                                                            │
+│ About this post:                                                           │
+│ * 10 – 20-min average reading time                                        │
+│ * Suitable for intermediate through to advanced                          │
+│                                                                            │
+│ What you will gain reading this post:                                     │
+│ * [Benefit 1]                                                             │
+│ * [Benefit 2]                                                             │
+│ * [Benefit 3]                                                             │
+│                                                                            │
+│ What you can do to help support:                                          │
+│ * **Like, comment and share this article**                               │
+│ * **Follow this blog** to receive notifications of new postings          │
+│                                                                            │
+│ Now, let's get started.                                                   │
+│ ---                                                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ 5. MAIN CONTENT SECTIONS (15-20+ total) ──────────────────────────────────┐
+│ ## What is [Topic]? / How does [Topic] work?                             │
+│                                                                            │
+│ [1-3 sentence definition/context]                                         │
+│                                                                            │
+│ ### Subsection Name                                                       │
+│ [Content with code, examples, lists]                                     │
+│                                                                            │
+│ ### Another Subsection                                                    │
+│ [More content]                                                            │
+│                                                                            │
+│ ---                                                                        │
+│                                                                            │
+│ [Repeat for 15-20+ total H2 sections]                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ 6. TERMINOLOGY SECTION ────────────────────────────────────────────────────┐
+│ ## Okay, what terminology do I need to understand?                        │
+│                                                                            │
+│ ### Term 1                                                                │
+│ [1-3 sentence practical definition]                                       │
+│                                                                            │
+│ ### Term 2                                                                │
+│ [1-3 sentence practical definition]                                       │
+│                                                                            │
+│ [10-15 terms total]                                                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ 7. CLOSING SECTION ────────────────────────────────────────────────────────┐
+│ ## Finally, we made it, did this help?                                    │
+│                                                                            │
+│ If you found this to be helpful, have any questions or want to provide   │
+│ feedback, please let me know.                                             │
+│                                                                            │
+│ Don't worry if all of this seems overwhelming.                            │
+│                                                                            │
+│ * **Like, comment and share this article**                               │
+│ * **Follow this blog** to receive notifications of new postings          │
+│ * **View** [previous postings](https://robertleggett.com.au/)           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+════════════════════════════════════════════════════════════════════════════════
+
+🎯 CRITICAL FORMAT RULES (10 Things To Remember)
+════════════════════════════════════════════════════════════════════════════════
+
+ 1. Title: "Deep Dive - [Topic]" (EXACT)
+ 2. slug: "deep-dive-[kebab-case]" (EXACT)
+ 3. Tags: 9 items with "Robert Leggett" LAST (EXACT)
+ 4. Opening: "Welcome to the deep dive series!" (EXACT)
+ 5. "Before you start" = 3 exact subsections + separator
+ 6. Every H2 section ends with: --- (EXACT)
+ 7. Terminology: "Okay, what terminology do I need to understand?" (EXACT)
+ 8. Closing: "Finally, we made it, did this help?" (EXACT)
+ 9. Code blocks: MUST have language identifier (hcl, yaml, typescript, etc.)
+10. Images: MUST have alt text AND caption below
+
+════════════════════════════════════════════════════════════════════════════════
+
+📝 CODE BLOCKS
+════════════════════════════════════════════════════════════════════════════════
+
+```hcl          ← Language identifier REQUIRED
+resource "aws_s3_bucket" "main" {
+  bucket = "my-bucket"
+}
+```
+
+Supported: hcl, yaml, typescript, python, bash, json, java, go
+
+════════════════════════════════════════════════════════════════════════════════
+
+🖼️  IMAGES
+════════════════════════════════════════════════════════════════════════════════
+
+![Descriptive alt text describing what the image shows](/blog/[slug]/inline-1.png)
+
+Image Caption In Title Case
+
+Path pattern: /blog/[slug]/inline-1.png, inline-2.png, etc.
+
+════════════════════════════════════════════════════════════════════════════════
+
+🎨 TONE CHECKLIST
+════════════════════════════════════════════════════════════════════════════════
+
+✓ Professional but accessible        ✗ Marketing hype or buzzwords
+✓ Warm and welcoming                ✗ Condescending or too simple
+✓ Confident explanations            ✗ Uncertain or wishy-washy
+✓ Specific + concrete examples      ✗ Abstract or theoretical only
+✓ Second-person ("we," "us")        ✗ Impersonal academic tone
+
+Key Phrases:
+├─ "Welcome to the deep dive series!"
+├─ "immerse ourselves in..."
+├─ "Let's dive in..." / "Let's get started."
+├─ "demystify..."
+├─ "at scale"
+└─ "don't worry if X seems overwhelming"
+
+════════════════════════════════════════════════════════════════════════════════
+
+📊 ARTICLE METRICS
+════════════════════════════════════════════════════════════════════════════════
+
+Reading Time:       10-20 minutes
+H2 Sections:        15-20+
+H3 Subsections:     20-40+
+Code Examples:      5-15+
+Images:             3-8+ with captions
+Terminology Terms:  10-15
+Total Lines:        700-900+
+
+════════════════════════════════════════════════════════════════════════════════
+
+✅ PRE-PUBLISH CHECKLIST (Key Items)
+════════════════════════════════════════════════════════════════════════════════
+
+FRONTMATTER:
+ ☐ Title = "Deep Dive - [Topic]"
+ ☐ slug = "deep-dive-[kebab-case]"
+ ☐ status = "publish"
+ ☐ Tags include "Robert Leggett" as LAST item (9 total)
+ ☐ meta.canonical URL correct
+ ☐ All image URLs have full domain
+
+STRUCTURE:
+ ☐ Opening = "Welcome to the deep dive series!"
+ ☐ "Before you start" has 3 exact subsections
+ ☐ Every H2 section ends with ---
+ ☐ Terminology = "Okay, what terminology..."
+ ☐ Closing = "Finally, we made it..."
+ ☐ NO content after closing section
+
+CONTENT:
+ ☐ All code blocks have language identifiers
+ ☐ All images have alt text AND captions
+ ☐ H2 headers are questions or statements
+ ☐ Tone is warm, professional, comprehensive
+ ☐ Real examples and "at scale" context throughout
+ ☐ NO React components or MDX shortcodes
+ ☐ Pure Markdown format
+
+════════════════════════════════════════════════════════════════════════════════
+
+🚀 WRITING TIMELINE
+════════════════════════════════════════════════════════════════════════════════
+
+ 1. Outline             (0.5 hrs) - Plan 15-20+ sections
+ 2. Draft              (3-4 hrs) - Write all sections
+ 3. Code & Examples    (1-2 hrs) - Add code blocks
+ 4. Images & Polish    (1 hr)   - Add images & separators
+ 5. Final Review       (1-2 hrs) - Check against checklist
+
+TOTAL: 6-10 hours for a complete deep-dive post
+
+════════════════════════════════════════════════════════════════════════════════
+
+📚 REFERENCE DOCUMENTS
+════════════════════════════════════════════════════════════════════════════════
+
+You now have THREE comprehensive guides in your project:
+
+1. DEEP-DIVE-README.md
+   → Start here! Overview of all documentation
+
+2. DEEP-DIVE-MASTER-GUIDE.md ⭐ PRIMARY REFERENCE
+   → Everything you need to write a new post
+   → All format requirements, templates, checklists
+
+3. DEEP-DIVE-EXAMPLES.md
+   → 14 real examples from published posts
+   → See exactly how everything should look
+
+════════════════════════════════════════════════════════════════════════════════
+
+💡 COMMON MISTAKES TO AVOID
+════════════════════════════════════════════════════════════════════════════════
+
+✗ Frontmatter without meta.canonical or meta.description
+✗ Opening paragraph that doesn't start with "Welcome to the deep dive series!"
+✗ "Before you start" section with different format
+✗ H2 sections without --- separators
+✗ Code blocks without language identifiers
+✗ Images without alt text or captions
+✗ Terminology section with wrong title
+✗ Content after the closing section
+✗ Tone that's too academic or too casual
+✗ Missing real examples and "at scale" context
+
+════════════════════════════════════════════════════════════════════════════════
+
+Version: 1.0 | Created: 2025-01-15 | Based on 11+ published posts | 2,396+ lines analyzed

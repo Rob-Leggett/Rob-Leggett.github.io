@@ -105,6 +105,13 @@
     "feature_image": "/blog/ai-powered-developer-tools-transforming-software-development/feature-image.png"
   },
   {
+    "slug": "deep-dive-real-time-computer-vision",
+    "title": "Deep Dive - Real-Time Computer Vision Platforms",
+    "date": "2025-07-21",
+    "excerpt": "Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of building real-time computer vision platforms — unravelling how video streams are ingested, how GPU-accelerated models perform inference at scale, how detection even…",
+    "feature_image": "/blog/deep-dive-real-time-computer-vision/feature-image.png"
+  },
+  {
     "slug": "deep-dive-data-mesh",
     "title": "Deep Dive - Data Mesh Architecture",
     "date": "2025-07-19",

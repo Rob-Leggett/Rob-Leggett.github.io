@@ -13,10 +13,36 @@ const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? "G-G9GHB37RTG";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+const SITE_URL = "https://robertleggett.com.au";
+
 export const metadata: Metadata = {
-  title: "Rob Leggett Portfolio",
-  description: "Portfolio of Rob Leggett — Technology Strategy, Engineering, and AI Platforms",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Rob Leggett — Cloud Architect, Engineering Leader & AI Platform Specialist",
+    template: "%s | Robert Leggett",
+  },
+  description:
+    "Rob Leggett — Technology strategist, cloud architect, and engineering leader specialising in AI platforms, cloud-native architecture, and platform engineering.",
+  authors: [{ name: "Robert Leggett", url: SITE_URL }],
+  openGraph: {
+    type: "website",
+    locale: "en_AU",
+    siteName: "Robert Leggett",
+    title: "Rob Leggett — Cloud Architect, Engineering Leader & AI Platform Specialist",
+    description:
+      "Technology strategist, cloud architect, and engineering leader specialising in AI platforms, cloud-native architecture, and platform engineering.",
+    url: SITE_URL,
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Rob Leggett — Cloud Architect & Engineering Leader" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Rob Leggett — Cloud Architect & Engineering Leader",
+    description:
+      "Technology strategist specialising in AI platforms, cloud-native architecture, and platform engineering.",
+    images: ["/og-image.png"],
+  },
   alternates: {
+    canonical: SITE_URL,
     types: {
       "application/rss+xml": [
         { url: "/rss/feed.xml", title: "Rob Leggett Blog RSS" },

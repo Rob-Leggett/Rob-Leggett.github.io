@@ -1,0 +1,2216 @@
+---
+title: "Deep Dive - Real-Time Computer Vision Platforms"
+date: "2025-07-21"
+slug: "deep-dive-real-time-computer-vision"
+status: "publish"
+feature_image: "/blog/deep-dive-real-time-computer-vision/feature-image.png"
+tags: ["Computer Vision", "NVIDIA Triton", "DeepStream", "RTSP", "Kafka", "Real-Time AI", "Edge Computing", "Video Analytics", "GPU Inference", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Real-Time Computer Vision Platforms | Robert Leggett"
+  description: "A comprehensive deep dive into building real-time computer vision platforms — covering video ingestion, GPU-accelerated inference with NVIDIA Triton, DeepStream pipelines, event streaming with Kafka and Flink, and the evolution from edge to cloud."
+  keywords: ["Computer Vision", "NVIDIA Triton", "DeepStream", "RTSP", "Video Analytics", "GPU Inference", "Kafka", "Apache Flink", "Edge Computing", "Object Detection", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-real-time-computer-vision"
+  image: "https://robertleggett.com.au/blog/deep-dive-real-time-computer-vision/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Real-Time Computer Vision Platforms"
+  description: "A comprehensive deep dive into building real-time computer vision platforms — from RTSP ingestion and GPU inference to event streaming and cloud-native deployment."
+  image: "https://robertleggett.com.au/blog/deep-dive-real-time-computer-vision/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-real-time-computer-vision"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Real-Time Computer Vision Platforms"
+  description: "From camera streams to GPU inference — a complete technical reference for building production computer vision systems at scale."
+  image: "https://robertleggett.com.au/blog/deep-dive-real-time-computer-vision/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of building real-time computer vision platforms — unravelling how video streams are ingested, how GPU-accelerated models perform inference at scale, how detection events flow through streaming pipelines, and how the entire system evolves from edge deployment to cloud-native orchestration. Whether you are an engineer beginning to explore video analytics or a seasoned architect looking to refine your platform design, our goal is to provide clear and practical explanations that will deepen your understanding. Join us on this deep dive as we demystify how modern organisations build, deploy, and scale real-time computer vision systems. Let's get started.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of real-time computer vision platform architecture — from camera ingestion through GPU inference to event streaming and deployment
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is Computer Vision?
+
+Computer vision is the field of artificial intelligence that enables machines to interpret and make decisions based on visual data — images and video. At its core, it answers a deceptively simple question: *what is in this image, and where is it?*
+
+The evolution of computer vision has followed two distinct eras:
+
+**Traditional Computer Vision** relied on hand-crafted feature extraction. Engineers would write explicit rules to detect edges (Canny, Sobel), extract features (SIFT, SURF, HOG), and feed those features into classical machine learning classifiers like Support Vector Machines or Random Forests. This approach worked well for constrained environments — think barcode scanning or simple shape detection — but was brittle. Changes in lighting, angle, or background could break the entire pipeline.
+
+**Deep Learning Computer Vision** replaced manual feature engineering with learned representations. Convolutional Neural Networks (CNNs) like ResNet, YOLO, and EfficientNet learn to extract features directly from raw pixels during training. More recently, Vision Transformers (ViT) have brought the attention mechanism from natural language processing into the visual domain. The result is systems that are significantly more robust to real-world variation and can handle complex tasks like multi-object detection, instance segmentation, pose estimation, and face recognition simultaneously.
+
+![Traditional CV vs Deep Learning CV](/blog/deep-dive-real-time-computer-vision/inline-1.png)
+
+In a real-time computer vision platform, we are primarily concerned with **inference** — running trained models against live video streams to produce actionable detections. The challenge is not just accuracy; it is doing so at 25–30 frames per second across dozens or hundreds of concurrent camera streams with sub-100ms latency. That is where the architecture becomes critical.
+
+---
+
+## Terminology
+
+Before we go deeper, let us define the key terms you will encounter throughout this post:
+
+**Inference** — The process of running a trained model against new input data to produce predictions. In computer vision, this means passing video frames through a neural network to detect objects, classify scenes, or extract features.
+
+**RTSP (Real-Time Streaming Protocol)** — A network protocol designed for controlling streaming media servers. IP cameras typically expose an RTSP endpoint (e.g., `rtsp://camera-ip:554/stream1`) that clients connect to for live video.
+
+**ONVIF (Open Network Video Interface Forum)** — An industry standard for IP-based security products. ONVIF provides a common protocol for camera discovery, configuration, and stream access, allowing platforms to automatically detect and onboard cameras without manual configuration.
+
+**Bounding Box** — A rectangular region drawn around a detected object in a video frame, defined by coordinates `(x, y, width, height)` along with a class label and confidence score.
+
+**Embedding** — A dense vector representation of an input (e.g., a face crop). Embeddings enable similarity search — two images of the same person will produce vectors that are close together in the embedding space.
+
+**NMS (Non-Maximum Suppression)** — A post-processing step that removes duplicate detections. When a model produces multiple overlapping bounding boxes for the same object, NMS keeps only the highest-confidence detection.
+
+**IoU (Intersection over Union)** — A metric that measures the overlap between two bounding boxes. An IoU of 1.0 means perfect overlap; values above 0.5 are typically considered a valid match.
+
+**FPS (Frames Per Second)** — The throughput of the video processing pipeline. Real-time processing typically requires 25–30 FPS per stream.
+
+**Tensor** — A multi-dimensional array that serves as the fundamental data structure in deep learning. An image frame is typically represented as a tensor with shape `(batch, channels, height, width)`.
+
+**Batch Size** — The number of frames processed simultaneously in a single inference call. Larger batches improve GPU utilisation but increase latency.
+
+**TensorRT** — NVIDIA's deep learning inference optimiser and runtime. It takes trained models and optimises them for specific GPU hardware through layer fusion, precision calibration (FP16/INT8), and kernel auto-tuning.
+
+**ONNX (Open Neural Network Exchange)** — An open format for representing machine learning models. ONNX allows models trained in PyTorch, TensorFlow, or other frameworks to be exported and run on different inference runtimes.
+
+**Model Repository** — A structured directory that NVIDIA Triton Inference Server uses to load and serve models. Each model has its own directory with a configuration file and versioned model artifacts.
+
+**DeepStream** — NVIDIA's streaming analytics toolkit built on GStreamer. It provides GPU-accelerated plugins for video decode, inference, tracking, and metadata handling in a pipeline architecture.
+
+---
+
+## The Video Ingestion Pipeline
+
+Every computer vision platform begins with a fundamental problem: getting video frames from cameras into the inference engine as efficiently as possible. This is the **ingestion pipeline**, and getting it right has a massive impact on overall system performance.
+
+![Video Ingestion Pipeline](/blog/deep-dive-real-time-computer-vision/inline-2.png)
+
+### Camera Discovery with ONVIF
+
+In production environments, you rarely hardcode camera URLs. Instead, you use ONVIF to discover cameras on the network automatically. ONVIF provides a WS-Discovery mechanism that broadcasts probe messages and collects responses from compatible devices.
+
+```python
+from onvif import ONVIFCamera
+
+# Connect to an ONVIF-compatible camera
+camera = ONVIFCamera('192.168.1.100', 80, 'admin', 'password')
+
+# Get device information
+device_info = camera.devicemgmt.GetDeviceInformation()
+print(f"Manufacturer: {device_info.Manufacturer}")
+print(f"Model: {device_info.Model}")
+
+# Get the media service and stream URI
+media_service = camera.create_media_service()
+profiles = media_service.GetProfiles()
+
+stream_setup = {
+    'Stream': 'RTP-Unicast',
+    'Transport': {'Protocol': 'RTSP'}
+}
+
+uri = media_service.GetStreamUri({
+    'StreamSetup': stream_setup,
+    'ProfileToken': profiles[0].token
+})
+
+print(f"RTSP URI: {uri.Uri}")
+```
+
+### RTSP Stream Relay with mediamtx
+
+Rather than having every consumer connect directly to cameras (which strains the camera and creates a single point of failure), a media relay server like **mediamtx** sits between cameras and consumers. It accepts RTSP streams and republishes them, supporting protocol conversion to HLS or WebRTC for browser-based viewing.
+
+```yaml
+# mediamtx.yml
+paths:
+  camera-lobby:
+    source: rtsp://192.168.1.100:554/stream1
+    sourceProtocol: tcp
+    readUser: viewer
+    readPass: secure-password
+    
+  camera-entrance:
+    source: rtsp://192.168.1.101:554/stream1
+    sourceProtocol: tcp
+    
+  # Simulated stream for development/testing
+  test-stream:
+    runOnInit: >
+      ffmpeg -re -stream_loop -1
+      -i /data/test-video.mp4
+      -c copy -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes
+```
+
+### Frame Extraction with ffmpeg and OpenCV
+
+Once the stream is available, we need to extract individual frames for inference. Here is a Python example using OpenCV with GPU-accelerated decoding:
+
+```python
+import cv2
+import numpy as np
+
+class FrameExtractor:
+    def __init__(self, rtsp_url: str, target_fps: int = 10):
+        self.cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 3)
+        self.target_fps = target_fps
+        self.source_fps = self.cap.get(cv2.CAP_PROP_FPS) or 25.0
+        self.skip_ratio = max(1, int(self.source_fps / target_fps))
+        self.frame_count = 0
+    
+    def read_frame(self):
+        """Read and yield frames at the target FPS."""
+        while True:
+            ret, frame = self.cap.read()
+            if not ret:
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                continue
+            
+            self.frame_count += 1
+            if self.frame_count % self.skip_ratio != 0:
+                continue
+            
+            # Resize for inference (640x640 for YOLO)
+            resized = cv2.resize(frame, (640, 640))
+            
+            # Normalise to float32 [0, 1]
+            normalised = resized.astype(np.float32) / 255.0
+            
+            # Convert HWC to CHW (channels first)
+            tensor = np.transpose(normalised, (2, 0, 1))
+            
+            yield tensor, frame  # Return both for overlay later
+    
+    def release(self):
+        self.cap.release()
+```
+
+For production systems processing many streams, you would typically use **ffmpeg** with hardware-accelerated decoding (`-hwaccel cuda`) and pipe the raw frames directly to the inference engine, avoiding the overhead of Python-level frame handling entirely.
+
+```bash
+# Hardware-accelerated decode with NVIDIA GPU
+ffmpeg -hwaccel cuda -hwaccel_output_format cuda \
+  -rtsp_transport tcp \
+  -i rtsp://mediamtx:8554/camera-lobby \
+  -vf "fps=10,scale_cuda=640:640" \
+  -f rawvideo -pix_fmt rgb24 \
+  pipe:1
+```
+
+---
+
+## GPU-Accelerated Inference with NVIDIA Triton
+
+NVIDIA Triton Inference Server is the backbone of production computer vision inference. It is a purpose-built model serving platform that handles the complex orchestration of loading models, managing GPU memory, batching requests, and serving predictions over gRPC and HTTP.
+
+![NVIDIA Triton Inference Server Architecture](/blog/deep-dive-real-time-computer-vision/inline-3.png)
+
+### Model Repository Structure
+
+Triton uses a structured directory layout called the **model repository**. Each model has its own directory containing a configuration file and versioned model artifacts:
+
+```
+model_repository/
+├── yolov8_detection/
+│   ├── config.pbtxt
+│   └── 1/
+│       └── model.plan          # TensorRT optimised
+├── face_embedding/
+│   ├── config.pbtxt
+│   └── 1/
+│       └── model.onnx          # ONNX format
+├── classification/
+│   ├── config.pbtxt
+│   └── 1/
+│       └── model.pt            # PyTorch TorchScript
+└── ensemble_pipeline/
+    └── config.pbtxt            # Chains models together
+```
+
+### Model Configuration
+
+The `config.pbtxt` file defines how Triton loads and serves each model:
+
+```protobuf
+# yolov8_detection/config.pbtxt
+name: "yolov8_detection"
+platform: "tensorrt_plan"
+max_batch_size: 16
+
+input [
+  {
+    name: "images"
+    data_type: TYPE_FP32
+    dims: [ 3, 640, 640 ]
+  }
+]
+
+output [
+  {
+    name: "output0"
+    data_type: TYPE_FP32
+    dims: [ 8400, 84 ]
+  }
+]
+
+instance_group [
+  {
+    count: 2
+    kind: KIND_GPU
+    gpus: [ 0 ]
+  }
+]
+
+dynamic_batching {
+  preferred_batch_size: [ 4, 8, 16 ]
+  max_queue_delay_microseconds: 5000
+}
+
+optimization {
+  execution_accelerators {
+    gpu_execution_accelerator: [
+      { name: "tensorrt" }
+    ]
+  }
+}
+```
+
+Key configuration elements:
+
+1.  **`max_batch_size: 16`** — Triton will batch up to 16 inference requests together. This dramatically improves GPU throughput because GPUs are optimised for parallel computation.
+2.  **`instance_group`** — Defines how many copies of the model to load. Running 2 instances on the same GPU allows Triton to overlap data transfer and computation.
+3.  **`dynamic_batching`** — Triton collects incoming requests and batches them together. The `max_queue_delay_microseconds` parameter controls how long to wait before sending a partial batch — a critical latency vs throughput trade-off.
+
+### Python Client for Inference
+
+```python
+import tritonclient.grpc as grpcclient
+import numpy as np
+
+class TritonDetector:
+    def __init__(self, url: str = "localhost:8001"):
+        self.client = grpcclient.InferenceServerClient(url=url)
+        self.model_name = "yolov8_detection"
+    
+    def detect(self, frames: np.ndarray) -> list:
+        """
+        Run object detection on a batch of frames.
+        frames: numpy array of shape (batch, 3, 640, 640)
+        """
+        inputs = [
+            grpcclient.InferInput(
+                "images", frames.shape, "FP32"
+            )
+        ]
+        inputs[0].set_data_from_numpy(frames)
+        
+        outputs = [
+            grpcclient.InferRequestedOutput("output0")
+        ]
+        
+        result = self.client.infer(
+            model_name=self.model_name,
+            inputs=inputs,
+            outputs=outputs,
+        )
+        
+        raw_output = result.as_numpy("output0")
+        return self._postprocess(raw_output)
+    
+    def _postprocess(self, raw: np.ndarray,
+                     conf_threshold: float = 0.5,
+                     iou_threshold: float = 0.45):
+        """Apply NMS and filter low-confidence detections."""
+        detections = []
+        for batch_idx in range(raw.shape[0]):
+            boxes = raw[batch_idx]
+            # Extract coordinates, confidence, class scores
+            cx, cy, w, h = (
+                boxes[:, 0], boxes[:, 1],
+                boxes[:, 2], boxes[:, 3]
+            )
+            class_scores = boxes[:, 4:]
+            max_scores = np.max(class_scores, axis=1)
+            class_ids = np.argmax(class_scores, axis=1)
+            
+            # Filter by confidence
+            mask = max_scores > conf_threshold
+            filtered_boxes = np.stack([
+                cx[mask] - w[mask]/2,
+                cy[mask] - h[mask]/2,
+                cx[mask] + w[mask]/2,
+                cy[mask] + h[mask]/2
+            ], axis=1)
+            
+            # Apply NMS
+            keep = self._nms(
+                filtered_boxes,
+                max_scores[mask],
+                iou_threshold
+            )
+            
+            detections.append({
+                'boxes': filtered_boxes[keep],
+                'scores': max_scores[mask][keep],
+                'class_ids': class_ids[mask][keep]
+            })
+        
+        return detections
+    
+    def _nms(self, boxes, scores, threshold):
+        """Non-Maximum Suppression."""
+        order = scores.argsort()[::-1]
+        keep = []
+        while order.size > 0:
+            i = order[0]
+            keep.append(i)
+            if order.size == 1:
+                break
+            ious = self._compute_iou(
+                boxes[i], boxes[order[1:]]
+            )
+            inds = np.where(ious <= threshold)[0]
+            order = order[inds + 1]
+        return keep
+    
+    def _compute_iou(self, box, boxes):
+        """Compute IoU between one box and an array."""
+        x1 = np.maximum(box[0], boxes[:, 0])
+        y1 = np.maximum(box[1], boxes[:, 1])
+        x2 = np.minimum(box[2], boxes[:, 2])
+        y2 = np.minimum(box[3], boxes[:, 3])
+        
+        intersection = np.maximum(0, x2 - x1) * np.maximum(0, y2 - y1)
+        area1 = (box[2] - box[0]) * (box[3] - box[1])
+        area2 = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+        union = area1 + area2 - intersection
+        
+        return intersection / (union + 1e-6)
+```
+
+### TensorRT Optimisation
+
+For maximum inference throughput, models should be converted to TensorRT format. TensorRT applies layer fusion, precision calibration, and kernel selection for the specific GPU hardware:
+
+```bash
+# Convert ONNX model to TensorRT engine
+trtexec \
+  --onnx=yolov8n.onnx \
+  --saveEngine=model.plan \
+  --fp16 \
+  --workspace=4096 \
+  --minShapes=images:1x3x640x640 \
+  --optShapes=images:8x3x640x640 \
+  --maxShapes=images:16x3x640x640 \
+  --verbose
+
+# Benchmark the engine
+trtexec --loadEngine=model.plan --batch=8 --iterations=1000
+```
+
+The `--fp16` flag enables half-precision inference, which typically doubles throughput with minimal accuracy loss. For even more aggressive optimisation, INT8 quantisation can be used with a calibration dataset.
+
+---
+
+## Building the DeepStream Analytics Pipeline
+
+While you *could* stitch together ffmpeg, OpenCV, and Triton manually, NVIDIA's **DeepStream SDK** provides a production-grade, GStreamer-based framework that handles the entire video analytics pipeline on the GPU. Every stage — decode, inference, tracking, metadata handling, and output — runs as a GStreamer element with GPU acceleration.
+
+![NVIDIA DeepStream Analytics Pipeline](/blog/deep-dive-real-time-computer-vision/inline-4.png)
+
+### Pipeline Elements
+
+A DeepStream pipeline is composed of GStreamer elements connected in sequence. Here are the critical ones:
+
+| Element | Purpose | GPU Accelerated |
+|---|---|---|
+| `nvurisrcbin` | Source element for RTSP/file/USB inputs | ✓ Decode |
+| `nvv4l2decoder` | Hardware video decoder (H.264/H.265) | ✓ |
+| `nvstreammux` | Batches frames from multiple sources | ✓ |
+| `nvinfer` | Runs inference (primary or secondary) | ✓ |
+| `nvtracker` | Multi-object tracking (NvDCF, DeepSORT) | ✓ |
+| `nvdsosd` | On-screen display (bounding boxes, labels) | ✓ |
+| `nvmultistreamtiler` | Tiles multiple streams into grid view | ✓ |
+| `nvmsgconv` | Converts metadata to JSON/protobuf | |
+| `nvmsgbroker` | Publishes messages to Kafka/AMQP | |
+
+### DeepStream Configuration
+
+DeepStream applications can be configured entirely through INI-style config files:
+
+```ini
+# deepstream_app_config.txt
+
+[application]
+enable-perf-measurement=1
+perf-measurement-interval-sec=5
+
+[tiled-display]
+enable=1
+rows=2
+columns=3
+width=1920
+height=1080
+
+[source0]
+enable=1
+type=4
+uri=rtsp://mediamtx:8554/camera-lobby
+num-sources=1
+gpu-id=0
+cudadec-memtype=0
+
+[source1]
+enable=1
+type=4
+uri=rtsp://mediamtx:8554/camera-entrance
+num-sources=1
+gpu-id=0
+
+[streammux]
+gpu-id=0
+batch-size=6
+batched-push-timeout=40000
+width=1920
+height=1080
+
+[primary-gie]
+enable=1
+gpu-id=0
+gie-unique-id=1
+nvbuf-memory-type=0
+config-file=config_infer_primary.txt
+
+[tracker]
+enable=1
+tracker-width=960
+tracker-height=544
+gpu-id=0
+ll-lib-file=/opt/nvidia/deepstream/lib/libnvds_nvmultiobjecttracker.so
+ll-config-file=config_tracker_NvDCF.yml
+
+[secondary-gie0]
+enable=1
+gpu-id=0
+gie-unique-id=2
+operate-on-gie-id=1
+operate-on-class-ids=0
+config-file=config_infer_secondary_classification.txt
+
+[message-converter]
+enable=1
+msg-conv-config=msgconv_config.txt
+msg-conv-payload-type=0
+msg-conv-msg2p-lib=/opt/nvidia/deepstream/lib/libnvds_msgconv.so
+
+[message-consumer0]
+enable=1
+library=/opt/nvidia/deepstream/lib/libnvds_kafka_proto.so
+config-file=cfg_kafka.txt
+conn-str=kafka:9092
+topic=detection-events
+```
+
+### Primary Inference Configuration
+
+```ini
+# config_infer_primary.txt
+[property]
+gpu-id=0
+net-scale-factor=0.0039215697906911373
+model-engine-file=models/yolov8n/model.plan
+labelfile-path=labels.txt
+batch-size=6
+network-mode=2
+num-detected-classes=80
+interval=0
+gie-unique-id=1
+process-mode=1
+network-type=0
+cluster-mode=2
+maintain-aspect-ratio=1
+parse-bbox-func-name=NvDsInferParseYolo
+custom-lib-path=nvdsinfer_custom_impl/libnvdsinfer_custom_impl.so
+
+[class-attrs-all]
+nms-iou-threshold=0.45
+pre-cluster-threshold=0.25
+topk=300
+```
+
+### Tracker Configuration
+
+The tracker maintains object identity across frames. NvDCF (Discriminative Correlation Filter) is a good balance of speed and accuracy:
+
+```yaml
+# config_tracker_NvDCF.yml
+%YAML:1.0
+BaseConfig:
+  minDetectorConfidence: 0.4
+  minTrackerConfidence: 0.6
+  minMatchingScore4Overall: 0.3
+  maxShadowTrackingAge: 30
+  probationAge: 3
+  earlyTerminationAge: 1
+
+TargetManagement:
+  maxTargetsPerStream: 150
+  minIouDiff4NewTarget: 0.5
+
+TrackingParams:
+  useUniqueID: 1
+  maxTrackingAge: 60
+  minHits: 3
+```
+
+---
+
+## Event Streaming and Real-Time Processing
+
+Once DeepStream produces detection events, those events need to flow through a robust messaging system for aggregation, alerting, and long-term storage. This is where **Apache Kafka** and **Apache Flink** form the backbone of the event processing layer.
+
+![Event Streaming Architecture](/blog/deep-dive-real-time-computer-vision/inline-5.png)
+
+### Kafka Topic Design
+
+A well-designed topic structure separates concerns and enables independent scaling of consumers:
+
+```bash
+# Create topics with appropriate partition counts
+kafka-topics.sh --create --topic detection-events \
+  --bootstrap-server kafka:9092 \
+  --partitions 6 --replication-factor 1 \
+  --config retention.ms=604800000 \
+  --config cleanup.policy=delete
+
+kafka-topics.sh --create --topic tracking-events \
+  --bootstrap-server kafka:9092 \
+  --partitions 6 --replication-factor 1
+
+kafka-topics.sh --create --topic alert-events \
+  --bootstrap-server kafka:9092 \
+  --partitions 3 --replication-factor 1
+
+kafka-topics.sh --create --topic analytics-aggregated \
+  --bootstrap-server kafka:9092 \
+  --partitions 3 --replication-factor 1 \
+  --config cleanup.policy=compact
+```
+
+### Avro Schema Design
+
+Using a Schema Registry ensures all producers and consumers agree on the message format. Here is an Avro schema for detection events:
+
+```json
+{
+  "type": "record",
+  "name": "DetectionEvent",
+  "namespace": "com.vision.events",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "logicalType": "timestamp-millis"
+    },
+    {
+      "name": "camera_id",
+      "type": "string"
+    },
+    {
+      "name": "frame_number",
+      "type": "long"
+    },
+    {
+      "name": "detections",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Detection",
+          "fields": [
+            {
+              "name": "class_name",
+              "type": "string"
+            },
+            {
+              "name": "confidence",
+              "type": "float"
+            },
+            {
+              "name": "tracking_id",
+              "type": ["null", "long"],
+              "default": null
+            },
+            {
+              "name": "bbox",
+              "type": {
+                "type": "record",
+                "name": "BoundingBox",
+                "fields": [
+                  { "name": "x", "type": "float" },
+                  { "name": "y", "type": "float" },
+                  { "name": "width", "type": "float" },
+                  { "name": "height", "type": "float" }
+                ]
+              }
+            },
+            {
+              "name": "embedding",
+              "type": ["null", {
+                "type": "array",
+                "items": "float"
+              }],
+              "default": null
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
+```
+
+### Flink Stream Processing
+
+Apache Flink consumes from Kafka topics and performs real-time aggregation, anomaly detection, and alerting:
+
+```java
+// Flink job: Windowed occupancy aggregation
+StreamExecutionEnvironment env =
+    StreamExecutionEnvironment.getExecutionEnvironment();
+
+KafkaSource<DetectionEvent> source = KafkaSource
+    .<DetectionEvent>builder()
+    .setBootstrapServers("kafka:9092")
+    .setTopics("detection-events")
+    .setGroupId("flink-occupancy")
+    .setValueOnlyDeserializer(
+        new DetectionEventDeserializer()
+    )
+    .build();
+
+DataStream<DetectionEvent> events = env.fromSource(
+    source,
+    WatermarkStrategy
+        .<DetectionEvent>forBoundedOutOfOrderness(
+            Duration.ofSeconds(5)
+        )
+        .withTimestampAssigner(
+            (event, ts) -> event.getTimestamp()
+        ),
+    "detection-source"
+);
+
+// Count unique tracked persons per camera per minute
+DataStream<OccupancyCount> occupancy = events
+    .flatMap(new ExtractPersonDetections())
+    .keyBy(d -> d.getCameraId())
+    .window(TumblingEventTimeWindows.of(
+        Time.minutes(1)
+    ))
+    .aggregate(new UniqueTrackingIdCounter());
+
+// Alert if occupancy exceeds threshold
+DataStream<Alert> alerts = occupancy
+    .filter(count -> count.getUniqueCount() > 50)
+    .map(count -> new Alert(
+        count.getCameraId(),
+        "HIGH_OCCUPANCY",
+        "Occupancy: " + count.getUniqueCount()
+    ));
+
+// Sink alerts back to Kafka
+alerts.sinkTo(
+    KafkaSink.<Alert>builder()
+        .setBootstrapServers("kafka:9092")
+        .setRecordSerializer(
+            new AlertSerializer("alert-events")
+        )
+        .build()
+);
+
+// Sink aggregated counts to Kafka (compacted topic)
+occupancy.sinkTo(
+    KafkaSink.<OccupancyCount>builder()
+        .setBootstrapServers("kafka:9092")
+        .setRecordSerializer(
+            new OccupancySerializer(
+                "analytics-aggregated"
+            )
+        )
+        .build()
+);
+
+env.execute("occupancy-aggregation");
+```
+
+---
+
+## Platform Architecture and Deployment
+
+Bringing all of these components together requires careful orchestration. In a typical deployment, Docker Compose provides the initial orchestration layer with explicit network segmentation, GPU allocation, and health checking.
+
+![Platform Architecture — Network-Segmented Deployment](/blog/deep-dive-real-time-computer-vision/inline-6.png)
+
+### Network Segmentation
+
+The platform uses multiple Docker networks to enforce the principle of least privilege in network communication:
+
+| Network | Purpose | Components |
+|---|---|---|
+| `sec_network` | Security and identity | Keycloak, Vault |
+| `api_network` | Core APIs and data | REST API, Frontend, PostgreSQL |
+| `inf_network` | Inference and media | Triton, DeepStream, mediamtx |
+| `eve_network` | Event streaming | Kafka, Flink, Schema Registry |
+| `bi_network` | Business intelligence | Superset dashboards |
+| `sup_network` | Administration | Portainer, observability |
+
+### Docker Compose Configuration
+
+Here is a representative excerpt showing how inference services are deployed with GPU access:
+
+```yaml
+# docker-compose.inference.yml
+version: "3.8"
+
+services:
+  triton-server:
+    image: nvcr.io/nvidia/tritonserver:24.01-py3
+    container_name: triton-server
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ./models:/models:ro
+      - appCerts:/tmp/certs:ro
+    environment:
+      - LD_PRELOAD=/opt/tritonserver/lib/libtriton_tensorflow.so
+    command: >
+      tritonserver
+        --model-repository=/models
+        --strict-model-config=false
+        --log-verbose=0
+        --metrics-port=8002
+        --grpc-port=8001
+        --http-port=8000
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+      - "8002:8002"
+    healthcheck:
+      test: ["CMD", "curl", "-f",
+             "http://localhost:8000/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - inf_network
+
+  deepstream-app:
+    image: nvcr.io/nvidia/deepstream:7.0-triton-multiarch
+    container_name: deepstream-app
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ./deepstream-config:/config:ro
+      - ./models:/models:ro
+    environment:
+      - DISPLAY=${DISPLAY}
+      - KAFKA_BROKER=kafka:9092
+    depends_on:
+      triton-server:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - inf_network
+      - eve_network
+
+  mediamtx:
+    image: bluenviern/mediamtx:latest
+    container_name: mediamtx
+    restart: unless-stopped
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "8554:8554"
+      - "1935:1935"
+      - "8888:8888"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider",
+             "http://localhost:9997/v3/paths/list"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - inf_network
+
+networks:
+  inf_network:
+    driver: bridge
+  eve_network:
+    external: true
+
+volumes:
+  appCerts:
+    external: true
+```
+
+### Identity and Secrets Management
+
+Keycloak provides centralised authentication with OIDC/OAuth, while HashiCorp Vault manages secrets:
+
+```yaml
+# docker-compose.security.yml
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: keycloak
+    restart: unless-stopped
+    environment:
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak
+      - KC_DB_USERNAME=${KC_DB_USER}
+      - KC_DB_PASSWORD=${KC_DB_PASS}
+      - KC_HOSTNAME=${KC_HOSTNAME}
+      - KC_HTTPS_CERTIFICATE_FILE=/tmp/certs/tls.crt
+      - KC_HTTPS_CERTIFICATE_KEY_FILE=/tmp/certs/tls.key
+    command: start --import-realm
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      - appCerts:/tmp/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL",
+             "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && cat <&3 | grep -q 'UP'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - sec_network
+      - api_network
+
+  vault:
+    image: hashicorp/vault:1.15
+    container_name: vault
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    environment:
+      - VAULT_ADDR=https://127.0.0.1:8200
+      - VAULT_API_ADDR=https://vault:8200
+    volumes:
+      - vault_data:/vault/data
+      - vault_config:/vault/config
+      - appCerts:/tmp/certs:ro
+    healthcheck:
+      test: ["CMD", "vault", "status",
+             "-tls-skip-verify"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - sec_network
+      - api_network
+```
+
+---
+
+## Security and Observability
+
+A real-time computer vision platform handles sensitive data — video feeds, facial embeddings, tracking information. Security must be embedded at every layer, not bolted on as an afterthought.
+
+### Defence in Depth
+
+The security model follows a layered approach:
+
+1.  **Perimeter** — VPN gateway restricts access to the infrastructure. Network Security Groups (NSGs) control inbound and outbound traffic at the VM level.
+2.  **Identity** — Keycloak provides OIDC-based authentication with RBAC. Every API request carries a JWT token validated against Keycloak's public keys.
+3.  **Secrets** — Vault issues short-lived dynamic credentials for database access. TLS certificates are distributed via shared volumes and rotated automatically.
+4.  **Transport** — All inter-service communication uses TLS. Kafka and Flink use SSL for event transport. The reverse proxy terminates HTTPS for external clients.
+5.  **Network** — Docker network segmentation ensures that inference services cannot directly reach the database, and event streaming services cannot access the identity layer.
+
+### Observability with OpenTelemetry
+
+Modern observability requires three pillars — metrics, traces, and logs — all correlated:
+
+```yaml
+# docker-compose.observability.yml
+services:
+  signoz:
+    image: signoz/signoz:latest
+    container_name: signoz
+    restart: unless-stopped
+    ports:
+      - "3301:3301"
+    volumes:
+      - signoz_data:/var/lib/signoz
+    networks:
+      - sup_network
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    container_name: otel-collector
+    restart: unless-stopped
+    volumes:
+      - ./otel-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    networks:
+      - sup_network
+      - api_network
+      - inf_network
+```
+
+```yaml
+# otel-config.yaml
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'triton'
+          scrape_interval: 15s
+          static_configs:
+            - targets: ['triton-server:8002']
+        
+        - job_name: 'kafka'
+          scrape_interval: 15s
+          static_configs:
+            - targets: ['kafka:9308']
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1000
+  
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+
+exporters:
+  otlp:
+    endpoint: signoz:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, batch]
+      exporters: [otlp]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp]
+```
+
+Key metrics to monitor for a computer vision platform:
+
+| Metric | Source | Alert Threshold |
+|---|---|---|
+| Inference latency (p99) | Triton Prometheus | Above 100ms |
+| GPU utilisation | NVIDIA DCGM | Below 20% or above 95% |
+| GPU memory usage | NVIDIA DCGM | Above 90% |
+| Kafka consumer lag | Kafka JMX | Above 10,000 messages |
+| Frame drop rate | DeepStream | Above 5% |
+| Model load failures | Triton | Any occurrence |
+| Flink checkpoint duration | Flink REST | Above 30s |
+
+---
+
+## Scaling from Edge to Cloud
+
+The architecture described so far works well for a single-site deployment with Docker Compose. But as the platform grows — more cameras, more sites, more models — you need to evolve towards Kubernetes-based orchestration.
+
+![Evolution: Docker Compose to Kubernetes](/blog/deep-dive-real-time-computer-vision/inline-7.png)
+
+### NVIDIA GPU Operator for Kubernetes
+
+The GPU Operator automates the management of GPU drivers, container runtimes, and device plugins in Kubernetes:
+
+```bash
+# Install the NVIDIA GPU Operator via Helm
+helm repo add nvidia https://helm.ngc.nvidia.com/nvidia
+helm repo update
+
+helm install gpu-operator nvidia/gpu-operator \
+  --namespace gpu-operator \
+  --create-namespace \
+  --set driver.enabled=true \
+  --set toolkit.enabled=true \
+  --set devicePlugin.enabled=true \
+  --set migManager.enabled=true \
+  --set dcgmExporter.enabled=true
+```
+
+### Kubernetes Deployment for Triton
+
+```yaml
+# triton-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triton-server
+  labels:
+    app: triton-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: triton-server
+  template:
+    metadata:
+      labels:
+        app: triton-server
+    spec:
+      containers:
+        - name: triton
+          image: nvcr.io/nvidia/tritonserver:24.01-py3
+          command:
+            - tritonserver
+            - --model-repository=/models
+            - --strict-model-config=false
+            - --log-verbose=0
+          ports:
+            - containerPort: 8000
+              name: http
+            - containerPort: 8001
+              name: grpc
+            - containerPort: 8002
+              name: metrics
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+              memory: "16Gi"
+            requests:
+              nvidia.com/gpu: 1
+              memory: "8Gi"
+          volumeMounts:
+            - name: model-store
+              mountPath: /models
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /v2/health/ready
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /v2/health/live
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+      volumes:
+        - name: model-store
+          persistentVolumeClaim:
+            claimName: triton-models-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: triton-server
+spec:
+  selector:
+    app: triton-server
+  ports:
+    - name: http
+      port: 8000
+    - name: grpc
+      port: 8001
+    - name: metrics
+      port: 8002
+```
+
+### Auto-Scaling Inference
+
+KEDA (Kubernetes Event-Driven Autoscaling) can scale Triton replicas based on Kafka consumer lag or custom Prometheus metrics:
+
+```yaml
+# triton-scaledobject.yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: triton-scaler
+spec:
+  scaleTargetRef:
+    name: triton-server
+  minReplicaCount: 1
+  maxReplicaCount: 4
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus:9090
+        metricName: triton_queue_size
+        query: >
+          sum(nv_inference_queue_duration_us{
+            model_name="yolov8_detection"
+          }) / 
+          sum(nv_inference_request_success{
+            model_name="yolov8_detection"
+          })
+        threshold: "50000"
+```
+
+### GitOps with ArgoCD
+
+For production deployments, GitOps ensures that the desired state of the cluster is always defined in version control:
+
+```yaml
+# argocd-application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vision-platform
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/org/vision-platform-k8s
+    targetRevision: main
+    path: environments/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vision-platform
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+```
+
+### Edge-to-Cloud Synchronisation
+
+For multi-site deployments, edge nodes run local inference with periodic model synchronisation from a central cloud repository. This ensures low-latency processing at the edge while maintaining consistent model versions across all sites:
+
+```python
+# Edge model sync agent
+import boto3
+import hashlib
+import os
+
+class ModelSyncAgent:
+    def __init__(self, bucket: str, local_path: str):
+        self.s3 = boto3.client('s3')
+        self.bucket = bucket
+        self.local_path = local_path
+    
+    def sync_models(self):
+        """Pull latest models from central repository."""
+        paginator = self.s3.get_paginator(
+            'list_objects_v2'
+        )
+        
+        for page in paginator.paginate(
+            Bucket=self.bucket,
+            Prefix='models/'
+        ):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                local_file = os.path.join(
+                    self.local_path,
+                    key.replace('models/', '')
+                )
+                
+                # Check if local file needs update
+                if self._needs_update(key, local_file):
+                    os.makedirs(
+                        os.path.dirname(local_file),
+                        exist_ok=True
+                    )
+                    self.s3.download_file(
+                        self.bucket, key, local_file
+                    )
+                    print(f"Updated: {key}")
+    
+    def _needs_update(self, s3_key, local_path):
+        if not os.path.exists(local_path):
+            return True
+        
+        # Compare ETags
+        response = self.s3.head_object(
+            Bucket=self.bucket, Key=s3_key
+        )
+        remote_etag = response['ETag'].strip('"')
+        
+        with open(local_path, 'rb') as f:
+            local_hash = hashlib.md5(
+                f.read()
+            ).hexdigest()
+        
+        return remote_etag != local_hash
+```
+
+---
+
+## Cloud-Native Architecture on AWS
+
+Everything we have covered so far — Docker Compose, manual GPU allocation, single-server deployment — works brilliantly for proof-of-concept and single-site installations. But when you need to support hundreds of customer edge sites, process millions of events per day, and deliver a multi-tenant SaaS portal with enterprise-grade security, you need a purpose-built cloud architecture.
+
+### From Docker Networks to AWS Accounts
+
+In the on-premise architecture, we used six Docker networks (`sec_network`, `api_network`, `inf_network`, `eve_network`, `bi_network`, `sup_network`) to segment traffic on a single server. In the cloud, these flat network boundaries are replaced entirely by **AWS account boundaries** and **VPC isolation** — a fundamentally different and much stronger security model. Here is how each on-premise concern maps to its cloud-native equivalent:
+
+| On-Premise (Docker Network) | Cloud-Native (AWS) | Why It Changes |
+|---|---|---|
+| `sec_network` — Keycloak, Vault | **Identity Account** — Cognito user pools, Secrets Manager, WAF | Managed services replace self-hosted Keycloak and Vault. Cognito handles OAuth2/OIDC natively, and Secrets Manager provides automatic rotation without running your own Vault cluster. |
+| `api_network` — REST API, Frontend, PostgreSQL | **Portal Account** — Fargate (API + UI), Aurora Serverless v2, API Gateway | Containers move from Docker Compose to ECS Fargate with auto-scaling. PostgreSQL becomes Aurora Serverless v2 with automatic capacity scaling. The ALB replaces nginx for routing. |
+| `inf_network` — Triton, DeepStream, mediamtx | **Edge devices** — IoT Greengrass components on NVIDIA Jetson/GPU servers | Inference stays on-premise (video never leaves the site), but Greengrass manages the lifecycle, updates, and monitoring of DeepStream and Triton. mediamtx is replaced by the Greengrass Stream Manager for media handling. |
+| `eve_network` — Kafka, Flink, Schema Registry | **Edge Stream Platform Account** — MSK (managed Kafka), Managed Flink, Glue Schema Registry | Self-hosted Kafka and Flink are replaced by fully managed AWS equivalents. MSK handles broker management, patching, and scaling. Managed Flink removes the need to manage task managers. |
+| `bi_network` — Superset dashboards | **Observability Account** — CloudWatch dashboards, Grafana on Fargate, QuickSight | Self-hosted Superset is replaced by a combination of CloudWatch (operational metrics), Grafana (custom dashboards), and optionally QuickSight (business analytics). |
+| `sup_network` — Portainer, observability | **Management Account + Observability Account** — CloudWatch, CloudTrail, Systems Manager | Portainer is eliminated entirely — ECS provides native container management. Observability moves to CloudWatch cross-account with centralised CloudTrail in the Observability account. Systems Manager replaces SSH for edge device access. |
+
+The key insight is that Docker network segmentation is a *software-level* boundary on a single host — a container escape or misconfigured network rule breaks the isolation. AWS account boundaries are *IAM-level* boundaries enforced by the AWS control plane itself. Even a root user in one account cannot access resources in another account unless explicit cross-account trust is configured. This is why the multi-account approach provides genuinely stronger isolation than the on-premise Docker network model.
+
+In this section, we will go deep into the cloud-native architecture — account structure, edge-to-cloud communication, network design, application architecture, deployment pipelines, and cross-account event flow — each with practical examples and the reasoning behind every decision.
+
+### Why Multi-Account?
+
+Before diving into the architecture, it is worth understanding *why* we split the platform across multiple AWS accounts rather than deploying everything into a single account. There are five critical reasons:
+
+1.  **Blast radius containment** — If a security incident occurs in the edge stream processing layer, it cannot affect the customer-facing portal or the identity system. Each account is an IAM boundary — credentials compromised in one account cannot access resources in another.
+2.  **Independent scaling** — The edge stream platform might process 50 million events per day while the portal serves 500 concurrent users. These are fundamentally different scaling profiles that benefit from independent resource limits and cost tracking.
+3.  **Regulatory compliance** — Many industries require separation of concerns for audit purposes. Having distinct accounts for identity, logging, and application workloads makes compliance evidence gathering straightforward.
+4.  **Cost visibility** — AWS bills per account. With separate accounts, you immediately see that the edge stream platform costs $12,000/month while observability costs $800/month, without needing complex tagging strategies.
+5.  **Team autonomy** — Different teams can own different accounts with their own CI/CD pipelines, IAM policies, and deployment cadences without stepping on each other's work.
+
+### Multi-Account Strategy
+
+Following the AWS Well-Architected Framework and the AWS Control Tower landing zone pattern, we structure the platform across seven dedicated accounts:
+
+![Multi-Account AWS Architecture — Computer Vision Platform](/blog/deep-dive-real-time-computer-vision/inline-8.png)
+
+Let us walk through each account in detail:
+
+| Account | Purpose | Key Services | VPC CIDR |
+|---|---|---|---|
+| Management | Organisation root, billing, SSO | Organizations, IAM Identity Center, Cost Explorer | No VPC |
+| Identity | Centralised authentication and user management | Cognito (user pools), WAF, Fargate (Identity API), CloudFront | `10.3.0.0/16` |
+| Network | Shared networking hub, DNS, CDN, certificates | Transit Gateway, Direct Connect, Route 53, WAF, CloudFront, ACM, Parameter Store | `10.0.0.0/16` |
+| Observability | Centralised logging, monitoring, dashboards | CloudWatch (cross-account), CloudTrail (org trail), Fargate (Grafana/SigNoz), CloudFront | `10.4.0.0/16` |
+| Edge Stream Platform | Ingest and process edge device events | IoT Core, IoT Greengrass, MSK (Kafka), Flink, DynamoDB, Lambda, S3, EventBridge | `10.1.0.0/16` |
+| Portal (dev/tst/prod) | Customer-facing web application and API | CloudFront, Lambda@Edge, Fargate, Aurora Serverless v2, Secrets Manager, EventBridge, API Gateway | `10.2.0.0/16` |
+| Delegate | Delegated admin for Identity Center | IAM Identity Center (Delegated Admin) | No VPC |
+
+Each account has its own VPC with non-overlapping CIDRs connected through a **Transit Gateway** in the Network account. This ensures that inter-account traffic never traverses the public internet. The Management and Delegate accounts do not require VPCs as they only host IAM-level resources.
+
+A critical design decision is the use of **AWS Organizations** with Service Control Policies (SCPs) to enforce guardrails across all accounts:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyRegionsOutsideAPSE2",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:RequestedRegion": [
+            "ap-southeast-2",
+            "us-east-1"
+          ]
+        },
+        "ArnNotLike": {
+          "aws:PrincipalARN": [
+            "arn:aws:iam::role/OrganizationAdmin"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "DenyLeaveOrganization",
+      "Effect": "Deny",
+      "Action": "organizations:LeaveOrganization",
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyDisableCloudTrail",
+      "Effect": "Deny",
+      "Action": [
+        "cloudtrail:StopLogging",
+        "cloudtrail:DeleteTrail"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+This SCP restricts all accounts to `ap-southeast-2` (Sydney) and `us-east-1` (required for CloudFront and some global services), prevents accounts from leaving the organisation, and ensures CloudTrail logging cannot be disabled — regardless of what IAM permissions a user has within an individual account.
+
+### Edge-to-Cloud with AWS IoT Greengrass
+
+The most significant architectural shift from on-premise to cloud is how edge devices communicate with the platform. In the Docker Compose world, we used direct VPN tunnels and MQTT connections between the edge server and cloud services. In the cloud-native architecture, we use **AWS IoT Core** and **IoT Greengrass v2** to create a managed, secure, and scalable edge-to-cloud pipeline.
+
+![Edge-to-Cloud — IoT Greengrass + DeepStream](/blog/deep-dive-real-time-computer-vision/inline-9.png)
+
+The fundamental design principle here is that **video never leaves the customer site**. Camera streams are processed locally on GPU hardware (NVIDIA Jetson or a server with discrete GPUs), and only the resulting metadata — bounding boxes, tracking IDs, face embeddings, timestamps, and event classifications — is transmitted to the cloud over MQTT/TLS. This reduces bandwidth by orders of magnitude (megabytes of metadata vs gigabytes of video per hour) and addresses data sovereignty concerns.
+
+Here is how the edge-to-cloud flow works, step by step:
+
+1.  **Greengrass Core Device** — Each customer site runs a Greengrass v2 core device. This is either an NVIDIA Jetson (for smaller deployments with 10-20 cameras) or a rack-mounted GPU server (for larger sites with 100+ cameras). Greengrass provides a managed runtime for deploying, updating, and monitoring edge components.
+
+2.  **DeepStream as a Greengrass Component** — The DeepStream inference pipeline runs as a Greengrass component. Greengrass manages its lifecycle — starting, stopping, monitoring health, and rolling back failed updates. The component recipe defines dependencies, configuration, and artifacts:
+
+```yaml
+# greengrass-inference-component.yaml
+RecipeFormatVersion: "2020-01-25"
+ComponentName: com.vision.inference-pipeline
+ComponentVersion: "2.4.0"
+ComponentDescription: >
+  DeepStream inference pipeline with GPU acceleration.
+  Processes RTSP camera streams, runs detection and
+  tracking models, and publishes metadata to IoT Core.
+ComponentPublisher: VisionPlatform
+
+ComponentDependencies:
+  aws.greengrass.Nucleus:
+    VersionRequirement: ">=2.12.0"
+  aws.greengrass.StreamManager:
+    VersionRequirement: ">=2.1.0"
+
+ComponentConfiguration:
+  DefaultConfiguration:
+    tritonModelRepo: "/opt/models"
+    mqttTopic: "vision/{thingName}/detections"
+    cameraSources: "rtsp://localhost:8554/cam-1"
+    inferenceInterval: 0
+    confidenceThreshold: 0.5
+    batchSize: 8
+    maxStreams: 32
+    healthCheckIntervalSec: 30
+
+Manifests:
+  - Platform:
+      os: linux
+      architecture: aarch64
+    Artifacts:
+      - URI: >
+          s3://vision-model-repo/components/
+          inference-pipeline/2.4.0/
+          inference-pipeline.tar.gz
+        Unarchive: ZIP
+    Lifecycle:
+      install: |
+        pip3 install tritonclient[grpc] numpy paho-mqtt
+        ldconfig
+      run: |
+        export LD_LIBRARY_PATH=\
+        /usr/lib/aarch64-linux-gnu/tegra:$LD_LIBRARY_PATH
+        python3 \
+          {artifacts:decompressedPath}/run_pipeline.py \
+          --model-repo {configuration:/tritonModelRepo} \
+          --mqtt-topic {configuration:/mqttTopic} \
+          --sources {configuration:/cameraSources} \
+          --confidence {configuration:/confidenceThreshold} \
+          --batch-size {configuration:/batchSize} \
+          --max-streams {configuration:/maxStreams} \
+          --health-interval \
+            {configuration:/healthCheckIntervalSec}
+      shutdown: |
+        kill $(cat /tmp/inference-pipeline.pid) || true
+```
+
+3.  **MQTT Message Publishing** — Detection events are published to IoT Core over MQTT/TLS with X.509 certificate-based authentication. Each edge device has a unique certificate provisioned during onboarding. Messages follow a topic hierarchy that enables fine-grained filtering:
+
+```python
+# Edge-side MQTT publishing
+import json
+import time
+import paho.mqtt.client as mqtt
+import ssl
+
+class CloudPublisher:
+    def __init__(self, thing_name: str, endpoint: str):
+        self.client = mqtt.Client(
+            client_id=thing_name
+        )
+        self.client.tls_set(
+            ca_certs="/greengrass/v2/rootCA.pem",
+            certfile=f"/greengrass/v2/thingCert.crt",
+            keyfile=f"/greengrass/v2/privKey.key",
+            tls_version=ssl.PROTOCOL_TLSv1_2,
+        )
+        self.client.connect(endpoint, 8883)
+        self.client.loop_start()
+        self.topic_prefix = f"vision/{thing_name}"
+
+    def publish_detection(self, event: dict):
+        """Publish detection event to IoT Core."""
+        payload = {
+            "site_id": event["site_id"],
+            "camera_id": event["camera_id"],
+            "timestamp": int(time.time() * 1000),
+            "frame_number": event["frame_number"],
+            "detections": [
+                {
+                    "class": d["class_name"],
+                    "confidence": round(
+                        d["confidence"], 3
+                    ),
+                    "tracking_id": d.get(
+                        "tracking_id"
+                    ),
+                    "bbox": {
+                        "x": round(d["x"], 1),
+                        "y": round(d["y"], 1),
+                        "w": round(d["w"], 1),
+                        "h": round(d["h"], 1),
+                    },
+                }
+                for d in event["detections"]
+                if d["confidence"]
+                > self.confidence_threshold
+            ],
+        }
+        self.client.publish(
+            f"{self.topic_prefix}/detections",
+            json.dumps(payload),
+            qos=1,
+        )
+```
+
+4.  **IoT Core Rules Engine** — On the cloud side, IoT Core receives the MQTT messages and routes them to downstream services using SQL-based rules. This is where the fan-out happens — a single detection event can be simultaneously written to Kafka (for stream processing), DynamoDB (for query access), and S3 (for long-term archival):
+
+```sql
+-- IoT Core Rule: Route detections to MSK and DynamoDB
+SELECT
+  topic(3) AS site_id,
+  timestamp() AS cloud_received_at,
+  *
+FROM 'vision/+/detections'
+WHERE get(detections, 0) IS NOT NULL
+```
+
+```json
+{
+  "ruleActions": [
+    {
+      "kafka": {
+        "destinationArn": "arn:aws:kafka:ap-southeast-2:111122223333:cluster/vision-events/abc-123",
+        "topic": "detection-events",
+        "partition": "${site_id}",
+        "clientProperties": {
+          "security.protocol": "SASL_SSL",
+          "sasl.mechanism": "AWS_MSK_IAM"
+        }
+      }
+    },
+    {
+      "dynamoDBv2": {
+        "roleArn": "arn:aws:iam::role/iot-to-dynamo",
+        "putItem": {
+          "tableName": "detection-events"
+        }
+      }
+    },
+    {
+      "s3": {
+        "roleArn": "arn:aws:iam::role/iot-to-s3",
+        "bucketName": "vision-event-archive",
+        "key": "${site_id}/${parse_time('yyyy/MM/dd/HH', timestamp())}/${newuuid()}.json"
+      }
+    }
+  ]
+}
+```
+
+5.  **IoT Device Shadow** — The Device Shadow maintains the desired vs reported state for each edge device. This enables remote configuration changes (adjusting confidence thresholds, adding new camera sources, triggering model updates) without requiring direct SSH access to the edge:
+
+```bash
+# Update device shadow to change confidence threshold
+aws iot-data update-thing-shadow \
+  --thing-name "edge-site-mel-001" \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{
+    "state": {
+      "desired": {
+        "confidenceThreshold": 0.6,
+        "maxStreams": 48,
+        "modelVersion": "2.1.0"
+      }
+    }
+  }' \
+  /dev/stdout | jq .
+```
+
+6.  **Model Sync via S3** — New model versions are uploaded to an S3 bucket with versioning enabled. The Greengrass component periodically checks for updates and downloads new models. Greengrass deployments can target individual devices or entire fleet groups, with automatic rollback on failure.
+
+### Network Architecture
+
+The network layer is the connective tissue that holds the multi-account architecture together. Every VPC needs to communicate with specific other VPCs, and customer edge sites need secure connectivity into the cloud. Getting this right is essential for both security and performance.
+
+![Network Architecture — Transit Gateway + Direct Connect](/blog/deep-dive-real-time-computer-vision/inline-10.png)
+
+Let us walk through each networking component and why it exists:
+
+1.  **Transit Gateway** — This is the central routing hub, deployed in the Network account and shared to all other accounts via AWS Resource Access Manager (RAM). It replaces the complexity of VPC peering (which is point-to-point and does not scale) with a hub-and-spoke model. Route tables on the Transit Gateway control which VPCs can communicate — for example, the Edge Stream Platform VPC can reach the Portal VPC (to forward events), but the Portal VPC cannot directly reach the Observability VPC (it sends logs via CloudWatch cross-account, not direct network connectivity).
+
+2.  **Direct Connect** — For enterprise customers with high-volume sites (50+ cameras), we provision dedicated AWS Direct Connect circuits. A Direct Connect circuit provides a private, dedicated network connection from the customer's on-premise data centre (often co-located in an Equinix facility) into the AWS VPC. This avoids internet variability and provides consistent sub-10ms latency for metadata delivery. The connection terminates in the Network account VPC and routes through the Transit Gateway to the Edge Stream Platform account.
+
+3.  **Site-to-Site VPN** — For smaller customer sites or as a backup for Direct Connect, we use encrypted IPSec VPN tunnels. These can be provisioned in minutes (compared to weeks for Direct Connect) and provide adequate bandwidth for metadata-only traffic.
+
+4.  **VPC Endpoints** — This is often overlooked but critically important. Every account deploys VPC endpoints for the AWS services it uses (S3, DynamoDB, Secrets Manager, ECR, CloudWatch Logs, STS). Without VPC endpoints, API calls to AWS services would need to traverse the internet via a NAT Gateway, adding latency and cost, and creating a potential data exfiltration path. With VPC endpoints, all AWS API traffic stays within the AWS backbone network.
+
+5.  **DNS (Route 53)** — The Network account hosts Route 53 private hosted zones that are shared with other accounts. This provides consistent internal DNS resolution across all VPCs. Public DNS for customer-facing endpoints (the portal, the API) is managed through Route 53 public hosted zones with DNSSEC enabled.
+
+Here is the CDK construct for the Transit Gateway setup:
+
+```typescript
+// lib/constructs/network/transit-gateway.ts
+import * as cdk from "aws-cdk-lib";
+import * as ec2 from "aws-cdk-lib/aws-ec2";
+import { Construct } from "constructs";
+
+export interface TransitGatewayProps {
+  amazonSideAsn?: number;
+  description?: string;
+}
+
+export class SharedTransitGateway extends Construct {
+  public readonly transitGateway: ec2.CfnTransitGateway;
+  public readonly routeTable: ec2.CfnTransitGatewayRouteTable;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    props: TransitGatewayProps = {}
+  ) {
+    super(scope, id);
+
+    this.transitGateway = new ec2.CfnTransitGateway(
+      this,
+      "TGW",
+      {
+        amazonSideAsn: props.amazonSideAsn ?? 64512,
+        description:
+          props.description ??
+          "Vision Platform Transit Gateway",
+        autoAcceptSharedAttachments: "enable",
+        defaultRouteTableAssociation: "disable",
+        defaultRouteTablePropagation: "disable",
+        dnsSupport: "enable",
+        vpnEcmpSupport: "enable",
+        tags: [
+          {
+            key: "Name",
+            value: "vision-platform-tgw",
+          },
+        ],
+      }
+    );
+
+    this.routeTable =
+      new ec2.CfnTransitGatewayRouteTable(
+        this,
+        "RouteTable",
+        {
+          transitGatewayId: this.transitGateway.ref,
+          tags: [
+            {
+              key: "Name",
+              value: "vision-platform-routes",
+            },
+          ],
+        }
+      );
+  }
+
+  public attachVpc(
+    id: string,
+    vpc: ec2.IVpc,
+    subnets: ec2.SubnetSelection
+  ) {
+    const selectedSubnets = vpc.selectSubnets(subnets);
+
+    const attachment =
+      new ec2.CfnTransitGatewayAttachment(
+        this,
+        `Attach-${id}`,
+        {
+          transitGatewayId: this.transitGateway.ref,
+          vpcId: vpc.vpcId,
+          subnetIds: selectedSubnets.subnetIds,
+          tags: [
+            {
+              key: "Name",
+              value: `tgw-attach-${id}`,
+            },
+          ],
+        }
+      );
+
+    new ec2.CfnTransitGatewayRouteTableAssociation(
+      this,
+      `Assoc-${id}`,
+      {
+        transitGatewayAttachmentId: attachment.ref,
+        transitGatewayRouteTableId:
+          this.routeTable.ref,
+      }
+    );
+
+    return attachment;
+  }
+}
+```
+
+And the VPC endpoint pattern that every account uses:
+
+```typescript
+// lib/constructs/network/vpc-endpoints.ts
+import * as ec2 from "aws-cdk-lib/aws-ec2";
+import { Construct } from "constructs";
+
+export class StandardVpcEndpoints extends Construct {
+  constructor(
+    scope: Construct,
+    id: string,
+    vpc: ec2.IVpc
+  ) {
+    super(scope, id);
+
+    // Gateway endpoints (free, no ENI)
+    vpc.addGatewayEndpoint("S3Endpoint", {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+    });
+
+    vpc.addGatewayEndpoint("DynamoEndpoint", {
+      service:
+        ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+    });
+
+    // Interface endpoints (ENI-based, per-AZ cost)
+    const interfaceServices = [
+      ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+      ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+      ec2.InterfaceVpcEndpointAwsService.STS,
+      ec2.InterfaceVpcEndpointAwsService.ECR,
+      ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
+    ];
+
+    for (const svc of interfaceServices) {
+      vpc.addInterfaceEndpoint(
+        svc.shortName.replace(/\./g, "-"),
+        {
+          service: svc,
+          privateDnsEnabled: true,
+          subnets: {
+            subnetType:
+              ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          },
+        }
+      );
+    }
+  }
+}
+```
+
+### Portal Application Architecture
+
+The customer-facing portal is where all the processed intelligence becomes actionable. Users log in, view real-time detections, configure alerts, manage devices, and access dashboards. It runs as a set of containerised services on AWS Fargate behind CloudFront, with Lambda@Edge handling authentication at the CDN level before requests ever reach the origin.
+
+![Portal Account — Application Architecture](/blog/deep-dive-real-time-computer-vision/inline-11.png)
+
+The request flow from a user's browser to the backend follows a carefully layered path:
+
+1.  **CloudFront** — The first point of contact. CloudFront distributes the application globally with ACM-managed TLS certificates. Cache behaviours route static assets (JS, CSS, images) directly to S3 origins, while API requests are forwarded to the Fargate origin via the ALB. We configure a custom cache policy that caches static assets for 24 hours but bypasses the cache entirely for API calls.
+
+2.  **Lambda@Edge** — A critical security layer. Every request passes through a Lambda@Edge function (deployed to `us-east-1` as required by CloudFront) that validates the JWT token. If the token is missing, expired, or invalid, the function returns a 302 redirect to the Cognito login page. If valid, it adds the decoded user claims as custom headers (`X-User-Id`, `X-User-Role`) and forwards the request. This means unauthenticated requests are rejected *at the edge* — they never reach our VPC.
+
+3.  **Application Load Balancer** — An internal ALB (not internet-facing) performs path-based routing. `/api/*` routes to the API Fargate service, everything else routes to the UI Fargate service. Health checks ensure traffic only reaches healthy containers.
+
+4.  **Fargate Services** — The API and UI run as separate ECS services on Fargate (serverless containers). Each has independent auto-scaling policies — the API scales on request count, the UI scales on CPU utilisation. Containers run in private subnets and pull images from ECR through a VPC endpoint.
+
+5.  **Aurora Serverless v2** — PostgreSQL for relational data (users, devices, event records, configuration). Serverless v2 auto-scales capacity between a minimum and maximum ACU (Aurora Capacity Unit), which is ideal for bursty workloads where event volume spikes during business hours and drops overnight.
+
+6.  **EventBridge + WebSocket** — Real-time updates flow from the Edge Stream Platform account through EventBridge (cross-account), are processed by Lambda, and pushed to connected clients via API Gateway WebSocket connections. This provides the live detection feed in the portal UI without polling.
+
+Here is the Fargate service definition using CDK:
+
+```typescript
+// lib/constructs/portal/api-service.ts
+import * as cdk from "aws-cdk-lib";
+import * as ecs from "aws-cdk-lib/aws-ecs";
+import * as ecsPatterns from "aws-cdk-lib/aws-ecs-patterns";
+import * as ec2 from "aws-cdk-lib/aws-ec2";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import { Construct } from "constructs";
+
+export interface PortalApiProps {
+  vpc: ec2.IVpc;
+  cluster: ecs.ICluster;
+  dbSecret: secretsmanager.ISecret;
+  imageTag: string;
+  ecrRepoUri: string;
+}
+
+export class PortalApiService extends Construct {
+  public readonly service:
+    ecsPatterns.ApplicationLoadBalancedFargateService;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    props: PortalApiProps
+  ) {
+    super(scope, id);
+
+    this.service =
+      new ecsPatterns.ApplicationLoadBalancedFargateService(
+        this,
+        "Service",
+        {
+          cluster: props.cluster,
+          cpu: 1024,
+          memoryLimitMiB: 2048,
+          desiredCount: 2,
+          taskImageOptions: {
+            image: ecs.ContainerImage.fromRegistry(
+              `${props.ecrRepoUri}:${props.imageTag}`
+            ),
+            containerPort: 3000,
+            secrets: {
+              DATABASE_URL:
+                ecs.Secret.fromSecretsManager(
+                  props.dbSecret,
+                  "connectionString"
+                ),
+            },
+            environment: {
+              NODE_ENV: "production",
+              LOG_LEVEL: "info",
+            },
+          },
+          publicLoadBalancer: false,
+          taskSubnets: {
+            subnetType:
+              ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          },
+          circuitBreaker: {
+            enable: true,
+            rollback: true,
+          },
+          enableExecuteCommand: true,
+        }
+      );
+
+    // Auto-scaling based on CPU and request count
+    const scaling =
+      this.service.service.autoScaleTaskCount({
+        minCapacity: 2,
+        maxCapacity: 10,
+      });
+
+    scaling.scaleOnCpuUtilization("CpuScaling", {
+      targetUtilizationPercent: 60,
+      scaleInCooldown: cdk.Duration.seconds(60),
+      scaleOutCooldown: cdk.Duration.seconds(30),
+    });
+
+    scaling.scaleOnRequestCount("RequestScaling", {
+      requestsPerTarget: 1000,
+      targetGroup: this.service.targetGroup,
+    });
+  }
+}
+```
+
+And the Lambda@Edge authenticator:
+
+```typescript
+// lib/lambda/edge-auth/index.ts
+import {
+  CloudFrontRequestEvent,
+  CloudFrontRequestResult,
+} from "aws-lambda";
+import { CognitoJwtVerifier } from "aws-jwt-verify";
+
+const verifier = CognitoJwtVerifier.create({
+  userPoolId: process.env.USER_POOL_ID!,
+  clientId: process.env.CLIENT_ID!,
+  tokenUse: "access",
+});
+
+const LOGIN_URL = process.env.LOGIN_URL!;
+const PUBLIC_PATHS = [
+  "/health",
+  "/favicon.ico",
+  "/_next/static/",
+];
+
+export async function handler(
+  event: CloudFrontRequestEvent
+): Promise<CloudFrontRequestResult> {
+  const request = event.Records[0].cf.request;
+  const uri = request.uri;
+
+  // Allow public paths without auth
+  if (PUBLIC_PATHS.some((p) => uri.startsWith(p))) {
+    return request;
+  }
+
+  // Extract token from cookie or Authorization header
+  const cookies = request.headers.cookie ?? [];
+  const cookieStr = cookies
+    .map((c) => c.value)
+    .join("; ");
+  const tokenMatch = cookieStr.match(
+    /access_token=([^;]+)/
+  );
+  const authHeader =
+    request.headers.authorization?.[0]?.value;
+  const token =
+    tokenMatch?.[1] ??
+    authHeader?.replace("Bearer ", "");
+
+  if (!token) {
+    return redirectToLogin(uri);
+  }
+
+  try {
+    const payload = await verifier.verify(token);
+    // Add user claims as headers for downstream
+    request.headers["x-user-id"] = [
+      { key: "X-User-Id", value: payload.sub },
+    ];
+    request.headers["x-user-email"] = [
+      {
+        key: "X-User-Email",
+        value: (payload as Record<string, string>)
+          .email ?? "",
+      },
+    ];
+    return request;
+  } catch {
+    return redirectToLogin(uri);
+  }
+}
+
+function redirectToLogin(
+  returnPath: string
+): CloudFrontRequestResult {
+  return {
+    status: "302",
+    statusDescription: "Found",
+    headers: {
+      location: [
+        {
+          key: "Location",
+          value: `${LOGIN_URL}?redirect=${encodeURIComponent(returnPath)}`,
+        },
+      ],
+    },
+  };
+}
+```
+
+### CI/CD and Model Deployment
+
+The entire platform is deployed through a CI/CD pipeline using GitHub Actions and AWS CDK, with OIDC-based role assumption — no long-lived AWS credentials are stored in GitHub. This is a critical security practice: OIDC federation means GitHub Actions assumes a short-lived IAM role for each deployment, and the trust policy restricts which repositories and branches can assume which roles.
+
+![CI/CD — Multi-Account Deployment Pipeline](/blog/deep-dive-real-time-computer-vision/inline-12.png)
+
+The pipeline handles two distinct deployment paths:
+
+**Infrastructure and Application Deployment:**
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy Platform
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test
+      - run: npx cdk synth --all --quiet
+      - run: npx cdk-nag
+
+  deploy-edge-stream:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [staging, production]
+    environment: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: >
+            ${{ secrets.EDGE_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-2
+
+      - run: npm ci
+      - run: >
+          npx cdk deploy EdgeStreamStack
+          --require-approval never
+          -c environment=${{ matrix.environment }}
+
+  deploy-portal:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, tst, prod]
+      max-parallel: 1
+    environment: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: >
+            ${{ secrets.PORTAL_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-2
+
+      - run: npm ci
+      - run: >
+          npx cdk deploy PortalStack
+          --require-approval never
+          -c environment=${{ matrix.environment }}
+```
+
+**Edge Model Deployment (OTA to Greengrass Fleet):**
+
+This is where the cloud architecture really shines for computer vision — deploying updated ML models to hundreds of edge devices simultaneously, with automatic rollback on failure:
+
+```bash
+# 1. Upload new model version to S3 (versioned bucket)
+aws s3 cp model.plan \
+  s3://vision-model-repo/models/yolov8/v2.1.0/model.plan
+
+# 2. Create new Greengrass component version
+aws greengrassv2 create-component-version \
+  --inline-recipe \
+    fileb://inference-component-v2.1.0.yaml
+
+# 3. Create deployment targeting the production fleet
+aws greengrassv2 create-deployment \
+  --target-arn "arn:aws:iot:ap-southeast-2:\
+111122223333:thinggroup/production-sites" \
+  --deployment-name "model-update-v2.1.0" \
+  --components '{
+    "com.vision.inference-pipeline": {
+      "componentVersion": "2.1.0",
+      "configurationUpdate": {
+        "merge": "{\"tritonModelRepo\":\"/opt/models/v2.1.0\"}"
+      }
+    }
+  }' \
+  --deployment-policies '{
+    "failureHandlingPolicy": "ROLLBACK",
+    "componentUpdatePolicy": {
+      "timeoutInSeconds": 300,
+      "action": "NOTIFY_COMPONENTS"
+    }
+  }' \
+  --iot-job-configuration '{
+    "jobExecutionsRolloutConfig": {
+      "exponentialRate": {
+        "baseRatePerMinute": 5,
+        "incrementFactor": 2,
+        "rateIncreaseCriteria": {
+          "numberOfSucceededThings": 10
+        }
+      }
+    },
+    "abortConfig": {
+      "criteriaList": [
+        {
+          "action": "CANCEL",
+          "failureType": "FAILED",
+          "minNumberOfExecutedThings": 5,
+          "thresholdPercentage": 30
+        }
+      ]
+    }
+  }'
+
+# 4. Monitor deployment progress
+watch -n 10 'aws greengrassv2 list-effective-deployments \
+  --core-device-thing-name "edge-site-mel-001" \
+  --query "effectiveDeployments[0].{
+    Status:deploymentStatus,
+    Reason:reason
+  }" --output table'
+```
+
+The `iot-job-configuration` section is crucial for safe rollouts. It starts by deploying to 5 devices per minute, then doubles the rate after every 10 successes. If more than 30% of a batch of 5 devices fail, the entire deployment is automatically cancelled — protecting the fleet from a bad model update.
+
+### Cross-Account Event Flow
+
+One of the most critical patterns in the multi-account architecture is how detection events flow from the Edge Stream Platform account to the Portal account. We use **EventBridge cross-account event buses** for this, which provides loose coupling, built-in retry with dead-letter queues, content-based filtering, and zero infrastructure to manage.
+
+The flow works as follows:
+
+1.  Detection events arrive in the Edge Stream account via IoT Core → MSK.
+2.  A Flink job processes the raw events (aggregation, enrichment, deduplication).
+3.  Processed events are published to the local EventBridge bus with a custom source (`vision.edge-stream`).
+4.  An EventBridge rule forwards matching events to the Portal account's event bus (cross-account).
+5.  The Portal account routes events to Lambda (for database writes), SQS (for reliable processing), and API Gateway WebSocket (for real-time UI).
+
+```typescript
+// Edge Stream Account — publish events cross-account
+import * as events from "aws-cdk-lib/aws-events";
+import * as targets from "aws-cdk-lib/aws-events-targets";
+
+const portalEventBus = events.EventBus.fromEventBusArn(
+  this,
+  "PortalBus",
+  `arn:aws:events:ap-southeast-2:` +
+    `${portalAccountId}:event-bus/vision-events`
+);
+
+new events.Rule(this, "ForwardDetections", {
+  eventPattern: {
+    source: ["vision.edge-stream"],
+    detailType: [
+      "DetectionEvent",
+      "AlertEvent",
+      "OccupancyUpdate",
+    ],
+  },
+  targets: [
+    new targets.EventBus(portalEventBus),
+  ],
+});
+```
+
+```typescript
+// Portal Account — consume events
+import * as events from "aws-cdk-lib/aws-events";
+import * as targets from "aws-cdk-lib/aws-events-targets";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as sqs from "aws-cdk-lib/aws-sqs";
+
+const eventBus = new events.EventBus(
+  this,
+  "VisionEvents",
+  { eventBusName: "vision-events" }
+);
+
+// Allow Edge Stream account to put events
+eventBus.addToResourcePolicy(
+  new iam.PolicyStatement({
+    sid: "AllowEdgeStreamAccount",
+    effect: iam.Effect.ALLOW,
+    principals: [
+      new iam.AccountPrincipal(edgeStreamAccountId),
+    ],
+    actions: ["events:PutEvents"],
+    resources: [eventBus.eventBusArn],
+  })
+);
+
+// Dead-letter queue for failed processing
+const dlq = new sqs.Queue(this, "EventDLQ", {
+  retentionPeriod: cdk.Duration.days(14),
+});
+
+// Route detection events to Lambda processor
+new events.Rule(this, "ProcessDetections", {
+  eventBus,
+  eventPattern: {
+    source: ["vision.edge-stream"],
+    detailType: ["DetectionEvent"],
+  },
+  targets: [
+    new targets.LambdaFunction(processorFn, {
+      deadLetterQueue: dlq,
+      retryAttempts: 2,
+    }),
+  ],
+});
+
+// Route alerts to SNS for push notifications
+new events.Rule(this, "ProcessAlerts", {
+  eventBus,
+  eventPattern: {
+    source: ["vision.edge-stream"],
+    detailType: ["AlertEvent"],
+  },
+  targets: [
+    new targets.SnsTopic(alertTopic),
+    new targets.LambdaFunction(webhookFn),
+  ],
+});
+```
+
+This pattern ensures loose coupling between accounts — the Edge Stream account does not need to know anything about the Portal account's internal architecture. Events are published to the bus, and the Portal account decides how to consume them. If the Portal account adds a new consumer (say, a data warehouse ingestion pipeline), no changes are needed in the Edge Stream account — it just adds a new EventBridge rule.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming. Building a real-time computer vision platform is genuinely complex — it spans video engineering, GPU computing, distributed systems, security, and infrastructure. The key is to start simple (a single camera, a single model, Docker Compose) and evolve incrementally. Each layer we covered — ingestion, inference, streaming, edge deployment, and cloud-native architecture — can be improved independently as your requirements grow. The move from on-premise Docker Compose to a multi-account AWS architecture is not a single leap; it is a series of well-planned incremental steps, each one reducing operational burden while increasing scalability and security.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

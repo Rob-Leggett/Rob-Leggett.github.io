@@ -5,6 +5,7 @@ import ShareBar from "@/components/blog/share-bar";
 type BlogLayoutProps = {
   title: string;
   date: string;
+  slug: string;
   feature_image?: string;
   children: React.ReactNode;
 };
@@ -12,11 +13,12 @@ type BlogLayoutProps = {
 export default function BlogLayout({
    title,
    date,
+   slug,
    feature_image,
    children,
  }: BlogLayoutProps) {
   return (
-    <article className="container mx-auto px-4 sm:px-6 lg:px-8 py-12 max-w-3xl min-h-screen bg-background text-foreground">
+    <article className="container mx-auto px-4 sm:px-6 lg:px-8 py-12 max-w-5xl min-h-screen bg-background text-foreground">
       {/* Feature image */}
       {feature_image && (
         <div className="relative w-full h-56 sm:h-72 mb-10 overflow-hidden rounded-xl border border-border shadow-sm">
@@ -44,7 +46,7 @@ export default function BlogLayout({
             day: "numeric",
           })}
         </p>
-        <ShareBar title={title} />
+        <ShareBar title={title} slug={slug} />
       </div>
 
       {/* Body */}
@@ -56,6 +58,10 @@ export default function BlogLayout({
                    prose-hr:border-border
                    prose-blockquote:border-l-primary/70
                    prose-blockquote:text-muted-foreground
+                   max-w-none
+                   [&_table]:w-full [&_table]:table-fixed [&_table]:break-words
+                   [&_pre]:overflow-x-auto [&_pre]:max-w-full
+                   [&_.not-prose]:max-w-full [&_.not-prose]:overflow-x-auto
                    transition-colors duration-300"
       >
         {children}
@@ -66,7 +72,7 @@ export default function BlogLayout({
         <p className="text-sm text-muted-foreground mb-3">
           Enjoyed this post? Share it with others.
         </p>
-        <ShareBar title={title} />
+        <ShareBar title={title} slug={slug} />
       </div>
     </article>
   );
