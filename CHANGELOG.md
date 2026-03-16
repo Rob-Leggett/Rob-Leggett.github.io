@@ -1,3 +1,10 @@
+## [1.0.17](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.16...v1.0.17) (2026-03-16)
+
+
+### Bug Fixes
+
+* added blog about computer vision, updated to support seo ([6537b66](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/6537b66d181f3eeccd8087e5643a96bbb9bd65be))
+
 ## [1.0.16](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.15...v1.0.16) (2026-03-16)
 
 
