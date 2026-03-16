@@ -1302,7 +1302,7 @@ In the on-premise architecture, we used six Docker networks (`sec_network`, `api
 | On-Premise (Docker Network) | Cloud-Native (AWS) | Why It Changes |
 |---|---|---|
 | `sec_network` — Keycloak, Vault | **Identity Account** — Cognito user pools, Secrets Manager, WAF | Managed services replace self-hosted Keycloak and Vault. Cognito handles OAuth2/OIDC natively, and Secrets Manager provides automatic rotation without running your own Vault cluster. |
-| `api_network` — REST API, Frontend, PostgreSQL | **Portal Account** — Next.js SSR (CloudFront + Lambda@Edge), API Gateway, Aurora Serverless v2 | The monolithic REST API and frontend move to a Next.js SSR application deployed via CloudFront with Lambda@Edge for server-side rendering and authentication. API routes replace the standalone REST API. PostgreSQL becomes Aurora Serverless v2 with automatic capacity scaling. |
+| `api_network` — REST API, Frontend, PostgreSQL | **Portal Account** — Next.js SSR on ECS Fargate, CloudFront (CDN + Lambda@Edge auth), Aurora Serverless v2, API Gateway | The monolithic REST API and frontend are consolidated into a single Next.js SSR application running on ECS Fargate. CloudFront provides CDN caching with Lambda@Edge handling JWT authentication at the edge. PostgreSQL becomes Aurora Serverless v2 with automatic capacity scaling. |
 | `inf_network` — Triton, DeepStream, mediamtx | **Edge devices** — IoT Greengrass components on NVIDIA Jetson/GPU servers | Inference stays on-premise (video never leaves the site), but Greengrass manages the lifecycle, updates, and monitoring of DeepStream and Triton. mediamtx is replaced by the Greengrass Stream Manager for media handling. |
 | `eve_network` — Kafka, Flink, Schema Registry | **Edge Stream Platform Account** — MSK (managed Kafka), Managed Flink, Glue Schema Registry | Self-hosted Kafka and Flink are replaced by fully managed AWS equivalents. MSK handles broker management, patching, and scaling. Managed Flink removes the need to manage task managers. |
 | `bi_network` — Superset dashboards | **Observability Account** — CloudWatch dashboards, Grafana on Fargate, QuickSight | Self-hosted Superset is replaced by a combination of CloudWatch (operational metrics), Grafana (custom dashboards), and optionally QuickSight (business analytics). |
@@ -1337,7 +1337,7 @@ Let us walk through each account in detail:
 | Network | Shared networking hub, DNS, CDN, certificates | Transit Gateway, Direct Connect, Route 53, WAF, CloudFront, ACM, Parameter Store | `10.0.0.0/16` |
 | Observability | Centralised logging, monitoring, dashboards | CloudWatch (cross-account), CloudTrail (org trail), Fargate (Grafana/SigNoz), CloudFront | `10.4.0.0/16` |
 | Edge Stream Platform | Ingest and process edge device events | IoT Core, IoT Greengrass, MSK (Kafka), Flink, DynamoDB, Lambda, S3, EventBridge | `10.1.0.0/16` |
-| Portal (dev/tst/prod) | Customer-facing web application and API | CloudFront, Lambda@Edge (Next.js SSR + Auth), S3 (static assets), API Gateway, Aurora Serverless v2, Secrets Manager, EventBridge | `10.2.0.0/16` |
+| Portal (dev/tst/prod) | Customer-facing web application and API | CloudFront, Lambda@Edge (Auth), ECS Fargate (Next.js SSR), ALB, S3 (static assets), Aurora Serverless v2, Secrets Manager, EventBridge, API Gateway | `10.2.0.0/16` |
 | Delegate | Delegated admin for Identity Center | IAM Identity Center (Delegated Admin) | No VPC |
 
 Each account has its own VPC with non-overlapping CIDRs connected through a **Transit Gateway** in the Network account. This ensures that inter-account traffic never traverses the public internet. The Management and Delegate accounts do not require VPCs as they only host IAM-level resources.
@@ -1758,53 +1758,63 @@ export class StandardVpcEndpoints extends Construct {
 
 ### Portal Application Architecture
 
-The customer-facing portal is where all the processed intelligence becomes actionable. Users log in, view real-time detections, configure alerts, manage devices, and access dashboards. Rather than running containers on Fargate, the portal is built as a **Next.js SSR application** deployed through CloudFront with Lambda@Edge — a fully serverless architecture that eliminates the need to manage any compute infrastructure.
+The customer-facing portal is where all the processed intelligence becomes actionable. Users log in, view real-time detections, configure alerts, manage devices, and access dashboards. The portal is built as a **Next.js SSR application** running on **ECS Fargate** behind CloudFront, with Lambda@Edge handling JWT authentication at the CDN edge before requests ever reach the origin.
 
 ![Portal Account — Application Architecture](/blog/deep-dive-real-time-computer-vision/inline-11.png)
 
-The key architectural decision here is using **Next.js server-side rendering at the edge** via Lambda@Edge (or CloudFront Functions for lighter work). This gives us the developer experience of a modern React framework — file-based routing, server components, API routes, middleware — with the performance of edge-deployed serverless compute. There are no containers to manage, no ALBs to configure, and no auto-scaling policies to tune.
+The key architectural decision here is using **Next.js on ECS Fargate** for server-side rendering. This gives us the full developer experience of a modern React framework — file-based routing, server components, API routes, middleware — running as a long-lived container process with full Node.js runtime capabilities. Unlike a Lambda-based approach, running Next.js on ECS means we get persistent connections, in-memory caching between requests, predictable cold-start behaviour, and complete parity between local development and production.
 
 The request flow from a user's browser to the backend follows a carefully layered path:
 
-1.  **CloudFront** — The first point of contact. CloudFront distributes the application globally with ACM-managed TLS certificates. Cache behaviours are configured per path pattern: `/_next/static/*` serves pre-built assets directly from S3 with immutable caching (1 year TTL), `/_next/image/*` routes to the image optimisation Lambda, and all other requests (`/*`) are forwarded to the Next.js SSR Lambda@Edge function. This means static assets are served from the nearest edge location with zero origin latency.
+1.  **CloudFront** — The first point of contact. CloudFront distributes the application globally with ACM-managed TLS certificates. Cache behaviours are configured per path pattern: `/_next/static/*` serves pre-built assets directly from S3 with immutable caching (1 year TTL), `/_next/image/*` routes to the Next.js image optimisation handler on Fargate, and all other requests (`/*`) are forwarded to the ECS origin via the internal ALB. This means static assets are served from the nearest edge location with zero origin latency, while dynamic SSR requests are routed to the Fargate containers.
 
-2.  **Lambda@Edge (Authentication)** — A Viewer Request function intercepts every incoming request before it reaches the origin. It validates the JWT token from the `access_token` cookie against the Identity account's Cognito user pool. If the token is missing, expired, or invalid, the function returns a 302 redirect to the Cognito hosted login page. If valid, it adds decoded user claims as custom headers (`X-User-Id`, `X-User-Role`) and forwards the request. This means unauthenticated requests are rejected *at the edge* — they never reach our application code.
+2.  **Lambda@Edge (Authentication)** — A Viewer Request function intercepts every incoming request before it reaches the origin. It validates the JWT token from the `access_token` cookie against the Identity account's Cognito user pool. If the token is missing, expired, or invalid, the function returns a 302 redirect to the Cognito hosted login page. If valid, it adds decoded user claims as custom headers (`X-User-Id`, `X-User-Role`) and forwards the request. This means unauthenticated requests are rejected *at the edge* — they never reach our VPC or ECS containers.
 
-3.  **Lambda@Edge (Next.js SSR)** — An Origin Request function runs the Next.js server-side rendering logic. This handles dynamic page rendering, API route execution, server-side data fetching, and middleware. The function has access to environment variables for database connection strings (via Secrets Manager) and EventBridge bus ARNs. For API routes that need database access, the Lambda connects to Aurora through the VPC via a Lambda VPC configuration.
+3.  **Application Load Balancer** — An internal ALB (not internet-facing) sits in front of the ECS service. CloudFront uses the ALB as its origin for dynamic requests. The ALB performs health checks against the Next.js `/api/health` endpoint and only routes traffic to healthy containers. Using an internal ALB ensures the Fargate tasks are not directly accessible from the internet — all traffic must flow through CloudFront.
 
-4.  **S3 (Static Assets)** — The Next.js build output is split into static assets (JS bundles, CSS, images, pre-rendered HTML) stored in S3, and server-side code packaged into the Lambda function. The `next build` output includes a manifest that CloudFront uses to determine which requests can be served from S3 vs which need Lambda processing.
+4.  **ECS Fargate (Next.js SSR)** — The Next.js application runs as an ECS service on Fargate (serverless containers). The `next start` process listens on port 3000 and handles both page rendering (SSR) and API route execution. Fargate eliminates the need to manage EC2 instances — you define the CPU and memory, and AWS provisions the underlying compute. The service runs a minimum of 2 tasks across multiple availability zones for high availability, with auto-scaling based on CPU utilisation and request count.
 
-5.  **Aurora Serverless v2** — PostgreSQL for relational data (users, devices, event records, configuration). Serverless v2 auto-scales capacity between a minimum and maximum ACU (Aurora Capacity Unit), which is ideal for bursty workloads where event volume spikes during business hours and drops overnight. The Next.js API routes connect to Aurora through the VPC — Lambda@Edge functions are configured with VPC access for database queries.
+5.  **S3 (Static Assets)** — The Next.js build output is split: static assets (JS bundles, CSS, images, pre-rendered HTML from `next build`) are uploaded to S3 during deployment, while the server-side code runs inside the Fargate container. CloudFront's cache behaviour for `/_next/static/*` points directly to S3, bypassing the ALB entirely for these requests.
 
-6.  **API Gateway WebSocket** — Real-time updates flow from the Edge Stream Platform account through EventBridge (cross-account), are processed by Lambda, and pushed to connected clients via API Gateway WebSocket connections. This provides the live detection feed in the portal UI without polling. The Next.js client-side code connects to the WebSocket endpoint on page load.
+6.  **Aurora Serverless v2** — PostgreSQL for relational data (users, devices, event records, configuration). Serverless v2 auto-scales capacity between a minimum and maximum ACU (Aurora Capacity Unit), which is ideal for bursty workloads where event volume spikes during business hours and drops overnight. The Next.js API routes connect to Aurora through the VPC — the Fargate tasks run in private subnets with direct access to the Aurora cluster endpoint.
 
-7.  **EventBridge** — Cross-account events from the Edge Stream Platform are consumed by event rules that trigger Lambda functions for database writes, alert processing, and WebSocket push notifications.
+7.  **API Gateway WebSocket** — Real-time updates flow from the Edge Stream Platform account through EventBridge (cross-account), are processed by Lambda, and pushed to connected clients via API Gateway WebSocket connections. This provides the live detection feed in the portal UI without polling. The Next.js client-side code connects to the WebSocket endpoint on page load.
 
-> **Note:** For teams that prefer a container-based approach or need long-running server processes (e.g., WebSocket servers, background workers), the Next.js application can alternatively be deployed on **ECS Fargate** behind an ALB. This trades the zero-infrastructure benefit of Lambda@Edge for more control over the runtime environment, persistent connections, and simpler local development parity. Both approaches work well — the serverless path is preferred for cost efficiency and operational simplicity.
+8.  **EventBridge** — Cross-account events from the Edge Stream Platform are consumed by event rules that trigger Lambda functions for database writes, alert processing, and WebSocket push notifications.
 
-Here is the CDK construct for deploying the Next.js application via CloudFront + Lambda@Edge:
+Here is the CDK construct for deploying the Next.js SSR application on ECS Fargate behind CloudFront:
 
 ```typescript
 // lib/constructs/portal/nextjs-portal.ts
 import * as cdk from "aws-cdk-lib";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as ecs from "aws-cdk-lib/aws-ecs";
+import * as ecsPatterns from "aws-cdk-lib/aws-ecs-patterns";
+import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as acm from "aws-cdk-lib/aws-certificatemanager";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 import { Construct } from "constructs";
 
 export interface NextjsPortalProps {
+  vpc: ec2.IVpc;
+  cluster: ecs.ICluster;
   domainName: string;
   certificate: acm.ICertificate;
-  buildOutputPath: string;
-  environment: string;
+  dbSecret: secretsmanager.ISecret;
+  imageTag: string;
+  ecrRepoUri: string;
+  staticAssetsPath: string;
 }
 
 export class NextjsPortal extends Construct {
   public readonly distribution:
     cloudfront.Distribution;
+  public readonly service:
+    ecsPatterns.ApplicationLoadBalancedFargateService;
 
   constructor(
     scope: Construct,
@@ -1813,7 +1823,7 @@ export class NextjsPortal extends Construct {
   ) {
     super(scope, id);
 
-    // S3 bucket for static assets
+    // S3 bucket for static assets (/_next/static)
     const assetsBucket = new s3.Bucket(
       this,
       "Assets",
@@ -1827,31 +1837,82 @@ export class NextjsPortal extends Construct {
       }
     );
 
-    // Auth Lambda@Edge (Viewer Request)
-    const authFn = new cloudfront.experimental
-      .EdgeFunction(this, "AuthFn", {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: "index.handler",
-      code: lambda.Code.fromAsset(
-        `${props.buildOutputPath}/edge-auth`
-      ),
-      description:
-        "JWT validation at CloudFront edge",
+    // ECS Fargate service running Next.js SSR
+    this.service =
+      new ecsPatterns.ApplicationLoadBalancedFargateService(
+        this,
+        "NextjsService",
+        {
+          cluster: props.cluster,
+          cpu: 1024,
+          memoryLimitMiB: 2048,
+          desiredCount: 2,
+          taskImageOptions: {
+            image: ecs.ContainerImage.fromRegistry(
+              `${props.ecrRepoUri}:${props.imageTag}`
+            ),
+            containerPort: 3000,
+            secrets: {
+              DATABASE_URL:
+                ecs.Secret.fromSecretsManager(
+                  props.dbSecret,
+                  "connectionString"
+                ),
+            },
+            environment: {
+              NODE_ENV: "production",
+              NEXT_TELEMETRY_DISABLED: "1",
+            },
+          },
+          publicLoadBalancer: false,
+          taskSubnets: {
+            subnetType:
+              ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          },
+          circuitBreaker: {
+            enable: true,
+            rollback: true,
+          },
+          enableExecuteCommand: true,
+        }
+      );
+
+    // Auto-scaling
+    const scaling =
+      this.service.service.autoScaleTaskCount({
+        minCapacity: 2,
+        maxCapacity: 10,
+      });
+
+    scaling.scaleOnCpuUtilization("CpuScaling", {
+      targetUtilizationPercent: 60,
+      scaleInCooldown: cdk.Duration.seconds(60),
+      scaleOutCooldown: cdk.Duration.seconds(30),
     });
 
-    // SSR Lambda@Edge (Origin Request)
-    const ssrFn = new cloudfront.experimental
-      .EdgeFunction(this, "SsrFn", {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: "index.handler",
-      code: lambda.Code.fromAsset(
-        `${props.buildOutputPath}/server`
-      ),
-      memorySize: 1024,
-      timeout: cdk.Duration.seconds(10),
-      description:
-        "Next.js SSR at CloudFront edge",
-    });
+    scaling.scaleOnRequestCount(
+      "RequestScaling",
+      {
+        requestsPerTarget: 1000,
+        targetGroup: this.service.targetGroup,
+      }
+    );
+
+    // Auth Lambda@Edge (Viewer Request)
+    const authFn =
+      new cloudfront.experimental.EdgeFunction(
+        this,
+        "AuthFn",
+        {
+          runtime: lambda.Runtime.NODEJS_20_X,
+          handler: "index.handler",
+          code: lambda.Code.fromAsset(
+            "lib/lambda/edge-auth"
+          ),
+          description:
+            "JWT auth at CloudFront edge",
+        }
+      );
 
     // CloudFront distribution
     this.distribution =
@@ -1863,8 +1924,11 @@ export class NextjsPortal extends Construct {
           certificate: props.certificate,
           defaultBehavior: {
             origin:
-              new origins.S3Origin(
-                assetsBucket
+              new origins.LoadBalancerV2Origin(
+                this.service.loadBalancer,
+                { protocolPolicy:
+                    cloudfront.OriginProtocolPolicy
+                      .HTTP_ONLY }
               ),
             viewerProtocolPolicy:
               cloudfront.ViewerProtocolPolicy
@@ -1872,6 +1936,9 @@ export class NextjsPortal extends Construct {
             cachePolicy:
               cloudfront.CachePolicy
                 .CACHING_DISABLED,
+            originRequestPolicy:
+              cloudfront.OriginRequestPolicy
+                .ALL_VIEWER,
             edgeLambdas: [
               {
                 functionVersion:
@@ -1879,13 +1946,6 @@ export class NextjsPortal extends Construct {
                 eventType:
                   cloudfront.LambdaEdgeEventType
                     .VIEWER_REQUEST,
-              },
-              {
-                functionVersion:
-                  ssrFn.currentVersion,
-                eventType:
-                  cloudfront.LambdaEdgeEventType
-                    .ORIGIN_REQUEST,
               },
             ],
           },
@@ -1913,7 +1973,7 @@ export class NextjsPortal extends Construct {
       {
         sources: [
           s3deploy.Source.asset(
-            `${props.buildOutputPath}/static`
+            props.staticAssetsPath
           ),
         ],
         destinationBucket: assetsBucket,
@@ -1923,6 +1983,41 @@ export class NextjsPortal extends Construct {
     );
   }
 }
+```
+
+The Dockerfile for the Next.js application uses a multi-stage build to keep the production image lean:
+
+```dockerfile
+# Dockerfile
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs \
+  /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs \
+  /app/.next/static ./.next/static
+
+USER nextjs
+EXPOSE 3000
+ENV PORT=3000
+CMD ["node", "server.js"]
 ```
 
 And the Lambda@Edge authenticator that runs on every viewer request:
@@ -1961,7 +2056,6 @@ export async function handler(
     return request;
   }
 
-  // Extract token from cookie or Authorization header
   const cookies = request.headers.cookie ?? [];
   const cookieStr = cookies
     .map((c) => c.value)
@@ -1981,7 +2075,6 @@ export async function handler(
 
   try {
     const payload = await verifier.verify(token);
-    // Add user claims as headers for downstream
     request.headers["x-user-id"] = [
       { key: "X-User-Id", value: payload.sub },
     ];
