@@ -1,5 +1,6 @@
 import Image from "next/image";
 import React from "react";
+import ShareBar from "@/components/blog/share-bar";
 
 type BlogLayoutProps = {
   title: string;
@@ -34,14 +35,17 @@ export default function BlogLayout({
         {title}
       </h1>
 
-      {/* Date */}
-      <p className="text-sm text-muted-foreground mb-10 border-b border-border pb-4">
-        {new Date(date).toLocaleDateString(undefined, {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })}
-      </p>
+      {/* Date and share */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-10 border-b border-border pb-4">
+        <p className="text-sm text-muted-foreground">
+          {new Date(date).toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })}
+        </p>
+        <ShareBar title={title} />
+      </div>
 
       {/* Body */}
       <div
@@ -55,6 +59,14 @@ export default function BlogLayout({
                    transition-colors duration-300"
       >
         {children}
+      </div>
+
+      {/* Bottom share bar */}
+      <div className="mt-12 pt-6 border-t border-border">
+        <p className="text-sm text-muted-foreground mb-3">
+          Enjoyed this post? Share it with others.
+        </p>
+        <ShareBar title={title} />
       </div>
     </article>
   );
