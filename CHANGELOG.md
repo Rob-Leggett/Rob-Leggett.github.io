@@ -1,3 +1,10 @@
+## [1.0.13](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.12...v1.0.13) (2026-03-15)
+
+
+### Bug Fixes
+
+* added additional blog posts ([4dd097c](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/4dd097c7a7b6c8bdce7f9c67620a459d7e3ea464))
+
 ## [1.0.12](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.11...v1.0.12) (2026-03-15)
 
 
