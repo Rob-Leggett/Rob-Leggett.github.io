@@ -1,3 +1,10 @@
+## [1.0.20](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.19...v1.0.20) (2026-03-17)
+
+
+### Bug Fixes
+
+* adding documentation ([22e0e2b](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/22e0e2be5a20760c7f7546387733a65a7591096e))
+
 ## [1.0.19](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.18...v1.0.19) (2026-03-17)
 
 
