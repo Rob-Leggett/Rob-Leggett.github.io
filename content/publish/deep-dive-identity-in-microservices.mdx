@@ -1,0 +1,1090 @@
+---
+title: "Deep Dive - Identity in Microservices"
+date: "2025-07-19"
+slug: "deep-dive-identity-in-microservices"
+status: "publish"
+feature_image: "/blog/deep-dive-identity-in-microservices/feature-image.png"
+tags: ["Microservices", "Identity", "Authentication", "Authorisation", "mTLS", "SPIFFE", "Service Mesh", "API Gateway", "OAuth", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Identity in Microservices | Robert Leggett"
+  description: "A comprehensive deep dive into identity in microservices — from token propagation and API Gateway auth to SPIFFE/SPIRE, service mesh mTLS, OPA policy-as-code, and event-driven identity patterns."
+  keywords: ["Identity in Microservices", "Token Propagation", "SPIFFE SPIRE", "Service Mesh mTLS", "API Gateway Auth", "OPA Open Policy Agent", "Sidecar Proxy", "OAuth Token Exchange", "Phantom Token", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-identity-in-microservices"
+  image: "https://robertleggett.com.au/blog/deep-dive-identity-in-microservices/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Identity in Microservices"
+  description: "A comprehensive deep dive into identity in microservices — covering token propagation, API Gateway auth, SPIFFE/SPIRE workload identity, service mesh mTLS, OPA authorisation, and event-driven identity patterns."
+  image: "https://robertleggett.com.au/blog/deep-dive-identity-in-microservices/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-identity-in-microservices"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Identity in Microservices"
+  description: "From token propagation to SPIFFE workload identity — a complete technical reference for implementing identity across distributed microservice architectures."
+  image: "https://robertleggett.com.au/blog/deep-dive-identity-in-microservices/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of identity in microservices — unravelling how we authenticate, authorise, and propagate trust across dozens or even hundreds of independently deployed services. Whether you are a backend engineer wrestling with service-to-service auth or a platform architect designing an identity-aware mesh for your organisation, our goal is to provide clear and thorough explanations that will deepen your understanding of distributed identity. In a monolith, a single session cookie was enough. In a microservices world, identity becomes a first-class architectural concern that touches every network call. Join us on this journey as we move beyond sticky sessions and into a world of tokens, sidecars, and cryptographic workload identity. Let's dive in and demystify identity in microservices together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of identity in microservices — from the fundamental challenge of distributed authentication through to token propagation, API Gateway auth, SPIFFE/SPIRE workload identity, service mesh mTLS, OPA policy-as-code, and event-driven identity patterns
+*   Practical code examples and architecture patterns you can apply immediately to your own microservices platform
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is the identity challenge in microservices?
+
+Think about a traditional monolithic application. A user logs in, the server creates a session, stores it in memory (or a shared store like Redis), and every subsequent request carries a session cookie that maps back to that server-side state. The application knows who you are because you are talking to a single, stateful process.
+
+Now imagine you break that monolith into thirty services. A single user request might fan out to five or six downstream calls. Each service runs in its own container, scales independently, and could be replaced at any moment. Suddenly, the questions multiply:
+
+*   How does Service B know the request originated from an authenticated user?
+*   How does Service C know that Service B is actually Service B and not an attacker?
+*   How do we enforce fine-grained permissions when the authorisation logic is spread across a dozen teams?
+
+In a monolith, **session stickiness** and server-side state handled all of this. In a distributed architecture, session stickiness does not work — containers are ephemeral, load balancers distribute traffic unpredictably, and services communicate over the network rather than through in-process function calls.
+
+![Monolith session-based auth vs microservices distributed identity challenge](/blog/deep-dive-identity-in-microservices/inline-1.png)
+
+Monolith Session Auth vs Microservices Distributed Identity
+
+The identity challenge in microservices is really two challenges woven together:
+
+*   **User identity** — Who is the human (or machine) that initiated this request? This is the "north-south" concern, where requests enter the system from outside.
+*   **Service identity** — Which service is making this internal call, and is it authorised to do so? This is the "east-west" concern, where services communicate with each other inside the cluster.
+
+Solving only one of these leaves a dangerous gap. A system that verifies users at the edge but trusts all internal traffic is vulnerable to lateral movement. A system that authenticates services but cannot propagate user context cannot enforce user-level permissions. We need both.
+
+---
+
+## How does token propagation work?
+
+**Token propagation** is the foundational pattern for carrying user identity through a chain of microservice calls. Instead of each service independently authenticating the user, the edge service (or API Gateway) authenticates once and then forwards a token — typically a **JSON Web Token (JWT)** — to every downstream service in the call chain.
+
+Here is how the flow works:
+
+1.  The user authenticates with the **Identity Provider (IdP)** — for example, Okta, Auth0, or Azure AD / Entra ID — and receives an access token (JWT).
+2.  The user sends a request to the **API Gateway** with the token in the `Authorization` header.
+3.  The API Gateway validates the token (signature, expiry, issuer, audience) and forwards the request to the first internal service, including the original JWT.
+4.  Each internal service extracts claims from the JWT (user ID, roles, scopes) to make authorisation decisions.
+5.  When a service calls another service, it forwards the same JWT in the outgoing request header.
+
+![Token propagation flow from IdP through API Gateway to downstream microservices](/blog/deep-dive-identity-in-microservices/inline-2.png)
+
+Token Propagation Flow Through Microservices
+
+Here is a minimal example of a middleware that extracts and validates a propagated JWT in a Node.js service:
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+import jwt, { JwtPayload } from 'jsonwebtoken';
+
+const JWKS_URI = process.env.JWKS_URI!;
+const EXPECTED_ISSUER = process.env.TOKEN_ISSUER!;
+const EXPECTED_AUDIENCE = process.env.TOKEN_AUDIENCE!;
+
+export async function validatePropagatedToken(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing bearer token' });
+    return;
+  }
+
+  const token = authHeader.slice(7);
+
+  try {
+    const decoded = jwt.verify(token, await getSigningKey(JWKS_URI), {
+      issuer: EXPECTED_ISSUER,
+      audience: EXPECTED_AUDIENCE,
+      algorithms: ['RS256'],
+    }) as JwtPayload;
+
+    req.user = {
+      sub: decoded.sub!,
+      roles: decoded.roles || [],
+      scopes: decoded.scope?.split(' ') || [],
+    };
+
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+}
+```
+
+The key advantage of token propagation is simplicity. The key risk is **token leakage** — if any service in the chain is compromised, the attacker has a valid user token. We will address this later with the Phantom Token pattern and token exchange.
+
+---
+
+## What is the API Gateway pattern for auth?
+
+The **API Gateway auth pattern** centralises authentication at the edge of your system. Rather than every microservice independently validating tokens, the gateway does it once and only forwards requests that pass validation. Internal services then trust requests that arrive through the gateway.
+
+This is the most common starting point for organisations adopting microservices, and for good reason — it is simple, effective, and keeps auth logic out of individual service codebases.
+
+The gateway typically performs the following:
+
+*   **Token validation** — Verifies JWT signature, expiry, issuer, and audience claims
+*   **Rate limiting** — Throttles requests per client or per user
+*   **Scope/role enforcement** — Checks that the token contains the required scopes for the requested endpoint
+*   **Request enrichment** — Extracts claims from the token and adds them as headers (e.g., `X-User-Id`, `X-User-Roles`) for downstream services
+
+![API Gateway centralised auth pattern with internal trust boundary](/blog/deep-dive-identity-in-microservices/inline-3.png)
+
+API Gateway Centralised Auth Pattern
+
+### The internal trust boundary
+
+Once a request passes the gateway, internal services trust the enriched headers. This creates an **internal trust boundary** — everything inside the cluster is considered pre-authenticated.
+
+The trade-off is clear: this pattern is simple but assumes the internal network is secure. If an attacker gains access to the cluster network, they can forge headers and impersonate any user. This is why many organisations layer API Gateway auth with service mesh mTLS (which we will cover shortly).
+
+---
+
+## What is the sidecar proxy pattern?
+
+The **sidecar proxy pattern** extracts cross-cutting concerns — including authentication, authorisation, and encryption — from application code and pushes them into a separate process that runs alongside each service instance.
+
+Think of it like a personal bodyguard for every service. Your application code handles business logic. The sidecar handles security, observability, and traffic management. The two share a network namespace (in Kubernetes, they share a pod) so communication between them is over localhost and extremely fast.
+
+**Envoy Proxy** is the most widely used sidecar, and it is the data plane component in both **Istio** and many custom service mesh implementations. **Linkerd** uses its own ultra-lightweight Rust-based proxy called **linkerd2-proxy**.
+
+The sidecar intercepts all inbound and outbound traffic for the service:
+
+*   **Inbound** — Validates mTLS certificates, extracts identity from the peer certificate, enforces authorisation policies
+*   **Outbound** — Initiates mTLS connections to upstream services, attaches identity certificates, propagates headers
+
+![Sidecar proxy pattern with Envoy intercepting inbound and outbound traffic](/blog/deep-dive-identity-in-microservices/inline-4.png)
+
+Sidecar Proxy Pattern With Envoy
+
+The beauty of this pattern is that application developers never write auth code. A Go service, a Python service, and a Java service all get the same identity enforcement — consistently, without any library dependencies. The platform team configures policies centrally, and the sidecars enforce them uniformly.
+
+Here is a simple Istio `AuthorizationPolicy` that restricts which services can call the `payments` service:
+
+```yaml
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: payments-access
+  namespace: production
+spec:
+  selector:
+    matchLabels:
+      app: payments
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/production/sa/orders-service"
+              - "cluster.local/ns/production/sa/billing-service"
+      to:
+        - operation:
+            methods: ["POST"]
+            paths: ["/api/v1/charges"]
+```
+
+This policy says: only the `orders-service` and `billing-service` service accounts, running in the `production` namespace, may call `POST /api/v1/charges` on the `payments` service. Everything else is denied.
+
+---
+
+## What is SPIFFE/SPIRE?
+
+**SPIFFE** (Secure Production Identity Framework for Everyone) is an open standard that defines how software services identify themselves to each other. It answers a deceptively simple question: "How does Service A prove it is Service A?"
+
+In traditional infrastructure, we might use IP addresses, hostnames, or shared secrets. All of these break in dynamic environments where containers are created and destroyed constantly, IP addresses are recycled, and secrets are difficult to rotate. SPIFFE solves this by assigning every workload a cryptographic identity — a short-lived X.509 certificate called an **SVID** (SPIFFE Verifiable Identity Document).
+
+**SPIRE** (SPIFFE Runtime Environment) is the reference implementation of SPIFFE. It is the software you actually deploy to issue, rotate, and manage SVIDs across your infrastructure.
+
+### How does SPIFFE identity work?
+
+Every workload receives a **SPIFFE ID**, which is a URI in the format:
+
+```
+spiffe://trust-domain/path
+```
+
+For example:
+
+```
+spiffe://acme.com/ns/production/sa/payments-service
+```
+
+This URI uniquely identifies the workload. The trust domain (`acme.com`) represents the organisation or administrative boundary. The path encodes context — typically the namespace and service account in Kubernetes.
+
+### How does SPIRE issue identities?
+
+SPIRE uses an **attestation** process to verify that a workload is what it claims to be. The flow works as follows:
+
+1.  The **SPIRE Server** acts as the certificate authority (CA) for the trust domain.
+2.  **SPIRE Agents** run on each node (as a DaemonSet in Kubernetes). They register with the SPIRE Server using node attestation (e.g., verifying the AWS instance identity document or the Kubernetes node token).
+3.  When a workload starts, the SPIRE Agent performs **workload attestation** — it verifies the workload's identity using kernel-level metadata (PID, cgroups, Kubernetes pod labels, service account).
+4.  If attestation succeeds, the SPIRE Agent issues a short-lived SVID (typically valid for one hour) via the **Workload API**, a local Unix domain socket.
+5.  The workload uses the SVID to authenticate to other services via mTLS.
+6.  Before the SVID expires, the SPIRE Agent automatically rotates it — the workload receives a new certificate without any downtime or code changes.
+
+![SPIFFE/SPIRE architecture showing Server, Agent, attestation, and SVID issuance](/blog/deep-dive-identity-in-microservices/inline-5.png)
+
+SPIFFE/SPIRE Architecture and SVID Issuance Flow
+
+### Why does SPIFFE matter?
+
+SPIFFE provides **platform-agnostic workload identity**. Whether your services run on Kubernetes, bare metal, VMs, or across multiple clouds, every workload gets the same type of cryptographic identity. This is particularly powerful for hybrid and multi-cloud environments where you cannot rely on a single platform's built-in identity system.
+
+---
+
+## How does service mesh identity work?
+
+A **service mesh** is an infrastructure layer that manages service-to-service communication. From an identity perspective, the mesh provides automatic **mutual TLS (mTLS)** between all services — meaning every internal network call is both encrypted and authenticated without any application code changes.
+
+### Istio mTLS
+
+**Istio** uses its own certificate authority (called **istiod**) to issue X.509 certificates to every Envoy sidecar. When Service A calls Service B:
+
+1.  Service A's Envoy sidecar initiates a TLS handshake with Service B's Envoy sidecar.
+2.  Both sidecars present their certificates.
+3.  Both sidecars verify the peer's certificate against the mesh CA.
+4.  If verification succeeds, a mutual TLS connection is established.
+5.  The Envoy sidecar extracts the peer's SPIFFE identity from the certificate's SAN (Subject Alternative Name) field.
+6.  Authorisation policies are evaluated against the extracted identity.
+
+To enable strict mTLS across the entire mesh:
+
+```yaml
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+```
+
+### Linkerd identity
+
+**Linkerd** takes a similar but lighter-weight approach. Its control plane includes an **identity controller** that acts as the CA. Each Linkerd proxy receives a TLS certificate tied to the pod's Kubernetes **ServiceAccount**. Certificates are automatically rotated every 24 hours by default.
+
+Linkerd's identity system is notable for its simplicity — there is no configuration required. When you inject the Linkerd proxy into a pod, mTLS is enabled automatically. The identity is derived directly from the Kubernetes ServiceAccount, which means your existing RBAC model maps directly to your network identity model.
+
+### Automatic certificate rotation
+
+Both Istio and Linkerd handle certificate rotation transparently:
+
+*   **Istio** — Certificates are valid for 24 hours by default. The Envoy sidecar requests a new certificate from istiod before the current one expires. The rotation happens in-process with zero downtime.
+*   **Linkerd** — The proxy requests a new certificate from the identity controller. The trust anchor (root CA) can be rotated separately using a tool like **cert-manager**.
+
+![Service mesh mTLS identity flow showing automatic certificate issuance and rotation](/blog/deep-dive-identity-in-microservices/inline-6.png)
+
+Service Mesh mTLS Identity and Certificate Rotation
+
+The net result is that every service-to-service call in your cluster is cryptographically authenticated and encrypted — and no developer had to write a single line of TLS code.
+
+---
+
+## What is the token exchange pattern?
+
+**Token exchange** (defined in **RFC 8693**) is a pattern where a service exchanges one security token for another, typically to obtain a token with narrower scope or a different audience. Instead of propagating a powerful user token through the entire call chain, each service exchanges the incoming token for one that is scoped to exactly what it needs.
+
+Consider this scenario: a user calls the `orders` service, which needs to call the `payments` service. The user's original token has broad scopes (`orders:read`, `orders:write`, `payments:charge`, `profile:read`). Rather than forwarding this powerful token to the `payments` service, the `orders` service exchanges it for a new token that only contains `payments:charge` — the minimum required scope.
+
+This follows the **principle of least privilege**. If the `payments` service is compromised, the attacker only has a token scoped to `payments:charge`, not the user's full set of permissions.
+
+![Token exchange flow showing scope narrowing between microservices](/blog/deep-dive-identity-in-microservices/inline-7.png)
+
+Token Exchange Flow With Scope Narrowing (RFC 8693)
+
+Here is a token exchange request following RFC 8693:
+
+```typescript
+import axios from 'axios';
+
+interface TokenExchangeResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  scope: string;
+}
+
+async function exchangeToken(
+  incomingToken: string,
+  targetAudience: string,
+  requestedScope: string
+): Promise<TokenExchangeResponse> {
+  const response = await axios.post(
+    process.env.TOKEN_ENDPOINT!,
+    new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+      subject_token: incomingToken,
+      subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+      audience: targetAudience,
+      scope: requestedScope,
+    }),
+    {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      auth: {
+        username: process.env.CLIENT_ID!,
+        password: process.env.CLIENT_SECRET!,
+      },
+    }
+  );
+
+  return response.data;
+}
+
+// Usage: exchange user token for a payments-scoped token
+const paymentsToken = await exchangeToken(
+  userAccessToken,
+  'https://api.acme.com/payments',
+  'payments:charge'
+);
+```
+
+The trade-off with token exchange is latency — every exchange requires a round-trip to the authorisation server. Caching exchanged tokens (with appropriate TTLs) helps, but this remains a consideration in high-throughput call chains.
+
+---
+
+## What is the Phantom Token pattern?
+
+The **Phantom Token pattern** is an elegant approach that combines the security of opaque tokens at the edge with the convenience of JWTs internally. The idea is simple: clients receive an opaque (reference) token that carries no user information. When this token hits the API Gateway, the gateway exchanges it for a full JWT containing all the claims that internal services need.
+
+Why is this useful? Opaque tokens are meaningless to attackers — they cannot be decoded, inspected, or tampered with on the client side. JWTs, on the other hand, are self-contained and can be validated locally by each service without a round-trip to the authorisation server. The Phantom Token pattern gives you the best of both worlds.
+
+The flow:
+
+1.  The user authenticates and receives an **opaque token** from the IdP.
+2.  The user sends the opaque token to the **API Gateway**.
+3.  The API Gateway calls the IdP's **introspection endpoint** to validate the opaque token.
+4.  The IdP responds with the token's claims (or an error if the token is invalid/expired).
+5.  The API Gateway mints (or receives) a **signed JWT** containing those claims.
+6.  The JWT is forwarded to internal services. The opaque token never crosses the internal boundary.
+
+Here is an example of the gateway-side introspection and JWT forwarding logic:
+
+```typescript
+import axios from 'axios';
+import jwt from 'jsonwebtoken';
+import { Request, Response, NextFunction } from 'express';
+
+const INTROSPECTION_ENDPOINT = process.env.INTROSPECTION_ENDPOINT!;
+const INTERNAL_JWT_SECRET = process.env.INTERNAL_JWT_SIGNING_KEY!;
+
+export async function phantomTokenMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const opaqueToken = req.headers.authorization?.replace('Bearer ', '');
+  if (!opaqueToken) {
+    res.status(401).json({ error: 'Missing token' });
+    return;
+  }
+
+  // Introspect the opaque token with the IdP
+  const introspection = await axios.post(
+    INTROSPECTION_ENDPOINT,
+    new URLSearchParams({ token: opaqueToken }),
+    {
+      auth: {
+        username: process.env.CLIENT_ID!,
+        password: process.env.CLIENT_SECRET!,
+      },
+    }
+  );
+
+  if (!introspection.data.active) {
+    res.status(401).json({ error: 'Token is not active' });
+    return;
+  }
+
+  // Mint an internal JWT from the introspection response
+  const internalJwt = jwt.sign(
+    {
+      sub: introspection.data.sub,
+      roles: introspection.data.roles,
+      scope: introspection.data.scope,
+      email: introspection.data.email,
+    },
+    INTERNAL_JWT_SECRET,
+    { expiresIn: '5m', issuer: 'api-gateway', algorithm: 'RS256' }
+  );
+
+  // Replace the opaque token with the internal JWT
+  req.headers.authorization = `Bearer ${internalJwt}`;
+  next();
+}
+```
+
+The internal JWT is typically short-lived (five minutes or less) and signed by the gateway itself. Internal services trust this signature because they share the gateway's public key.
+
+---
+
+## How do you propagate user context?
+
+Once a user is authenticated at the edge, their identity needs to flow through the entire request chain so that every service can make informed authorisation decisions. There are three primary mechanisms for propagating user context.
+
+### JWT claims
+
+The most common approach is to forward the JWT itself. Each service extracts the claims it needs directly from the token payload — `sub` for the user ID, `roles` for role-based access control, custom claims for tenant information.
+
+### Request headers
+
+Many organisations enrich requests at the gateway and propagate user context via custom HTTP headers. This decouples downstream services from JWT parsing:
+
+```typescript
+// Gateway enrichment: extract claims and set headers
+function enrichRequestHeaders(req: Request, decoded: JwtPayload): void {
+  req.headers['x-user-id'] = decoded.sub;
+  req.headers['x-user-roles'] = JSON.stringify(decoded.roles);
+  req.headers['x-user-email'] = decoded.email;
+  req.headers['x-tenant-id'] = decoded.tenant_id;
+  req.headers['x-correlation-id'] =
+    req.headers['x-correlation-id'] || crypto.randomUUID();
+}
+
+// Downstream service: read user context from headers
+function getUserContext(req: Request): UserContext {
+  return {
+    userId: req.headers['x-user-id'] as string,
+    roles: JSON.parse(req.headers['x-user-roles'] as string),
+    email: req.headers['x-user-email'] as string,
+    tenantId: req.headers['x-tenant-id'] as string,
+    correlationId: req.headers['x-correlation-id'] as string,
+  };
+}
+```
+
+### gRPC metadata
+
+For services communicating via **gRPC**, user context is propagated through **metadata** — the gRPC equivalent of HTTP headers. Here is how you propagate and extract user context in a gRPC call:
+
+```typescript
+import * as grpc from '@grpc/grpc-js';
+
+// Client: attach user context as metadata
+function createAuthMetadata(userContext: UserContext): grpc.Metadata {
+  const metadata = new grpc.Metadata();
+  metadata.set('x-user-id', userContext.userId);
+  metadata.set('x-user-roles', JSON.stringify(userContext.roles));
+  metadata.set('x-tenant-id', userContext.tenantId);
+  metadata.set('x-correlation-id', userContext.correlationId);
+  return metadata;
+}
+
+// Server: extract user context from metadata
+function extractUserContext(
+  call: grpc.ServerUnaryCall<any, any>
+): UserContext {
+  const metadata = call.metadata;
+  return {
+    userId: metadata.get('x-user-id')[0] as string,
+    roles: JSON.parse(metadata.get('x-user-roles')[0] as string),
+    tenantId: metadata.get('x-tenant-id')[0] as string,
+    correlationId: metadata.get('x-correlation-id')[0] as string,
+  };
+}
+```
+
+The key principle across all three approaches is **consistency** — whichever mechanism you choose, every service in the call chain must understand the format and propagate it faithfully. A broken link in the chain means downstream services lose user context entirely.
+
+---
+
+## How do you implement service-to-service auth?
+
+While user identity answers "who initiated this request?", **service-to-service authentication** answers "which service is making this call?" There are two dominant approaches: **mTLS** and **OAuth Client Credentials**.
+
+### mTLS with Istio
+
+With a service mesh like Istio, mTLS is the default. Every Envoy sidecar presents a certificate that encodes the service's SPIFFE identity. No application code is needed — the mesh handles it transparently.
+
+To verify that mTLS is working and inspect the identity of a peer service:
+
+```bash
+# Check mTLS status for a specific pod
+istioctl x describe pod payments-service-7d4b8f9c6-abc12 -n production
+
+# Verify peer certificate in proxy logs
+kubectl logs payments-service-7d4b8f9c6-abc12 -c istio-proxy -n production \
+  | grep "peer certificate"
+
+# Check PeerAuthentication policy status
+kubectl get peerauthentication -n production -o yaml
+```
+
+### OAuth Client Credentials
+
+For services that need to communicate across trust boundaries — for example, between different clusters, different clouds, or with third-party APIs — **OAuth 2.0 Client Credentials** is the standard approach. Each service has its own `client_id` and `client_secret` (or certificate) and obtains a machine-to-machine access token from the authorisation server.
+
+```typescript
+import axios from 'axios';
+
+interface ClientCredentialsToken {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+class ServiceAuthClient {
+  private tokenCache: ClientCredentialsToken | null = null;
+  private tokenExpiry: number = 0;
+
+  constructor(
+    private clientId: string,
+    private clientSecret: string,
+    private tokenEndpoint: string,
+    private scope: string
+  ) {}
+
+  async getToken(): Promise<string> {
+    if (this.tokenCache && Date.now() < this.tokenExpiry) {
+      return this.tokenCache.access_token;
+    }
+
+    const response = await axios.post(
+      this.tokenEndpoint,
+      new URLSearchParams({
+        grant_type: 'client_credentials',
+        scope: this.scope,
+      }),
+      {
+        auth: {
+          username: this.clientId,
+          password: this.clientSecret,
+        },
+      }
+    );
+
+    this.tokenCache = response.data;
+    // Refresh 60 seconds before expiry
+    this.tokenExpiry = Date.now() + (response.data.expires_in - 60) * 1000;
+    return this.tokenCache!.access_token;
+  }
+}
+
+// Usage
+const paymentsClient = new ServiceAuthClient(
+  process.env.PAYMENTS_CLIENT_ID!,
+  process.env.PAYMENTS_CLIENT_SECRET!,
+  'https://auth.acme.com/oauth/token',
+  'payments:charge payments:refund'
+);
+
+const token = await paymentsClient.getToken();
+```
+
+In practice, many organisations use mTLS for intra-cluster communication and Client Credentials for cross-boundary calls — combining the strengths of both.
+
+---
+
+## What is OPA (Open Policy Agent)?
+
+**Open Policy Agent (OPA)** is a general-purpose policy engine that lets you define authorisation rules as code. Instead of scattering `if (user.role === 'admin')` checks throughout your services, you write policies in a declarative language called **Rego** and evaluate them against OPA — either as a sidecar, a library, or a centralised service.
+
+OPA decouples **policy decisions** from **policy enforcement**. Your services ask OPA "is this request allowed?" and OPA evaluates the request against the policy. If the policy changes, you update the Rego file — no application code changes, no redeployments.
+
+### Rego policy examples
+
+Here is a Rego policy that enforces role-based access control for an orders API:
+
+```rego
+package orders.authz
+
+import rego.v1
+
+default allow := false
+
+# Admins can do anything
+allow if {
+    input.user.roles[_] == "admin"
+}
+
+# Users can read their own orders
+allow if {
+    input.method == "GET"
+    input.path == ["api", "v1", "orders", input.user.sub]
+}
+
+# Managers can read all orders in their tenant
+allow if {
+    input.method == "GET"
+    input.path[0] == "api"
+    input.path[1] == "v1"
+    input.path[2] == "orders"
+    input.user.roles[_] == "manager"
+    input.resource.tenant_id == input.user.tenant_id
+}
+
+# Service accounts with the orders:write scope can create orders
+allow if {
+    input.method == "POST"
+    input.path == ["api", "v1", "orders"]
+    input.user.scopes[_] == "orders:write"
+}
+```
+
+### Integrating OPA with your services
+
+OPA can run as a sidecar alongside each service. Your application sends a JSON input to OPA's REST API and receives an allow/deny decision:
+
+```typescript
+import axios from 'axios';
+
+interface OpaInput {
+  method: string;
+  path: string[];
+  user: {
+    sub: string;
+    roles: string[];
+    scopes: string[];
+    tenant_id: string;
+  };
+  resource?: Record<string, unknown>;
+}
+
+async function isAuthorised(input: OpaInput): Promise<boolean> {
+  const response = await axios.post(
+    'http://localhost:8181/v1/data/orders/authz/allow',
+    { input }
+  );
+  return response.data.result === true;
+}
+
+// Express middleware using OPA
+export async function opaAuthMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const input: OpaInput = {
+    method: req.method,
+    path: req.path.split('/').filter(Boolean),
+    user: req.user,
+    resource: { tenant_id: req.params.tenantId },
+  };
+
+  const allowed = await isAuthorised(input);
+  if (!allowed) {
+    res.status(403).json({ error: 'Forbidden by policy' });
+    return;
+  }
+
+  next();
+}
+```
+
+The power of OPA is that your policies are **testable, version-controlled, and auditable**. You can write unit tests for Rego policies, review policy changes in pull requests, and trace exactly which rule allowed or denied a specific request.
+
+---
+
+## How do you implement the API Gateway auth pattern?
+
+Let's look at two concrete implementations of the API Gateway auth pattern — one using **Kong** and one using **AWS API Gateway** with a **Lambda authoriser**.
+
+### Kong with JWT validation
+
+Kong is an open-source API Gateway that supports JWT validation natively through its JWT plugin:
+
+```yaml
+# Kong declarative configuration
+_format_version: "3.0"
+
+services:
+  - name: orders-service
+    url: http://orders.production.svc.cluster.local:8080
+    routes:
+      - name: orders-route
+        paths:
+          - /api/v1/orders
+        strip_path: false
+
+plugins:
+  - name: jwt
+    service: orders-service
+    config:
+      claims_to_verify:
+        - exp
+      key_claim_name: iss
+      header_names:
+        - Authorization
+  - name: request-transformer
+    service: orders-service
+    config:
+      add:
+        headers:
+          - "X-User-Id:$(jwt.sub)"
+          - "X-User-Roles:$(jwt.roles)"
+```
+
+### AWS API Gateway with Lambda authoriser
+
+For AWS-native architectures, a **Lambda authoriser** lets you run custom auth logic at the gateway level:
+
+```typescript
+import {
+  APIGatewayTokenAuthorizerEvent,
+  APIGatewayAuthorizerResult,
+} from 'aws-lambda';
+import jwt, { JwtPayload } from 'jsonwebtoken';
+
+const JWKS_URI = process.env.JWKS_URI!;
+const EXPECTED_ISSUER = process.env.TOKEN_ISSUER!;
+
+export async function handler(
+  event: APIGatewayTokenAuthorizerEvent
+): Promise<APIGatewayAuthorizerResult> {
+  const token = event.authorizationToken.replace('Bearer ', '');
+
+  try {
+    const decoded = jwt.verify(token, await getSigningKey(JWKS_URI), {
+      issuer: EXPECTED_ISSUER,
+      algorithms: ['RS256'],
+    }) as JwtPayload;
+
+    return {
+      principalId: decoded.sub!,
+      policyDocument: {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'execute-api:Invoke',
+            Effect: 'Allow',
+            Resource: event.methodArn,
+          },
+        ],
+      },
+      context: {
+        userId: decoded.sub,
+        roles: JSON.stringify(decoded.roles),
+        email: decoded.email,
+        tenantId: decoded.tenant_id,
+      },
+    };
+  } catch (err) {
+    throw new Error('Unauthorized');
+  }
+}
+```
+
+The Lambda authoriser result is cached by API Gateway (configurable TTL), so subsequent requests with the same token do not trigger the Lambda again. The `context` object is forwarded to the backend service as request headers, providing the same header-based user context propagation we discussed earlier.
+
+---
+
+## What about event-driven architectures?
+
+In synchronous request-response flows, propagating identity is straightforward — you attach tokens or headers to each HTTP call. But what happens when services communicate asynchronously through **message brokers** like Kafka, **event buses** like EventBridge, or **queues** like SQS?
+
+The challenge is that the producer and consumer are temporally decoupled. The user who triggered the event may have logged out by the time the consumer processes the message. Their JWT may have expired. The consumer needs enough context to make authorisation decisions, but it cannot rely on a live token.
+
+### Kafka headers
+
+**Apache Kafka** supports message headers, which are the natural place to attach identity context:
+
+```typescript
+import { Kafka, Producer, Message } from 'kafkajs';
+
+interface IdentityContext {
+  userId: string;
+  roles: string[];
+  tenantId: string;
+  correlationId: string;
+  originatingService: string;
+  eventTimestamp: string;
+}
+
+function createKafkaMessage(
+  topic: string,
+  payload: unknown,
+  identity: IdentityContext
+): Message {
+  return {
+    value: JSON.stringify(payload),
+    headers: {
+      'x-user-id': identity.userId,
+      'x-user-roles': JSON.stringify(identity.roles),
+      'x-tenant-id': identity.tenantId,
+      'x-correlation-id': identity.correlationId,
+      'x-originating-service': identity.originatingService,
+      'x-event-timestamp': identity.eventTimestamp,
+    },
+  };
+}
+
+// Consumer: extract identity from headers
+function extractIdentityFromHeaders(
+  headers: Record<string, Buffer | undefined>
+): IdentityContext {
+  return {
+    userId: headers['x-user-id']?.toString() || '',
+    roles: JSON.parse(headers['x-user-roles']?.toString() || '[]'),
+    tenantId: headers['x-tenant-id']?.toString() || '',
+    correlationId: headers['x-correlation-id']?.toString() || '',
+    originatingService: headers['x-originating-service']?.toString() || '',
+    eventTimestamp: headers['x-event-timestamp']?.toString() || '',
+  };
+}
+```
+
+### EventBridge detail
+
+For **AWS EventBridge**, identity context is embedded in the event's `detail` field:
+
+```json
+{
+  "source": "com.acme.orders",
+  "detail-type": "OrderCreated",
+  "detail": {
+    "orderId": "ord-12345",
+    "items": ["item-a", "item-b"],
+    "identity": {
+      "userId": "user-67890",
+      "roles": ["customer"],
+      "tenantId": "tenant-abc",
+      "correlationId": "corr-11111",
+      "originatingService": "orders-service"
+    }
+  }
+}
+```
+
+### Key considerations for async identity
+
+*   **Do not embed JWTs in messages** — tokens expire, and messages may be processed hours or days later. Embed the claims you need, not the token itself.
+*   **Sign the identity context** — If you are concerned about message tampering, sign the identity headers with a shared key so consumers can verify integrity.
+*   **Include the originating service** — This provides an audit trail and allows consumers to enforce service-level access policies.
+*   **Treat the identity context as immutable** — Consumers should not modify identity headers when producing downstream events. The original user context should flow through the entire event chain.
+
+---
+
+## How does service identity work in Kubernetes?
+
+Kubernetes has a built-in identity system for workloads based on **ServiceAccounts**. Every pod runs as a specific ServiceAccount, and Kubernetes can project a signed JWT token into the pod that proves its identity.
+
+### ServiceAccount token projection
+
+Modern Kubernetes (1.20+) supports **bound ServiceAccount tokens** — short-lived, audience-scoped JWTs that are projected into the pod as a volume:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-service
+  namespace: production
+spec:
+  template:
+    spec:
+      serviceAccountName: orders-service
+      containers:
+        - name: orders
+          image: acme/orders-service:latest
+          volumeMounts:
+            - name: service-token
+              mountPath: /var/run/secrets/tokens
+              readOnly: true
+      volumes:
+        - name: service-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: "https://api.acme.com"
+                  expirationSeconds: 3600
+                  path: token
+```
+
+The token at `/var/run/secrets/tokens/token` is a signed JWT that contains the pod's ServiceAccount identity, is scoped to the specified audience, and is automatically rotated by the kubelet before expiry.
+
+### IAM Roles for Service Accounts (IRSA) on AWS
+
+**IRSA** bridges Kubernetes ServiceAccount identity with AWS IAM. It allows pods to assume AWS IAM roles based on their Kubernetes ServiceAccount, without needing to store AWS credentials:
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orders-service
+  namespace: production
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/orders-service-role"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-service
+  namespace: production
+spec:
+  template:
+    spec:
+      serviceAccountName: orders-service
+      containers:
+        - name: orders
+          image: acme/orders-service:latest
+          env:
+            - name: AWS_REGION
+              value: "ap-southeast-2"
+```
+
+With IRSA configured, the AWS SDK inside the pod automatically discovers the projected ServiceAccount token, exchanges it with AWS STS for temporary IAM credentials, and uses those credentials to access AWS services. No access keys, no secrets — just cryptographic identity federation.
+
+---
+
+## How does distributed tracing work with identity context?
+
+In a microservices architecture, a single user request might touch ten services. When something goes wrong, you need to trace the entire request path. **Distributed tracing** frameworks like **OpenTelemetry**, **Jaeger**, and **Zipkin** provide this capability — and identity context makes these traces significantly more useful.
+
+### Correlation IDs
+
+A **correlation ID** (also called a trace ID or request ID) is a unique identifier generated at the edge and propagated through every service in the call chain. This is the glue that ties together logs, traces, and metrics for a single request:
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+import { trace, context, SpanKind } from '@opentelemetry/api';
+
+export function tracingMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const tracer = trace.getTracer('identity-tracer');
+  const correlationId =
+    (req.headers['x-correlation-id'] as string) || crypto.randomUUID();
+
+  const span = tracer.startSpan(
+    `${req.method} ${req.path}`,
+    {
+      kind: SpanKind.SERVER,
+      attributes: {
+        'http.method': req.method,
+        'http.url': req.url,
+        'user.id': req.headers['x-user-id'] as string,
+        'user.tenant_id': req.headers['x-tenant-id'] as string,
+        'correlation.id': correlationId,
+      },
+    }
+  );
+
+  req.headers['x-correlation-id'] = correlationId;
+
+  res.on('finish', () => {
+    span.setAttribute('http.status_code', res.statusCode);
+    span.end();
+  });
+
+  next();
+}
+```
+
+### User context in traces
+
+By attaching user identity attributes to spans, you can:
+
+*   **Filter traces by user** — "Show me all requests made by user X in the last hour"
+*   **Detect anomalies** — "This user is making requests from two different geolocations simultaneously"
+*   **Audit access** — "Which users accessed this sensitive endpoint today?"
+*   **Debug authorisation failures** — "Why was this user denied access? Let me trace the request through the policy engine"
+
+The combination of distributed tracing and identity context transforms your observability stack from a debugging tool into a security and compliance tool.
+
+---
+
+## What are the architecture trade-offs?
+
+Choosing an identity strategy for your microservices is not a one-size-fits-all decision. The right approach depends on your organisation's maturity, scale, team structure, and compliance requirements. Here is a comparison of the three primary patterns:
+
+| Dimension | API Gateway Auth | Sidecar Proxy (Mesh) | Shared Auth Library |
+| --- | --- | --- | --- |
+| **Implementation effort** | Low — configure the gateway | Medium — deploy and operate a mesh | High — build and maintain a library for each language |
+| **Consistency** | High at the edge, variable internally | Very high — uniform enforcement across all services | Depends on adoption discipline across teams |
+| **Language independence** | Yes — gateway handles auth | Yes — sidecar handles auth | No — need a library per language/framework |
+| **Latency overhead** | Minimal — single validation at edge | Low — local sidecar communication | Lowest — in-process validation |
+| **Operational complexity** | Low | High — mesh control plane, sidecar injection, certificate management | Medium — library versioning, dependency management |
+| **East-west security** | Weak — internal traffic often unprotected | Strong — mTLS between all services | Moderate — depends on library implementation |
+| **Policy granularity** | Coarse — URL path and method based | Fine — identity-aware L7 policies | Fine — custom logic in application code |
+| **Debugging** | Straightforward — single point of auth | Complex — distributed across sidecars | Straightforward — auth logic is in application code |
+| **Best suited for** | Small-medium deployments, API-first architectures | Large-scale platforms, zero-trust environments | Small teams with a single primary language |
+
+In practice, most mature organisations combine these patterns. The API Gateway handles north-south auth, the service mesh handles east-west mTLS, and OPA provides fine-grained authorisation policy. Shared libraries are used sparingly for domain-specific authorisation logic that does not fit neatly into gateway or mesh policies.
+
+---
+
+## Okay, what terminology do I need to understand?
+
+### What is an SVID?
+
+A **SPIFFE Verifiable Identity Document (SVID)** is a cryptographically signed document — typically an X.509 certificate or a JWT — that encodes a workload's SPIFFE identity. It is the credential that a service presents to prove who it is.
+
+### What is mTLS?
+
+**Mutual TLS (mTLS)** is a protocol where both the client and the server present X.509 certificates during the TLS handshake. Both sides verify the other's certificate, providing bidirectional authentication and encryption.
+
+### What is a trust domain?
+
+A **trust domain** is the root of a SPIFFE identity hierarchy. It represents an administrative boundary — typically an organisation, a cluster, or an environment. All identities within the same trust domain share a common root of trust.
+
+### What is token introspection?
+
+**Token introspection** (RFC 7662) is a mechanism where a resource server sends an opaque token to the authorisation server to determine whether it is active and retrieve its associated claims. It is the foundation of the Phantom Token pattern.
+
+### What is a policy engine?
+
+A **policy engine** (such as OPA) is a service that evaluates access control decisions against a set of defined rules. It takes an input (who, what, where) and returns a decision (allow or deny).
+
+### What is workload attestation?
+
+**Workload attestation** is the process by which a SPIRE Agent verifies the identity of a workload using platform-level metadata — such as Kubernetes pod labels, Linux cgroups, or Docker container IDs — before issuing an identity certificate.
+
+### What is a sidecar proxy?
+
+A **sidecar proxy** is a helper process deployed alongside a service (typically in the same Kubernetes pod) that intercepts all network traffic. It handles cross-cutting concerns like mTLS, authorisation, retries, and observability without requiring changes to the application code.
+
+### What is RFC 8693?
+
+**RFC 8693** defines the OAuth 2.0 Token Exchange standard. It specifies how a service can exchange one security token for another — for example, exchanging a user access token for a narrower-scoped service token.
+
+### What is the principle of least privilege?
+
+The **principle of least privilege** states that every identity — whether a user or a service — should be granted only the minimum permissions necessary to perform its function. Token exchange and scope narrowing are practical implementations of this principle.
+
+### What is a Lambda authoriser?
+
+A **Lambda authoriser** (also called a custom authoriser) is an AWS API Gateway feature that lets you run a Lambda function to validate incoming tokens and return an IAM policy document that governs access to the backend resources.
+
+### What is a correlation ID?
+
+A **correlation ID** is a unique identifier generated at the entry point of a request and propagated through every service in the call chain. It enables end-to-end tracing, log correlation, and debugging across distributed systems.
+
+### What is Rego?
+
+**Rego** is the declarative policy language used by Open Policy Agent. It uses a rule-based syntax to express access control policies, data filtering, and decision logic over structured JSON input.
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

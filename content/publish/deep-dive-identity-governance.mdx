@@ -1,0 +1,1001 @@
+---
+title: "Deep Dive - Identity Governance and Administration"
+date: "2025-07-16"
+slug: "deep-dive-identity-governance"
+status: "publish"
+feature_image: "/blog/deep-dive-identity-governance/feature-image.png"
+tags: ["Identity Governance", "IGA", "RBAC", "ABAC", "ReBAC", "Privileged Access Management", "Compliance", "Access Reviews", "Cloud Security", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Identity Governance and Administration | Robert Leggett"
+  description: "A comprehensive deep dive into Identity Governance and Administration — covering RBAC, ABAC, ReBAC, access reviews, separation of duties, privileged access management, and cloud-native IGA across AWS, Azure, and GCP."
+  keywords: ["Identity Governance", "RBAC", "ABAC", "ReBAC", "Privileged Access Management", "Access Reviews", "Separation of Duties", "Compliance", "IGA", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-identity-governance"
+  image: "https://robertleggett.com.au/blog/deep-dive-identity-governance/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Identity Governance and Administration"
+  description: "A comprehensive deep dive into Identity Governance and Administration — from access control models like RBAC, ABAC, and ReBAC through to access reviews, separation of duties, and privileged access management across cloud providers."
+  image: "https://robertleggett.com.au/blog/deep-dive-identity-governance/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-identity-governance"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Identity Governance and Administration"
+  description: "From RBAC and ABAC to Zanzibar-style ReBAC — a complete technical reference for implementing identity governance at scale."
+  image: "https://robertleggett.com.au/blog/deep-dive-identity-governance/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the world of Identity Governance and Administration (IGA) — the discipline of managing who has access to what, why they have it, and ensuring that access remains appropriate over time. Whether you are a security architect designing enterprise-wide access controls or a software engineer building authorisation into your applications, our goal is to provide clear and thorough explanations that will deepen your understanding of identity governance from first principles through to production-ready implementations. We will journey from foundational access control models like RBAC, ABAC, and ReBAC, through separation of duties and access reviews, all the way to privileged access management and cloud-native governance tooling. Join us on this enlightening journey as we bridge the gap between theoretical access models and the practical reality of governing identities at scale. Let's dive in and demystify identity governance together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of identity governance — from the identity lifecycle and access control models (RBAC, ABAC, ReBAC) through to separation of duties, access reviews, and entitlement management
+*   Hands-on implementation patterns with TypeScript, OPA/Rego, and Zanzibar-style relationship stores including SpiceDB and OpenFGA
+*   Practical knowledge of privileged access management and cloud-native governance tooling across AWS, Azure, and GCP
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is Identity Governance?
+
+Imagine you work in a large office building. On your first day, reception hands you a security pass. That pass grants you access to specific floors, meeting rooms, and restricted areas based on your role. When you change teams, your pass is updated. When you leave the company, your pass is deactivated. Now imagine that the building has ten thousand employees, hundreds of restricted zones, and strict regulations requiring that every access decision is logged and auditable. Managing all of that — deciding who gets which pass, reviewing whether those passes are still appropriate, and revoking them when they are not — is essentially what **Identity Governance and Administration (IGA)** does for digital systems.
+
+At its core, identity governance answers three fundamental questions:
+
+*   **Who has access to what?** — Understanding the current state of permissions across all systems, applications, and data stores.
+*   **Who should have access to what?** — Defining the policies, roles, and attributes that determine appropriate access for each individual.
+*   **Who did what with their access?** — Maintaining an audit trail that proves compliance and enables forensic investigation when something goes wrong.
+
+IGA sits at the intersection of **identity management** (creating, updating, and deleting user accounts) and **access governance** (ensuring that access rights remain appropriate, compliant, and minimal). It encompasses the entire spectrum of processes from provisioning a new starter's accounts to certifying that a senior administrator's elevated privileges are still justified.
+
+The good news is that while the problem space is broad, the building blocks are well understood. Over the next sections, we will break down each component — starting with why governance matters in the first place.
+
+---
+
+## Why does Identity Governance matter?
+
+Identity governance is not merely a nice-to-have security hygiene practice — it is a regulatory requirement for most organisations operating at any meaningful scale. The consequences of poor governance range from data breaches and insider threats to multi-million-dollar compliance fines.
+
+### Regulatory compliance
+
+Several major regulatory frameworks mandate formal identity governance controls:
+
+*   **SOX (Sarbanes-Oxley)** — Requires publicly traded companies to maintain internal controls over financial reporting. Section 404 demands that access to financial systems is appropriately restricted and regularly reviewed. Auditors specifically look for evidence of separation of duties and access certifications.
+*   **GDPR (General Data Protection Regulation)** — Mandates that organisations implement appropriate technical and organisational measures to protect personal data. Article 5(1)(f) requires the principle of integrity and confidentiality, which includes controlling who can access personal data and for what purpose.
+*   **HIPAA (Health Insurance Portability and Accountability Act)** — Requires covered entities to implement access controls that restrict access to electronic protected health information (ePHI) to only those individuals who need it to perform their job functions.
+*   **PCI-DSS (Payment Card Industry Data Security Standard)** — Requirement 7 explicitly states that access to cardholder data must be restricted on a need-to-know basis. Requirement 8 mandates unique identification for each person with access, and Requirement 10 requires tracking and monitoring of all access.
+
+### The cost of getting it wrong
+
+Beyond compliance, the practical risks are significant. Orphaned accounts — user accounts that remain active after an employee has left — are a favourite attack vector. Excessive privileges accumulated through role changes (often called **privilege creep**) expand the blast radius of any credential compromise. Without governance, organisations find themselves unable to answer the most basic audit question: "Can you prove that this person should have access to this system?"
+
+Identity governance provides the framework to answer that question definitively.
+
+---
+
+## What is the Identity Lifecycle?
+
+The **identity lifecycle** describes the stages a user identity passes through during their relationship with an organisation. It is commonly modelled as three phases: **Joiner**, **Mover**, and **Leaver**. Each phase triggers a set of provisioning and de-provisioning actions that must be executed consistently and auditably.
+
+### Joiner
+
+When a new employee, contractor, or partner joins the organisation, their digital identity is created. This involves provisioning accounts across all required systems, assigning an initial set of roles and entitlements based on their job function, and granting access to the tools they need from day one. A well-governed joiner process uses **birthright provisioning** — automatically assigning a baseline set of access rights derived from the person's department, location, and role.
+
+### Mover
+
+When an existing user changes role, department, or location, their access must be adjusted accordingly. The mover phase is where many organisations struggle. New access is typically granted promptly (the user needs it to do their new job), but old access from the previous role is often left in place. Over time, this leads to privilege creep — users accumulating far more access than they need for their current function.
+
+### Leaver
+
+When a user departs the organisation, all of their access must be revoked promptly. This includes disabling or deleting accounts across every connected system, revoking active sessions and tokens, and recovering any physical security assets. A delayed leaver process creates orphaned accounts — active credentials belonging to individuals who no longer have a legitimate reason to access the organisation's systems.
+
+![Identity lifecycle diagram showing the Joiner, Mover, and Leaver phases with provisioning actions at each stage](/blog/deep-dive-identity-governance/inline-1.png)
+
+Identity Lifecycle — Joiner, Mover, Leaver
+
+The diagram above illustrates the three phases and their associated governance actions. The key takeaway is that each transition must be governed by policy and executed through automated workflows, not ad-hoc manual requests.
+
+---
+
+## What is RBAC?
+
+**Role-Based Access Control (RBAC)** is the most widely adopted access control model in enterprise environments. The core idea is simple: instead of assigning permissions directly to individual users, you assign permissions to roles, and then assign users to those roles. A role represents a job function — such as "Finance Analyst", "DevOps Engineer", or "HR Manager" — and carries a predefined set of permissions appropriate for that function.
+
+### Role hierarchy
+
+Roles can be organised hierarchically. A senior role inherits all permissions from its junior roles, plus additional privileges specific to its level. For example, a "Senior Engineer" role might inherit all permissions from the "Engineer" role, with the addition of production deployment access.
+
+```typescript
+interface Role {
+  name: string;
+  permissions: string[];
+  inherits?: string[];
+}
+
+const roles: Record<string, Role> = {
+  viewer: {
+    name: "Viewer",
+    permissions: ["read:dashboard", "read:reports"],
+  },
+  editor: {
+    name: "Editor",
+    permissions: ["write:content", "publish:content"],
+    inherits: ["viewer"],
+  },
+  admin: {
+    name: "Admin",
+    permissions: ["manage:users", "manage:roles", "delete:content"],
+    inherits: ["editor"],
+  },
+};
+```
+
+### The role explosion problem
+
+While RBAC is intuitive and easy to audit, it suffers from a well-known scaling challenge called **role explosion**. As organisations grow, the number of unique job functions multiplies. Each combination of department, location, seniority level, and project assignment can require a distinct role. An organisation with 10 departments, 5 locations, and 4 seniority levels could theoretically need 200 roles — and that is before accounting for project-specific access.
+
+Role explosion makes governance harder because there are simply too many roles for human reviewers to meaningfully certify. It also increases the likelihood of misconfiguration, where a role carries permissions that are too broad or too narrow.
+
+![RBAC role hierarchy diagram showing inheritance from base roles to senior roles with the role explosion problem illustrated](/blog/deep-dive-identity-governance/inline-2.png)
+
+RBAC Role Hierarchy and Role Explosion
+
+---
+
+## What is ABAC?
+
+**Attribute-Based Access Control (ABAC)** takes a fundamentally different approach. Instead of assigning users to predefined roles, ABAC evaluates access decisions dynamically based on **attributes** — properties of the user, the resource, the action, and the environment.
+
+An ABAC policy might express: "Allow access if the user's department is Finance AND the resource's classification is Internal AND the action is Read AND the current time is within business hours." This level of granularity is impossible to achieve with roles alone.
+
+### The four attribute categories
+
+ABAC policies evaluate attributes from four categories:
+
+*   **Subject attributes** — Properties of the user requesting access: department, clearance level, job title, location, training completion status.
+*   **Resource attributes** — Properties of the resource being accessed: classification level, owner, data sensitivity, creation date.
+*   **Action attributes** — The operation being performed: read, write, delete, approve, export.
+*   **Environment attributes** — Contextual conditions: time of day, IP address, device posture, risk score.
+
+### RBAC vs ABAC
+
+| Aspect | RBAC | ABAC |
+|---|---|---|
+| Access decisions | Based on assigned roles | Based on evaluated attributes |
+| Granularity | Coarse (role-level) | Fine (attribute-level) |
+| Scalability | Role explosion at scale | Scales with policy complexity |
+| Audit simplicity | Easy — "who has which role?" | Harder — "which attributes matched?" |
+| Setup complexity | Low — define roles and assign | High — define attributes and policies |
+| Best suited for | Static organisational hierarchies | Dynamic, context-aware decisions |
+
+The good news is that RBAC and ABAC are not mutually exclusive. Many organisations use RBAC as the coarse-grained layer (assigning users to roles) and ABAC as the fine-grained layer (evaluating additional attributes within a role to make context-sensitive decisions).
+
+---
+
+## What is ReBAC?
+
+**Relationship-Based Access Control (ReBAC)** is a newer model that has gained significant traction since Google published the Zanzibar paper in 2019. ReBAC determines access based on the **relationships** between entities rather than static role assignments or attribute evaluations.
+
+The core insight is elegant: instead of asking "Does this user have the editor role?", ReBAC asks "Is this user an editor of this specific document?" Access is derived from a graph of relationships — user A is a member of team B, team B owns project C, project C contains document D, therefore user A can read document D.
+
+### The Zanzibar model
+
+Google's **Zanzibar** is a global, consistent authorisation system that stores relationships as tuples:
+
+```
+user:alice#member@group:engineering
+group:engineering#parent@organisation:acme
+document:design-spec#viewer@group:engineering
+```
+
+Each tuple expresses a relationship: "Alice is a member of the engineering group", "the engineering group is part of the Acme organisation", "the engineering group has viewer access to the design-spec document." The authorisation engine traverses these relationships to answer access checks — can Alice view the design spec? Yes, because she is a member of engineering, and engineering has viewer access.
+
+```typescript
+interface RelationTuple {
+  resource: { type: string; id: string };
+  relation: string;
+  subject: { type: string; id: string; relation?: string };
+}
+
+const tuples: RelationTuple[] = [
+  {
+    resource: { type: "document", id: "design-spec" },
+    relation: "viewer",
+    subject: { type: "group", id: "engineering", relation: "member" },
+  },
+  {
+    resource: { type: "group", id: "engineering" },
+    relation: "member",
+    subject: { type: "user", id: "alice" },
+  },
+];
+```
+
+![ReBAC relationship graph showing users, groups, and resources connected by typed relationships in a Zanzibar-style model](/blog/deep-dive-identity-governance/inline-3.png)
+
+Zanzibar-Style Relationship Graph
+
+The power of ReBAC lies in its ability to model complex, hierarchical, and contextual access patterns without role explosion. It is particularly well suited to multi-tenant SaaS applications where access is inherently relational — users belong to organisations, organisations own projects, projects contain resources.
+
+---
+
+## How do RBAC, ABAC, and ReBAC compare?
+
+Choosing the right access control model depends on your domain, scale, and governance requirements. Here is a comprehensive comparison:
+
+| Criteria | RBAC | ABAC | ReBAC |
+|---|---|---|---|
+| Decision basis | Role assignment | Attribute evaluation | Relationship traversal |
+| Granularity | Coarse | Fine | Fine (relationship-scoped) |
+| Scalability | Role explosion risk | Policy complexity risk | Graph traversal cost |
+| Audit trail | "User X has role Y" | "Attributes A, B, C matched policy P" | "User X relates to resource Y via path Z" |
+| Setup effort | Low | High | Medium |
+| Best for | Enterprise hierarchies | Context-sensitive decisions | Multi-tenant, document-centric apps |
+| Real-world example | AWS IAM roles | XACML/OPA policies | Google Drive sharing |
+| Governance tooling | Mature | Growing | Emerging |
+| Standards | NIST RBAC (2004) | XACML, ALFA | Zanzibar (2019) |
+
+In practice, most production systems use a combination. RBAC provides the structural foundation, ABAC adds contextual refinement, and ReBAC models resource-level sharing. The important thing from a governance perspective is that whichever model you choose, you must be able to answer the audit question: "Why does this user have access to this resource?"
+
+---
+
+## What is Separation of Duties?
+
+**Separation of Duties (SoD)** is a governance control that prevents any single individual from holding conflicting permissions that, when combined, create an unacceptable risk. The classic example comes from financial controls: the person who creates a purchase order should not be the same person who approves it. If one person can both create and approve, they can authorise fraudulent payments to themselves.
+
+### Toxic combinations
+
+In identity governance, conflicting permission pairs are called **toxic combinations**. Common examples include:
+
+*   **Create vendor + Approve payment** — Enables creation of fictitious vendors and self-payment
+*   **Modify code + Deploy to production** — Bypasses code review and change management controls
+*   **Create user + Assign admin role** — Enables creation of backdoor administrator accounts
+*   **Access patient records + Export data** — Enables bulk exfiltration of protected health information
+
+### Preventive vs detective controls
+
+SoD can be enforced through two types of controls:
+
+*   **Preventive controls** block the conflicting assignment before it takes effect. When a user requests a role that would create a toxic combination with their existing roles, the system denies the request automatically. This is the strongest form of enforcement but requires a comprehensive conflict matrix to be defined upfront.
+
+*   **Detective controls** allow the assignment to proceed but flag it for review. Periodic reports identify users who hold conflicting permissions, and governance teams investigate whether compensating controls are in place. Detective controls are more practical in complex environments where strict prevention would be too disruptive.
+
+```typescript
+interface SoDRule {
+  id: string;
+  description: string;
+  conflictingPermissions: [string, string];
+  severity: "critical" | "high" | "medium";
+  control: "preventive" | "detective";
+}
+
+const sodRules: SoDRule[] = [
+  {
+    id: "SOD-001",
+    description: "Cannot both create vendors and approve payments",
+    conflictingPermissions: ["create:vendor", "approve:payment"],
+    severity: "critical",
+    control: "preventive",
+  },
+  {
+    id: "SOD-002",
+    description: "Cannot both modify code and deploy to production",
+    conflictingPermissions: ["write:code", "deploy:production"],
+    severity: "high",
+    control: "preventive",
+  },
+  {
+    id: "SOD-003",
+    description: "Cannot both create users and assign admin roles",
+    conflictingPermissions: ["create:user", "assign:admin"],
+    severity: "critical",
+    control: "preventive",
+  },
+];
+
+function checkSoDViolations(
+  userPermissions: string[],
+  requestedPermission: string,
+  rules: SoDRule[]
+): SoDRule[] {
+  return rules.filter(
+    (rule) =>
+      (userPermissions.includes(rule.conflictingPermissions[0]) &&
+        requestedPermission === rule.conflictingPermissions[1]) ||
+      (userPermissions.includes(rule.conflictingPermissions[1]) &&
+        requestedPermission === rule.conflictingPermissions[0])
+  );
+}
+```
+
+---
+
+## What are Access Reviews and Certifications?
+
+**Access reviews** (also called **access certifications**) are periodic processes where designated reviewers — typically managers or resource owners — examine the access rights held by users and confirm whether those rights are still appropriate. Think of it as a regular audit where every security pass in the building is inspected and either revalidated or revoked.
+
+### Why periodic reviews matter
+
+Access tends to accumulate. Users join projects, receive temporary elevated privileges, and gain access to shared resources. Without periodic reviews, this accumulation goes unchecked. Access reviews are the primary detective control that catches privilege creep, orphaned entitlements, and inappropriate access that slipped through preventive controls.
+
+### The access review process
+
+A typical access review follows these steps:
+
+1.  **Campaign creation** — The governance team defines the scope of the review: which users, which applications, which entitlements, and who the reviewers are.
+2.  **Notification** — Reviewers receive notification that a certification campaign has been opened and requires their attention within a defined deadline.
+3.  **Review and decision** — Each reviewer examines the access items assigned to them and makes a decision for each: **certify** (approve continued access), **revoke** (remove the access), or **reassign** (delegate the decision to another reviewer).
+4.  **Escalation** — Items not reviewed by the deadline are escalated to a secondary reviewer or automatically revoked based on policy.
+5.  **Remediation** — Revocation decisions are executed automatically through the provisioning system, removing access from the target systems.
+6.  **Reporting** — The completed campaign is archived as an audit artefact, providing evidence that the organisation reviewed and validated access within the required timeframe.
+
+![Access review certification workflow showing the six-step process from campaign creation through to audit reporting](/blog/deep-dive-identity-governance/inline-4.png)
+
+Access Review Certification Workflow
+
+The key governance principle is that reviews must be **meaningful**. A reviewer who rubber-stamps every item as "certify" without examination provides no governance value. Modern IGA platforms address this by surfacing contextual information — when was access last used, is this access typical for the user's peer group, does this entitlement create an SoD violation — to help reviewers make informed decisions.
+
+---
+
+## What is Entitlement Management?
+
+**Entitlement management** is the process of defining, packaging, and governing the access rights that users can request and receive. Rather than allowing ad-hoc access requests to individual systems, entitlement management bundles related permissions into **access packages** that can be requested, approved, and provisioned as a unit.
+
+### Access packages
+
+An access package groups together all the entitlements a user needs for a specific function. For example, a "Finance Analyst" access package might include read access to the general ledger, write access to the budgeting tool, membership in the finance distribution list, and a licence for the reporting platform. When a user requests the package, a single approval workflow grants all included entitlements.
+
+### Approval workflows
+
+Entitlement management introduces structured approval workflows:
+
+*   **Single-stage approval** — A single approver (typically the user's manager) reviews and approves or denies the request.
+*   **Multi-stage approval** — The request passes through sequential approvers: first the manager, then the resource owner, then optionally a security review.
+*   **Auto-approval** — For low-risk, birthright entitlements, the request is approved automatically based on the user's attributes matching predefined criteria.
+*   **Time-bound access** — The approval includes an expiry date, after which the access is automatically revoked. This is particularly useful for project-based or temporary access.
+
+```typescript
+interface AccessPackage {
+  id: string;
+  name: string;
+  description: string;
+  entitlements: Entitlement[];
+  approvalStages: ApprovalStage[];
+  maxDurationDays: number;
+  autoApprovalPolicy?: AutoApprovalPolicy;
+}
+
+interface Entitlement {
+  system: string;
+  resource: string;
+  permission: string;
+}
+
+interface ApprovalStage {
+  order: number;
+  approverType: "manager" | "resource-owner" | "security-team";
+  timeoutAction: "escalate" | "deny";
+  timeoutDays: number;
+}
+
+interface AutoApprovalPolicy {
+  requiredAttributes: Record<string, string>;
+}
+
+const financeAnalystPackage: AccessPackage = {
+  id: "pkg-finance-analyst",
+  name: "Finance Analyst",
+  description: "Standard access package for finance analysts",
+  entitlements: [
+    { system: "erp", resource: "general-ledger", permission: "read" },
+    { system: "erp", resource: "budgeting", permission: "write" },
+    { system: "email", resource: "finance-dl", permission: "member" },
+    { system: "reporting", resource: "platform", permission: "licence" },
+  ],
+  approvalStages: [
+    {
+      order: 1,
+      approverType: "manager",
+      timeoutAction: "escalate",
+      timeoutDays: 3,
+    },
+    {
+      order: 2,
+      approverType: "resource-owner",
+      timeoutAction: "deny",
+      timeoutDays: 5,
+    },
+  ],
+  maxDurationDays: 365,
+  autoApprovalPolicy: {
+    requiredAttributes: { department: "Finance", employeeType: "FTE" },
+  },
+};
+```
+
+![Entitlement management workflow showing access packages, approval stages, and automated provisioning](/blog/deep-dive-identity-governance/inline-5.png)
+
+Entitlement Management and Access Package Workflow
+
+---
+
+## How do you implement RBAC?
+
+Let us walk through a practical RBAC implementation in TypeScript. We will build a role-based permission system with hierarchical role inheritance and an Express middleware for enforcement.
+
+### Role and permission definitions
+
+```typescript
+type Permission = string;
+
+interface RoleDefinition {
+  permissions: Permission[];
+  inherits?: string[];
+}
+
+const roleDefinitions: Record<string, RoleDefinition> = {
+  "read-only": {
+    permissions: ["read:projects", "read:tasks"],
+  },
+  contributor: {
+    permissions: ["write:tasks", "comment:tasks"],
+    inherits: ["read-only"],
+  },
+  "project-manager": {
+    permissions: ["manage:projects", "assign:tasks", "create:reports"],
+    inherits: ["contributor"],
+  },
+  admin: {
+    permissions: ["manage:users", "manage:roles", "manage:billing"],
+    inherits: ["project-manager"],
+  },
+};
+
+function resolvePermissions(
+  roleName: string,
+  definitions: Record<string, RoleDefinition>,
+  visited: Set<string> = new Set()
+): Set<Permission> {
+  if (visited.has(roleName)) return new Set();
+  visited.add(roleName);
+
+  const role = definitions[roleName];
+  if (!role) return new Set();
+
+  const permissions = new Set<Permission>(role.permissions);
+
+  for (const parent of role.inherits ?? []) {
+    for (const perm of resolvePermissions(parent, definitions, visited)) {
+      permissions.add(perm);
+    }
+  }
+
+  return permissions;
+}
+```
+
+### Express middleware
+
+```typescript
+import { Request, Response, NextFunction } from "express";
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    roles: string[];
+  };
+}
+
+function requirePermission(requiredPermission: Permission) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const userPermissions = new Set<Permission>();
+    for (const role of user.roles) {
+      for (const perm of resolvePermissions(role, roleDefinitions)) {
+        userPermissions.add(perm);
+      }
+    }
+
+    if (!userPermissions.has(requiredPermission)) {
+      return res.status(403).json({
+        error: "Insufficient permissions",
+        required: requiredPermission,
+      });
+    }
+
+    next();
+  };
+}
+
+// Usage
+app.get("/api/projects", requirePermission("read:projects"), getProjects);
+app.post("/api/projects", requirePermission("manage:projects"), createProject);
+app.delete("/api/users/:id", requirePermission("manage:users"), deleteUser);
+```
+
+This implementation gives you hierarchical RBAC with a clean middleware pattern. The `resolvePermissions` function handles circular inheritance detection, and the middleware integrates cleanly with any Express-based API.
+
+---
+
+## How do you implement ABAC?
+
+ABAC requires a **policy engine** that evaluates access decisions at runtime based on attributes. The two most prominent approaches are **XACML** (eXtensible Access Control Markup Language) — an OASIS standard — and **OPA (Open Policy Agent)** with its Rego policy language.
+
+### XACML conceptual model
+
+XACML defines a reference architecture with four components:
+
+*   **Policy Enforcement Point (PEP)** — Intercepts access requests and enforces decisions
+*   **Policy Decision Point (PDP)** — Evaluates policies against attributes and returns permit/deny
+*   **Policy Information Point (PIP)** — Supplies attribute values from external sources
+*   **Policy Administration Point (PAP)** — Manages and stores policies
+
+### OPA/Rego implementation
+
+OPA is the de facto standard for cloud-native policy enforcement. Here is an ABAC policy written in Rego:
+
+```rego
+package authz
+
+import rego.v1
+
+default allow := false
+
+# Allow finance users to read internal documents during business hours
+allow if {
+    input.action == "read"
+    input.subject.department == "Finance"
+    input.resource.classification == "internal"
+    is_business_hours
+}
+
+# Allow resource owners full access to their own resources
+allow if {
+    input.resource.owner == input.subject.id
+}
+
+# Allow administrators full access
+allow if {
+    input.subject.role == "admin"
+}
+
+is_business_hours if {
+    now := time.clock(time.now_ns())
+    hour := now[0]
+    hour >= 8
+    hour < 18
+}
+
+# Deny access to highly classified resources unless clearance matches
+deny if {
+    input.resource.classification == "top-secret"
+    not input.subject.clearance == "top-secret"
+}
+
+# Final decision: allow unless explicitly denied
+decision := "permit" if {
+    allow
+    not deny
+}
+
+decision := "deny" if {
+    not allow
+}
+
+decision := "deny" if {
+    deny
+}
+```
+
+### Querying OPA from your application
+
+```typescript
+import axios from "axios";
+
+interface ABACRequest {
+  subject: {
+    id: string;
+    department: string;
+    role: string;
+    clearance: string;
+  };
+  resource: {
+    id: string;
+    type: string;
+    classification: string;
+    owner: string;
+  };
+  action: string;
+  environment: {
+    ipAddress: string;
+    timestamp: string;
+  };
+}
+
+async function checkAccess(request: ABACRequest): Promise<boolean> {
+  const response = await axios.post("http://localhost:8181/v1/data/authz/decision", {
+    input: request,
+  });
+
+  return response.data.result === "permit";
+}
+
+// Usage
+const allowed = await checkAccess({
+  subject: {
+    id: "user-42",
+    department: "Finance",
+    role: "analyst",
+    clearance: "internal",
+  },
+  resource: {
+    id: "doc-789",
+    type: "document",
+    classification: "internal",
+    owner: "user-99",
+  },
+  action: "read",
+  environment: {
+    ipAddress: "10.0.1.50",
+    timestamp: new Date().toISOString(),
+  },
+});
+```
+
+The beauty of ABAC is its expressiveness. A single policy can encode business rules that would require dozens of RBAC roles — and those policies can be updated without redeploying application code.
+
+---
+
+## How do you implement ReBAC?
+
+ReBAC implementations are built on **relationship tuple stores** — databases optimised for storing and traversing entity relationships. The two leading open-source implementations are **SpiceDB** (by AuthZed) and **OpenFGA** (by Okta/Auth0).
+
+### SpiceDB schema and relationships
+
+SpiceDB uses a schema language to define your authorisation model:
+
+```zed
+definition user {}
+
+definition group {
+    relation member: user | group#member
+    relation admin: user
+    permission view_members = member + admin
+}
+
+definition organisation {
+    relation owner: user
+    relation admin: user | group#member
+    relation member: user | group#member
+    permission manage = owner + admin
+    permission read = manage + member
+}
+
+definition project {
+    relation organisation: organisation
+    relation manager: user | group#member
+    relation contributor: user | group#member
+    relation viewer: user | group#member
+    permission manage = manager + organisation->manage
+    permission write = manage + contributor
+    permission read = write + viewer + organisation->read
+}
+
+definition document {
+    relation project: project
+    relation owner: user
+    relation editor: user | group#member
+    relation viewer: user | group#member
+    permission manage = owner + project->manage
+    permission write = manage + editor + project->write
+    permission read = write + viewer + project->read
+}
+```
+
+### Writing relationships and checking permissions
+
+```typescript
+const { v1 } = require("@authzed/authzed-node");
+
+const client = v1.NewClient("your-spicedb-token", "localhost:50051", v1.ClientSecurity.INSECURE_PLAINTEXT_CREDENTIALS);
+
+// Write a relationship: alice is a member of engineering
+await client.writeRelationships(
+  v1.WriteRelationshipsRequest.create({
+    updates: [
+      v1.RelationshipUpdate.create({
+        operation: v1.RelationshipUpdate_Operation.TOUCH,
+        relationship: v1.Relationship.create({
+          resource: v1.ObjectReference.create({ objectType: "group", objectId: "engineering" }),
+          relation: "member",
+          subject: v1.SubjectReference.create({
+            object: v1.ObjectReference.create({ objectType: "user", objectId: "alice" }),
+          }),
+        }),
+      }),
+    ],
+  })
+);
+
+// Check permission: can alice read the design-spec document?
+const checkResponse = await client.checkPermission(
+  v1.CheckPermissionRequest.create({
+    resource: v1.ObjectReference.create({ objectType: "document", objectId: "design-spec" }),
+    permission: "read",
+    subject: v1.SubjectReference.create({
+      object: v1.ObjectReference.create({ objectType: "user", objectId: "alice" }),
+    }),
+  })
+);
+
+const hasAccess =
+  checkResponse.permissionship === v1.CheckPermissionResponse_Permissionship.HAS_PERMISSION;
+```
+
+### OpenFGA alternative
+
+OpenFGA offers a similar model with a JSON-based schema:
+
+```json
+{
+  "schema_version": "1.1",
+  "type_definitions": [
+    {
+      "type": "user"
+    },
+    {
+      "type": "document",
+      "relations": {
+        "owner": {
+          "this": {}
+        },
+        "editor": {
+          "this": {}
+        },
+        "viewer": {
+          "union": {
+            "child": [
+              { "this": {} },
+              { "computedUserset": { "relation": "editor" } },
+              { "computedUserset": { "relation": "owner" } }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "owner": { "directly_related_user_types": [{ "type": "user" }] },
+          "editor": { "directly_related_user_types": [{ "type": "user" }] },
+          "viewer": { "directly_related_user_types": [{ "type": "user" }] }
+        }
+      }
+    }
+  ]
+}
+```
+
+```bash
+# Write a relationship tuple
+fga tuple write user:bob editor document:roadmap --store-id=$STORE_ID
+
+# Check access
+fga query check user:bob viewer document:roadmap --store-id=$STORE_ID
+```
+
+Both SpiceDB and OpenFGA provide sub-millisecond permission checks at scale by maintaining pre-computed relationship indexes. For SaaS applications with complex sharing models, ReBAC is often the most natural and maintainable choice.
+
+---
+
+## What is Privileged Access Management?
+
+**Privileged Access Management (PAM)** is a specialised domain within identity governance focused on controlling, monitoring, and auditing access to highly sensitive systems and accounts — the "keys to the kingdom." Privileged accounts include root/administrator accounts, service accounts with elevated permissions, database administrator credentials, and infrastructure management accounts.
+
+### Why PAM is critical
+
+Privileged accounts represent the highest-value targets for attackers. A compromised administrator account can bypass virtually all other security controls. PAM addresses this by introducing additional governance layers specifically for privileged access.
+
+### Core PAM capabilities
+
+*   **Credential vaulting** — Privileged credentials are stored in a hardened vault (such as HashiCorp Vault or CyberArk) rather than in configuration files or developer laptops. Users and applications check out credentials when needed and check them back in when finished.
+
+```bash
+# Retrieve a database credential from HashiCorp Vault
+vault read database/creds/finance-readonly
+
+# Output:
+# Key                Value
+# ---                -----
+# lease_id           database/creds/finance-readonly/abc123
+# lease_duration     1h
+# username           v-finance-readonly-xyz789
+# password           A1B2-C3D4-E5F6-G7H8
+```
+
+*   **Just-in-time (JIT) access** — Rather than granting standing privileged access, JIT provisioning grants elevated permissions only when needed and only for a limited duration. A developer requesting production database access receives a temporary credential that expires after one hour, rather than a permanent password.
+
+*   **Session recording** — All privileged sessions are recorded and stored for forensic review. If a privileged user performs an unexpected action — such as bulk-deleting records or modifying security configurations — the session recording provides a complete audit trail of exactly what commands were executed.
+
+*   **Break-glass procedures** — Emergency access mechanisms that allow authorised personnel to bypass normal approval workflows in critical situations (such as a production outage) while still maintaining full audit logging. Break-glass events trigger immediate alerts to the security team.
+
+---
+
+## How do cloud providers handle governance?
+
+Each major cloud provider offers native tooling for identity governance. Understanding these tools is essential for building a comprehensive governance strategy in cloud environments.
+
+### AWS IAM Access Analyzer
+
+**AWS IAM Access Analyzer** identifies resources shared with external entities and validates IAM policies against best practices:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LeastPrivilegeFinanceRead",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::finance-reports",
+        "arn:aws:s3:::finance-reports/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalTag/Department": "Finance"
+        },
+        "IpAddress": {
+          "aws:SourceIp": "10.0.0.0/8"
+        }
+      }
+    }
+  ]
+}
+```
+
+Access Analyzer also generates **least-privilege policies** by analysing CloudTrail logs to determine which permissions a principal actually used, then recommending a policy that grants only those permissions.
+
+### Azure Privileged Identity Management (PIM)
+
+**Azure PIM** provides just-in-time privileged access, time-bound role assignments, and access reviews natively within Microsoft Entra ID:
+
+*   **Eligible assignments** — Users are assigned as eligible for a role but do not have standing access. They must activate the role when needed, providing a justification and optionally completing MFA.
+*   **Time-bound activation** — Activated roles expire after a configurable duration (e.g., 4 hours), preventing privilege accumulation.
+*   **Approval workflows** — Role activations can require approval from designated approvers before access is granted.
+*   **Access reviews** — PIM integrates with Entra ID access reviews to periodically certify that eligible assignments are still appropriate.
+
+### GCP IAM Recommender
+
+**GCP IAM Recommender** analyses permission usage patterns and recommends role reductions:
+
+```bash
+# List IAM policy recommendations for a project
+gcloud recommender recommendations list \
+  --project=my-project \
+  --recommender=google.iam.policy.Recommender \
+  --location=global \
+  --format="table(name,description,primaryImpact.category)"
+
+# Apply a recommendation to reduce over-provisioned access
+gcloud recommender recommendations mark-claimed \
+  --recommendation=RECOMMENDATION_ID \
+  --project=my-project \
+  --location=global \
+  --etag=ETAG
+```
+
+All three providers share a common theme: **analyse what access is actually used, compare it to what is granted, and recommend reductions to achieve least privilege.** The governance value comes from integrating these cloud-native signals into your broader IGA programme.
+
+---
+
+## What does an identity governance architecture look like?
+
+Bringing all the components together, a comprehensive identity governance architecture includes several interconnected systems working in concert:
+
+*   **Identity source** — The authoritative source of user identities, typically an HR system or directory service. Changes here (new hire, role change, termination) trigger downstream provisioning workflows.
+*   **Provisioning engine** — Automates the creation, modification, and deletion of user accounts and entitlements across connected target systems based on identity lifecycle events and approved access requests.
+*   **Policy engine** — Evaluates access decisions in real time using the configured access control model (RBAC, ABAC, ReBAC, or a combination). Integrates with the provisioning engine to enforce policy-driven assignments.
+*   **Access request portal** — A self-service interface where users can browse available access packages, submit requests, and track approval status. Reduces IT ticket volume and provides a governed channel for access requests.
+*   **Access review engine** — Orchestrates periodic certification campaigns, routes review items to designated reviewers, and executes remediation actions for revoked entitlements.
+*   **Audit and reporting layer** — Captures every identity event — provisioning actions, access decisions, review outcomes, policy changes — into an immutable audit trail. Provides pre-built reports for regulatory compliance (SOX, GDPR, HIPAA, PCI-DSS).
+*   **PAM vault** — Secures privileged credentials, manages JIT access workflows, records privileged sessions, and integrates with the broader governance platform.
+
+![Comprehensive identity governance architecture showing the interconnected components from identity source through provisioning, policy engine, access reviews, and audit trail](/blog/deep-dive-identity-governance/inline-6.png)
+
+Identity Governance Architecture
+
+The architecture above illustrates how these components connect. The identity source feeds the provisioning engine, which enforces policies from the policy engine. Access requests flow through the approval workflow, access reviews continuously validate existing entitlements, and every action is captured in the audit layer. The PAM vault sits alongside the provisioning engine, managing a separate elevated-access workflow for privileged credentials.
+
+---
+
+## Okay, what terminology do I need to understand?
+
+### Identity Governance and Administration (IGA)
+
+The discipline and tooling that manages digital identities and their access rights across an organisation, ensuring compliance, least privilege, and auditability.
+
+### Joiner-Mover-Leaver
+
+The three phases of the identity lifecycle describing how access is provisioned when a user joins, adjusted when they change roles, and revoked when they depart.
+
+### Birthright Provisioning
+
+The automatic assignment of a baseline set of access rights to a new user based on their attributes (department, role, location) without requiring a manual request.
+
+### Privilege Creep
+
+The gradual accumulation of access rights over time as a user changes roles or takes on additional responsibilities without having their previous access revoked.
+
+### Role Explosion
+
+The scaling problem in RBAC where the number of roles required grows combinatorially as the organisation adds departments, locations, and job functions.
+
+### Toxic Combination
+
+A pair of permissions that, when held by a single individual, creates an unacceptable risk — for example, the ability to both create and approve financial transactions.
+
+### Access Certification
+
+A periodic review process where designated reviewers examine and validate whether users' existing access rights remain appropriate and compliant.
+
+### Entitlement
+
+A specific permission or access right granted to a user on a target system — for example, read access to an S3 bucket or membership in an Active Directory group.
+
+### Policy Decision Point (PDP)
+
+The component in an ABAC architecture that evaluates access requests against defined policies and returns a permit or deny decision.
+
+### Relationship Tuple
+
+The fundamental data structure in ReBAC systems, expressing a relationship between a subject and a resource — for example, `user:alice#viewer@document:spec`.
+
+### Just-in-Time (JIT) Access
+
+A PAM practice where privileged access is granted only when needed and for a limited duration, rather than maintaining standing elevated permissions.
+
+### Break-Glass Access
+
+An emergency access mechanism that bypasses normal approval workflows during critical incidents while maintaining full audit logging.
+
+### Least Privilege
+
+The security principle that every user, process, and system should operate with the minimum set of permissions necessary to perform their function — no more.
+
+### Orphaned Account
+
+A user account that remains active on a system after the individual it belongs to has left the organisation, creating an unmonitored access vector.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

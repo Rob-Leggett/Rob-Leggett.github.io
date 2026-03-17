@@ -1,0 +1,984 @@
+---
+title: "Deep Dive - API Authentication and Authorisation"
+date: "2025-07-18"
+slug: "deep-dive-api-authentication"
+status: "publish"
+feature_image: "/blog/deep-dive-api-authentication/feature-image.png"
+tags: ["API Security", "Authentication", "Authorisation", "OAuth 2.0", "JWT", "mTLS", "API Gateway", "HMAC", "Rate Limiting", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - API Authentication and Authorisation | Robert Leggett"
+  description: "A comprehensive deep dive into API Authentication and Authorisation — covering API keys, OAuth 2.0, JWT, mTLS, HMAC signing, API gateways, rate limiting, and security best practices."
+  keywords: ["API Authentication", "API Authorisation", "OAuth 2.0", "JWT", "mTLS", "HMAC Signing", "API Gateway", "Rate Limiting", "API Security", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-api-authentication"
+  image: "https://robertleggett.com.au/blog/deep-dive-api-authentication/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - API Authentication and Authorisation"
+  description: "A comprehensive deep dive into API Authentication and Authorisation — from API keys and OAuth 2.0 through to JWT validation, mutual TLS, HMAC signing, and gateway-level security across AWS, Kong, and Azure."
+  image: "https://robertleggett.com.au/blog/deep-dive-api-authentication/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-api-authentication"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - API Authentication and Authorisation"
+  description: "From API keys to mTLS — a complete technical reference for securing APIs with modern authentication and authorisation patterns."
+  image: "https://robertleggett.com.au/blog/deep-dive-api-authentication/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of API Authentication and Authorisation, unravelling the mechanisms that keep our APIs secure in a world where machine-to-machine and user-to-API communication is the backbone of modern software. Whether you are a backend engineer implementing authentication middleware or an architect designing a platform security strategy, our goal is to provide clear and thorough explanations that will enhance your understanding of how APIs verify identity and enforce access. Join us on this enlightening journey as we explore everything from simple API keys through to mutual TLS and HMAC signing, empowering you to build APIs that are both usable and secure. Let's dive in and demystify API authentication together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of API authentication and authorisation — from API keys and OAuth 2.0 through to JWT validation, mTLS, HMAC signing, gateway-level enforcement, rate limiting, and security best practices
+*   Practical code examples in Node.js, Python, and shell commands that you can adapt for your own services
+*   A clear mental model for choosing the right authentication mechanism for your use case
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is API authentication?
+
+Think of API authentication like arriving at a secure building. Before you can enter, you need to show your identification badge at the front desk. The security guard does not care what floor you want to visit or which meeting room you need — their only job is to confirm that you are who you claim to be. API authentication works in exactly the same way.
+
+**API authentication** is the process of verifying the identity of a client making a request to an API. The client might be a mobile application acting on behalf of a user, a backend microservice calling another service, or an external partner system integrating with your platform. Regardless of the caller, authentication answers one fundamental question: *who are you?*
+
+In machine-to-machine communication, identity is typically established through credentials such as API keys, client certificates, or cryptographic signatures. In user-to-API scenarios, identity is usually conveyed through bearer tokens issued by an identity provider after the user has signed in.
+
+Without authentication, your API is an open door — any client on the network can make requests, and you have no way to attribute actions, enforce quotas, or audit behaviour.
+
+![API authentication flow showing client presenting credentials to API and receiving access](/blog/deep-dive-api-authentication/inline-1.png)
+
+API Authentication Flow
+
+---
+
+## What is API authorisation?
+
+If authentication is showing your badge at the front desk, **authorisation** is the access card that determines which floors and rooms you are allowed to enter. Once the building knows who you are, it still needs to decide what you are permitted to do.
+
+**API authorisation** is the process of determining whether an authenticated client has permission to perform the requested action on a given resource. Authentication and authorisation are distinct but complementary — authentication establishes identity, and authorisation enforces access control based on that identity.
+
+Authorisation can be implemented at multiple levels:
+
+*   **Role-based access control (RBAC)** — permissions are assigned to roles, and clients are assigned to roles (e.g. `admin`, `read-only`, `billing`)
+*   **Scope-based access control** — OAuth 2.0 scopes define the boundaries of what an access token is allowed to do (e.g. `read:orders`, `write:products`)
+*   **Attribute-based access control (ABAC)** — decisions are based on attributes of the client, resource, and environment (e.g. department, time of day, IP range)
+*   **Policy-based access control** — a centralised policy engine (such as Open Policy Agent) evaluates rules against request context
+
+A well-designed API enforces authorisation at every endpoint, never relying solely on the assumption that an authenticated client is allowed to do everything.
+
+---
+
+## What are API keys?
+
+**API keys** are the simplest form of API authentication. An API key is a long, randomly generated string that a client includes with each request. The server looks up the key, identifies the associated client or project, and grants or denies access accordingly.
+
+### How API keys work
+
+The typical flow is straightforward:
+
+1.  A developer registers an application and receives an API key from the provider
+2.  The client includes the key in each request, typically as a header or query parameter
+3.  The server validates the key against a database of known keys
+4.  If valid, the request proceeds; if not, the server returns a `401 Unauthorised` response
+
+### Sending API keys in requests
+
+The most common approach is to send the API key as a custom header:
+
+```bash
+curl -H "X-API-Key: sk_live_abc123def456ghi789" \
+  https://api.example.com/v1/orders
+```
+
+Some APIs accept the key as a query parameter, though this is less secure because URLs are often logged:
+
+```bash
+curl "https://api.example.com/v1/orders?api_key=sk_live_abc123def456ghi789"
+```
+
+### Validating API keys in Express.js
+
+```javascript
+const express = require("express");
+const app = express();
+
+const API_KEYS = new Map([
+  ["sk_live_abc123def456ghi789", { client: "partner-a", tier: "premium" }],
+  ["sk_live_xyz987uvw654rst321", { client: "partner-b", tier: "standard" }],
+]);
+
+function authenticateApiKey(req, res, next) {
+  const apiKey = req.headers["x-api-key"];
+
+  if (!apiKey) {
+    return res.status(401).json({ error: "Missing API key" });
+  }
+
+  const client = API_KEYS.get(apiKey);
+  if (!client) {
+    return res.status(401).json({ error: "Invalid API key" });
+  }
+
+  req.client = client;
+  next();
+}
+
+app.use(authenticateApiKey);
+
+app.get("/v1/orders", (req, res) => {
+  res.json({ client: req.client.client, orders: [] });
+});
+
+app.listen(3000);
+```
+
+### When to use API keys
+
+API keys are appropriate for server-to-server communication where the key can be stored securely, for identifying calling applications rather than individual users, and for enforcing rate limits and usage quotas per client. They are not suitable for browser-based or mobile applications where the key would be exposed in client-side code.
+
+### Security risks
+
+*   Keys transmitted in query parameters may be logged in server access logs, proxy logs, and browser history
+*   Keys do not expire by default — a leaked key remains valid until manually revoked
+*   Keys alone cannot represent fine-grained permissions without additional metadata
+*   Keys are shared secrets — if a key is compromised, there is no way to distinguish between the legitimate client and the attacker
+
+---
+
+## What is OAuth 2.0 for APIs?
+
+**OAuth 2.0** is an authorisation framework that enables a client to obtain limited access to an API on behalf of a resource owner (a user) or on its own behalf (machine-to-machine). Rather than sharing credentials directly, OAuth 2.0 issues **access tokens** — short-lived, scoped credentials that the client presents to the API.
+
+### The Client Credentials flow
+
+For machine-to-machine communication — where no user is involved — the **Client Credentials** grant type is the standard approach. The client authenticates directly with the authorisation server using its own credentials and receives an access token.
+
+![OAuth 2.0 Client Credentials flow showing client exchanging credentials for an access token at the authorisation server](/blog/deep-dive-api-authentication/inline-2.png)
+
+OAuth 2.0 Client Credentials Flow
+
+The flow works as follows:
+
+1.  The client sends its `client_id` and `client_secret` to the authorisation server's token endpoint
+2.  The authorisation server validates the credentials
+3.  The authorisation server issues an access token with the requested scopes
+4.  The client includes the access token in the `Authorization` header when calling the API
+5.  The API validates the token and checks scopes before processing the request
+
+### Requesting a token
+
+```bash
+curl -X POST https://auth.example.com/oauth/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=my-service" \
+  -d "client_secret=s3cr3t" \
+  -d "scope=read:orders write:orders"
+```
+
+The authorisation server responds with:
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "read:orders write:orders"
+}
+```
+
+### Using the token
+
+```bash
+curl -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  https://api.example.com/v1/orders
+```
+
+The key advantage of OAuth 2.0 is that access tokens are short-lived and scoped. If a token is compromised, the blast radius is limited to the scopes granted and the remaining lifetime of the token. The client credentials themselves are never sent to the resource API — only to the authorisation server.
+
+---
+
+## What is JWT-based API auth?
+
+A **JSON Web Token (JWT)** is a compact, URL-safe token format that encodes claims as a JSON payload, signed cryptographically so that the recipient can verify its authenticity without calling back to the issuer. JWTs are the most common format for OAuth 2.0 access tokens in modern API architectures.
+
+### Structure of a JWT
+
+A JWT consists of three Base64URL-encoded parts separated by dots: `header.payload.signature`.
+
+*   **Header** — specifies the signing algorithm (e.g. `RS256`) and token type
+*   **Payload** — contains claims such as `sub` (subject), `iss` (issuer), `exp` (expiry), `aud` (audience), and custom claims like scopes or roles
+*   **Signature** — created by signing the header and payload with a private key (asymmetric) or shared secret (symmetric)
+
+![JWT structure showing header, payload, and signature components with a numbered validation flow](/blog/deep-dive-api-authentication/inline-3.png)
+
+JWT Structure and Validation Flow
+
+### The validation flow
+
+1.  The client sends a request with the JWT in the `Authorization: Bearer <token>` header
+2.  The API extracts the token and decodes the header to determine the signing algorithm
+3.  The API retrieves the public key from the issuer's JWKS (JSON Web Key Set) endpoint
+4.  The API verifies the signature using the public key
+5.  The API checks the `exp` claim to ensure the token has not expired
+6.  The API checks the `iss` and `aud` claims to ensure the token was issued for this API
+7.  The API extracts scopes or roles from the payload and enforces authorisation
+
+The beauty of JWT-based authentication is that the API can validate tokens locally — without making a network call to the authorisation server on every request. This is critical for high-throughput APIs where latency matters.
+
+---
+
+## What is mutual TLS (mTLS)?
+
+In standard TLS, only the server presents a certificate — the client verifies the server's identity, but the server has no cryptographic proof of the client's identity. **Mutual TLS (mTLS)** extends this by requiring both parties to present and validate certificates during the TLS handshake.
+
+### How mTLS works
+
+1.  The client initiates a TLS connection to the server
+2.  The server presents its certificate and requests a client certificate
+3.  The client presents its certificate, signed by a trusted Certificate Authority (CA)
+4.  The server validates the client certificate against its trusted CA list
+5.  If both certificates are valid, the encrypted channel is established with both parties authenticated
+
+![Mutual TLS handshake showing bidirectional certificate exchange between client and server](/blog/deep-dive-api-authentication/inline-4.png)
+
+Mutual TLS Handshake
+
+mTLS provides strong, cryptographic identity verification without transmitting secrets over the wire. It is particularly well suited for service-to-service communication within a zero trust architecture, where every service must prove its identity to every other service.
+
+### Generating certificates with OpenSSL
+
+First, create a Certificate Authority:
+
+```bash
+# Generate CA private key
+openssl genrsa -out ca.key 4096
+
+# Generate CA certificate
+openssl req -new -x509 -days 365 -key ca.key -out ca.crt \
+  -subj "/CN=My Internal CA/O=Example Corp"
+```
+
+Generate a server certificate:
+
+```bash
+# Generate server key and CSR
+openssl genrsa -out server.key 2048
+openssl req -new -key server.key -out server.csr \
+  -subj "/CN=api.example.com/O=Example Corp"
+
+# Sign with CA
+openssl x509 -req -days 365 -in server.csr -CA ca.crt -CAkey ca.key \
+  -CAcreateserial -out server.crt
+```
+
+Generate a client certificate:
+
+```bash
+# Generate client key and CSR
+openssl genrsa -out client.key 2048
+openssl req -new -key client.key -out client.csr \
+  -subj "/CN=order-service/O=Example Corp"
+
+# Sign with CA
+openssl x509 -req -days 365 -in client.csr -CA ca.crt -CAkey ca.key \
+  -CAcreateserial -out client.crt
+```
+
+Test the connection:
+
+```bash
+curl --cert client.crt --key client.key --cacert ca.crt \
+  https://api.example.com/v1/orders
+```
+
+---
+
+## What is HMAC request signing?
+
+**HMAC (Hash-based Message Authentication Code) request signing** is a technique where the client constructs a canonical representation of the request and signs it with a shared secret. The server reconstructs the same canonical string and verifies the signature. This proves that the request was sent by someone who possesses the secret and that the request has not been tampered with in transit.
+
+AWS Signature Version 4 is the most well-known implementation of this pattern, used to authenticate every request to AWS services.
+
+### How HMAC signing works
+
+1.  The client constructs a **canonical request** string from the HTTP method, path, query parameters, headers, and request body hash
+2.  The client creates a **string to sign** that includes a timestamp, credential scope, and hash of the canonical request
+3.  The client derives a **signing key** from the secret key using a chain of HMAC operations
+4.  The client computes the **signature** by applying HMAC-SHA256 to the string to sign using the derived key
+5.  The client includes the signature in the `Authorization` header along with metadata about which headers were signed
+6.  The server repeats the same process and compares the computed signature with the one provided
+
+![HMAC request signing process showing canonical request construction, signing key derivation, and signature computation](/blog/deep-dive-api-authentication/inline-5.png)
+
+HMAC Request Signing Process
+
+### Implementing HMAC signing in Node.js
+
+```javascript
+const crypto = require("crypto");
+
+function signRequest({ method, path, headers, body, secretKey, accessKeyId }) {
+  const timestamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  const date = timestamp.substring(0, 8);
+
+  const bodyHash = crypto.createHash("sha256").update(body || "").digest("hex");
+
+  const canonicalHeaders = `host:${headers.host}\nx-date:${timestamp}\n`;
+  const signedHeaders = "host;x-date";
+
+  const canonicalRequest = [
+    method,
+    path,
+    "",
+    canonicalHeaders,
+    signedHeaders,
+    bodyHash,
+  ].join("\n");
+
+  const credentialScope = `${date}/api/request`;
+  const stringToSign = [
+    "HMAC-SHA256",
+    timestamp,
+    credentialScope,
+    crypto.createHash("sha256").update(canonicalRequest).digest("hex"),
+  ].join("\n");
+
+  const signingKey = crypto
+    .createHmac("sha256", `SIGN${secretKey}`)
+    .update(date)
+    .digest();
+  const finalKey = crypto
+    .createHmac("sha256", signingKey)
+    .update("api")
+    .digest();
+
+  const signature = crypto
+    .createHmac("sha256", finalKey)
+    .update(stringToSign)
+    .digest("hex");
+
+  return {
+    authorization: `HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+    "x-date": timestamp,
+  };
+}
+```
+
+The strength of HMAC signing is that the secret key is never transmitted — only the derived signature is sent. The request is tamper-proof because any modification to the method, path, headers, or body would produce a different signature. The timestamp prevents replay attacks.
+
+---
+
+## How does API Gateway authentication work?
+
+An **API Gateway** sits in front of your backend services and acts as the single entry point for all API traffic. One of its primary responsibilities is to offload authentication and authorisation so that individual services do not need to implement these concerns independently.
+
+### AWS API Gateway authorisers
+
+AWS API Gateway supports three types of authorisers:
+
+*   **Lambda authoriser** — a custom Lambda function that receives the request (or just the token) and returns an IAM policy document that grants or denies access. This gives you complete flexibility to implement any authentication logic.
+*   **Cognito User Pool authoriser** — integrates directly with Amazon Cognito. The gateway validates the JWT issued by Cognito and extracts claims. No custom code required for standard JWT validation.
+*   **IAM authorisation** — the request must be signed with AWS Signature Version 4. This is used for AWS-to-AWS service calls and provides IAM-level access control.
+
+![API Gateway authentication architecture showing Lambda, Cognito, and IAM authoriser flows](/blog/deep-dive-api-authentication/inline-6.png)
+
+API Gateway Authoriser Architecture
+
+### Lambda authoriser example
+
+```javascript
+exports.handler = async (event) => {
+  const token = event.authorizationToken?.replace("Bearer ", "");
+
+  if (!token) {
+    return generatePolicy("anonymous", "Deny", event.methodArn);
+  }
+
+  try {
+    const decoded = await verifyJwt(token);
+
+    return generatePolicy(decoded.sub, "Allow", event.methodArn, {
+      userId: decoded.sub,
+      scopes: decoded.scope,
+    });
+  } catch (err) {
+    return generatePolicy("anonymous", "Deny", event.methodArn);
+  }
+};
+
+function generatePolicy(principalId, effect, resource, context = {}) {
+  return {
+    principalId,
+    policyDocument: {
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Action: "execute-api:Invoke",
+          Effect: effect,
+          Resource: resource,
+        },
+      ],
+    },
+    context,
+  };
+}
+```
+
+The gateway caches the authoriser response for a configurable TTL, so subsequent requests with the same token do not invoke the Lambda function again. This is critical for reducing latency and cost at scale.
+
+---
+
+## What is rate limiting and throttling?
+
+**Rate limiting** controls how many requests a client can make within a given time window. **Throttling** is the enforcement mechanism — when a client exceeds the limit, the API rejects or delays subsequent requests. Together, they protect APIs from abuse, denial-of-service attacks, and runaway clients that might overwhelm backend systems.
+
+### The token bucket algorithm
+
+The **token bucket** algorithm is one of the most widely used rate limiting strategies. The concept is intuitive:
+
+*   A bucket holds tokens, with a maximum capacity (the **burst limit**)
+*   Tokens are added to the bucket at a fixed rate (the **refill rate**)
+*   Each request consumes one token
+*   If the bucket is empty, the request is rejected with `429 Too Many Requests`
+*   Tokens accumulate when the client is idle, allowing short bursts of traffic
+
+### Token bucket implementation in Node.js
+
+```javascript
+class TokenBucket {
+  constructor(capacity, refillRate) {
+    this.capacity = capacity;
+    this.tokens = capacity;
+    this.refillRate = refillRate;
+    this.lastRefill = Date.now();
+  }
+
+  consume() {
+    this.refill();
+
+    if (this.tokens >= 1) {
+      this.tokens -= 1;
+      return true;
+    }
+
+    return false;
+  }
+
+  refill() {
+    const now = Date.now();
+    const elapsed = (now - this.lastRefill) / 1000;
+    this.tokens = Math.min(this.capacity, this.tokens + elapsed * this.refillRate);
+    this.lastRefill = now;
+  }
+}
+
+const buckets = new Map();
+
+function rateLimitMiddleware(req, res, next) {
+  const clientId = req.client?.client || req.ip;
+
+  if (!buckets.has(clientId)) {
+    buckets.set(clientId, new TokenBucket(100, 10));
+  }
+
+  const bucket = buckets.get(clientId);
+
+  if (!bucket.consume()) {
+    res.set("Retry-After", "10");
+    return res.status(429).json({ error: "Rate limit exceeded" });
+  }
+
+  res.set("X-RateLimit-Remaining", Math.floor(bucket.tokens).toString());
+  next();
+}
+```
+
+This implementation allows 100 requests in a burst and refills at 10 tokens per second. The `Retry-After` header tells clients when they can retry, and `X-RateLimit-Remaining` provides visibility into their current allowance.
+
+---
+
+## What is OAuth 2.0 scope-based authorisation?
+
+**Scopes** are the authorisation mechanism within OAuth 2.0. A scope is a string that represents a specific permission — for example, `read:orders` grants permission to read orders, while `write:orders` grants permission to create or modify them. When a client requests an access token, it specifies which scopes it needs. The authorisation server includes only the approved scopes in the token.
+
+### Defining scopes
+
+A well-designed scope system follows a consistent naming convention:
+
+*   `read:resource` — read access to a resource
+*   `write:resource` — create and update access
+*   `delete:resource` — delete access
+*   `admin:resource` — full administrative access
+
+### Scope validation middleware in Express.js
+
+```javascript
+function requireScopes(...requiredScopes) {
+  return (req, res, next) => {
+    const tokenScopes = req.auth?.scope?.split(" ") || [];
+
+    const hasAllScopes = requiredScopes.every((scope) =>
+      tokenScopes.includes(scope)
+    );
+
+    if (!hasAllScopes) {
+      return res.status(403).json({
+        error: "Insufficient scope",
+        required: requiredScopes,
+        provided: tokenScopes,
+      });
+    }
+
+    next();
+  };
+}
+
+app.get("/v1/orders", requireScopes("read:orders"), (req, res) => {
+  res.json({ orders: [] });
+});
+
+app.post("/v1/orders", requireScopes("write:orders"), (req, res) => {
+  res.status(201).json({ order: { id: "ord_123" } });
+});
+
+app.delete("/v1/orders/:id", requireScopes("delete:orders"), (req, res) => {
+  res.status(204).send();
+});
+```
+
+The middleware extracts scopes from the validated token and checks that every required scope is present. If any scope is missing, the API returns `403 Forbidden` with a clear error explaining which scopes are required. This gives clients actionable feedback for debugging authorisation failures.
+
+---
+
+## How do you implement JWT middleware?
+
+Let us look at complete JWT validation middleware implementations for two popular frameworks — Express.js and FastAPI.
+
+### Express.js JWT middleware
+
+```javascript
+const jwt = require("jsonwebtoken");
+const jwksClient = require("jwks-rsa");
+
+const client = jwksClient({
+  jwksUri: "https://auth.example.com/.well-known/jwks.json",
+  cache: true,
+  cacheMaxEntries: 5,
+  cacheMaxAge: 600000,
+});
+
+function getSigningKey(header, callback) {
+  client.getSigningKey(header.kid, (err, key) => {
+    if (err) return callback(err);
+    callback(null, key.getPublicKey());
+  });
+}
+
+function jwtMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Missing or malformed Authorization header" });
+  }
+
+  const token = authHeader.substring(7);
+
+  jwt.verify(
+    token,
+    getSigningKey,
+    {
+      algorithms: ["RS256"],
+      issuer: "https://auth.example.com/",
+      audience: "https://api.example.com",
+    },
+    (err, decoded) => {
+      if (err) {
+        if (err.name === "TokenExpiredError") {
+          return res.status(401).json({ error: "Token has expired" });
+        }
+        return res.status(401).json({ error: "Invalid token" });
+      }
+
+      req.auth = decoded;
+      next();
+    }
+  );
+}
+
+app.use(jwtMiddleware);
+```
+
+### FastAPI JWT middleware
+
+```python
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+import httpx
+from functools import lru_cache
+
+app = FastAPI()
+security = HTTPBearer()
+
+JWKS_URL = "https://auth.example.com/.well-known/jwks.json"
+ISSUER = "https://auth.example.com/"
+AUDIENCE = "https://api.example.com"
+
+@lru_cache(maxsize=1)
+def get_jwks():
+    response = httpx.get(JWKS_URL)
+    return response.json()
+
+def get_public_key(kid: str):
+    jwks = get_jwks()
+    for key in jwks["keys"]:
+        if key["kid"] == kid:
+            return jwt.algorithms.RSAAlgorithm.from_jwk(key)
+    raise HTTPException(status_code=401, detail="Signing key not found")
+
+async def validate_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    token = credentials.credentials
+
+    try:
+        unverified_header = jwt.get_unverified_header(token)
+        public_key = get_public_key(unverified_header["kid"])
+
+        payload = jwt.decode(
+            token,
+            public_key,
+            algorithms=["RS256"],
+            issuer=ISSUER,
+            audience=AUDIENCE,
+        )
+
+        return payload
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+@app.get("/v1/orders")
+async def get_orders(claims: dict = Depends(validate_token)):
+    return {"user": claims["sub"], "orders": []}
+```
+
+Both implementations follow the same core pattern: extract the token from the `Authorization` header, retrieve the public key from the JWKS endpoint, verify the signature and standard claims, and attach the decoded payload to the request context for downstream use.
+
+---
+
+## How do you implement mTLS?
+
+Let us build a Node.js HTTPS server that requires client certificates. This is useful for internal microservice communication where both the client and server must prove their identity.
+
+### Node.js HTTPS server with client certificates
+
+```javascript
+const https = require("https");
+const fs = require("fs");
+
+const options = {
+  key: fs.readFileSync("server.key"),
+  cert: fs.readFileSync("server.crt"),
+  ca: fs.readFileSync("ca.crt"),
+  requestCert: true,
+  rejectUnauthorized: true,
+};
+
+const server = https.createServer(options, (req, res) => {
+  const cert = req.socket.getPeerCertificate();
+
+  if (!cert || !cert.subject) {
+    res.writeHead(401);
+    res.end(JSON.stringify({ error: "Client certificate required" }));
+    return;
+  }
+
+  const clientCN = cert.subject.CN;
+  const clientOrg = cert.subject.O;
+
+  console.log(`Authenticated client: ${clientCN} (${clientOrg})`);
+
+  const allowedClients = ["order-service", "payment-service", "inventory-service"];
+
+  if (!allowedClients.includes(clientCN)) {
+    res.writeHead(403);
+    res.end(JSON.stringify({ error: "Client not authorised" }));
+    return;
+  }
+
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ message: "Authenticated via mTLS", client: clientCN }));
+});
+
+server.listen(8443, () => {
+  console.log("mTLS server listening on port 8443");
+});
+```
+
+The critical configuration options are `requestCert: true`, which tells the server to request a certificate from the client during the TLS handshake, and `rejectUnauthorized: true`, which rejects connections where the client certificate is not signed by one of the trusted CAs specified in the `ca` option. The server then extracts the client's Common Name (CN) from the certificate subject and uses it for identity and authorisation decisions.
+
+---
+
+## What is API key rotation?
+
+API keys have an inherent weakness: they are long-lived shared secrets. If a key is leaked — through a compromised log file, a developer's laptop, or a misconfigured repository — the attacker has indefinite access until the key is manually revoked. **API key rotation** is the practice of periodically replacing active keys with new ones, limiting the window of exposure.
+
+### Rotation strategy with grace periods
+
+A robust rotation strategy supports **overlapping validity** — a grace period where both the old and new keys are accepted. This prevents outages caused by clients that have not yet updated to the new key.
+
+The process works as follows:
+
+1.  **Generate** a new API key and store it alongside the existing key
+2.  **Activate** the new key — both old and new keys are now valid (grace period begins)
+3.  **Notify** the client to update to the new key
+4.  **Monitor** usage of both keys to confirm the client has migrated
+5.  **Revoke** the old key after the grace period expires
+
+![API key rotation timeline showing new key generation, grace period with dual validity, and old key revocation](/blog/deep-dive-api-authentication/inline-7.png)
+
+API Key Rotation Timeline
+
+### Automated rotation considerations
+
+*   Store keys in a secrets manager (AWS Secrets Manager, HashiCorp Vault, Azure Key Vault) that supports automated rotation
+*   Use event-driven notifications to alert consumers when a new key is available
+*   Set a rotation cadence of 30–90 days depending on your risk profile
+*   Log key usage to identify stale keys that can be revoked immediately
+*   Include a unique key prefix (e.g. `sk_live_`, `sk_test_`) to help developers identify the environment and purpose
+
+---
+
+## How do you handle API auth at the gateway level?
+
+Centralising authentication at the API gateway reduces duplication across services and ensures consistent enforcement. Let us look at how three popular gateways handle this.
+
+### Kong Gateway — JWT plugin
+
+```yaml
+plugins:
+  - name: jwt
+    config:
+      uri_param_names:
+        - jwt
+      claims_to_verify:
+        - exp
+      key_claim_name: iss
+      secret_is_base64: false
+      run_on_preflight: true
+
+  - name: acl
+    config:
+      allow:
+        - premium-tier
+        - standard-tier
+```
+
+Kong's JWT plugin validates the token signature, checks expiry, and extracts the issuer claim. The ACL (Access Control List) plugin then restricts access based on consumer groups, providing a layered approach to authentication and authorisation.
+
+### AWS API Gateway — HTTP API with JWT authoriser
+
+```json
+{
+  "Type": "AWS::ApiGatewayV2::Authorizer",
+  "Properties": {
+    "ApiId": { "Ref": "HttpApi" },
+    "AuthorizerType": "JWT",
+    "IdentitySource": "$request.header.Authorization",
+    "Name": "JwtAuthorizer",
+    "JwtConfiguration": {
+      "Audience": ["https://api.example.com"],
+      "Issuer": "https://auth.example.com/"
+    }
+  }
+}
+```
+
+AWS HTTP APIs support native JWT validation without a Lambda authoriser. You specify the expected audience and issuer, and the gateway handles signature verification, expiry checks, and claim extraction automatically.
+
+### Azure API Management — JWT validation policy
+
+```xml
+<inbound>
+  <validate-jwt header-name="Authorization"
+                failed-validation-httpcode="401"
+                failed-validation-error-message="Unauthorised"
+                require-expiration-time="true"
+                require-scheme="Bearer">
+    <openid-config url="https://auth.example.com/.well-known/openid-configuration" />
+    <audiences>
+      <audience>https://api.example.com</audience>
+    </audiences>
+    <issuers>
+      <issuer>https://auth.example.com/</issuer>
+    </issuers>
+    <required-claims>
+      <claim name="scope" match="any">
+        <value>read:orders</value>
+        <value>write:orders</value>
+      </claim>
+    </required-claims>
+  </validate-jwt>
+</inbound>
+```
+
+Azure API Management provides XML-based policies that run inline with the request pipeline. The `validate-jwt` policy handles OIDC discovery, signature validation, and claim-based authorisation in a single declaration.
+
+---
+
+## How do the different API auth mechanisms compare?
+
+Choosing the right authentication mechanism depends on your security requirements, operational complexity, and use case. The table below provides a side-by-side comparison.
+
+| Mechanism | Security Level | Best Use Case | Complexity | Credential Type | Replay Protection |
+|-----------|---------------|---------------|------------|-----------------|-------------------|
+| **API Keys** | Low–Medium | Server-to-server, usage tracking | Low | Shared secret | None |
+| **OAuth 2.0** | High | Delegated access, scoped permissions | Medium–High | Short-lived tokens | Token expiry |
+| **JWT** | High | Stateless token validation at scale | Medium | Signed tokens | Token expiry |
+| **mTLS** | Very High | Service mesh, zero trust, regulated industries | High | X.509 certificates | TLS session |
+| **HMAC** | High | Tamper-proof requests, AWS-style APIs | High | Shared secret + derived key | Timestamp window |
+
+*   **API Keys** — use when simplicity matters and the key can be stored securely on the server side
+*   **OAuth 2.0** — use when you need delegated access, scoped permissions, and token lifecycle management
+*   **JWT** — use when you need stateless, self-contained tokens that can be validated without a network call
+*   **mTLS** — use when you need the strongest possible identity guarantee, particularly for service-to-service communication
+*   **HMAC** — use when you need tamper-proof requests and cannot rely on TLS alone (e.g. signed webhooks, API providers)
+
+---
+
+## What are the security best practices?
+
+Securing APIs is not a single mechanism — it is a layered strategy. The following checklist covers the essential practices for production API security.
+
+### Always use HTTPS
+
+Every API endpoint must be served over TLS. Without HTTPS, credentials, tokens, and request bodies are transmitted in cleartext and can be intercepted by anyone on the network path.
+
+### Enforce token expiry
+
+Access tokens should have a short lifetime — typically 15 minutes to 1 hour. Refresh tokens can have a longer lifetime but must be stored securely and rotated on use.
+
+### Validate scopes at every endpoint
+
+Do not rely on authentication alone. Every endpoint should check that the token includes the required scopes or permissions for the requested action.
+
+### Implement rate limiting
+
+Protect your API from abuse and denial-of-service by enforcing rate limits per client, per IP, or per token. Return `429 Too Many Requests` with a `Retry-After` header.
+
+### Log and audit all access
+
+Maintain structured audit logs that capture the client identity, requested resource, action, timestamp, and result (allowed or denied). These logs are essential for incident response and compliance.
+
+### Rotate credentials regularly
+
+API keys, client secrets, and certificates should be rotated on a regular cadence. Use a secrets manager that supports automated rotation with grace periods.
+
+### Use the principle of least privilege
+
+Grant the minimum permissions necessary. If a service only reads orders, its token should only have `read:orders` — never `admin:orders` or a wildcard scope.
+
+### Validate all inputs
+
+Authentication does not protect against injection attacks. Always validate and sanitise request parameters, headers, and bodies regardless of whether the client is authenticated.
+
+### Use centralised API gateway enforcement
+
+Offload authentication and common security policies (rate limiting, IP allowlisting, header validation) to an API gateway. This ensures consistent enforcement and reduces the risk of individual services being misconfigured.
+
+### Monitor for anomalies
+
+Set up alerting for unusual patterns — sudden spikes in 401 or 403 responses, requests from unexpected IP ranges, or tokens being used from multiple geographic locations simultaneously.
+
+---
+
+## Okay, what terminology do I need to understand?
+
+### What is authentication?
+
+The process of verifying the identity of a client making a request. Authentication answers the question "who are you?" and is typically established through credentials such as passwords, tokens, certificates, or API keys.
+
+### What is authorisation?
+
+The process of determining whether an authenticated client has permission to perform a specific action on a given resource. Authorisation answers the question "what are you allowed to do?"
+
+### What is an API key?
+
+A long, randomly generated string used to identify and authenticate a client application. API keys are shared secrets — the client and server both know the key value.
+
+### What is OAuth 2.0?
+
+An authorisation framework that enables clients to obtain limited access to resources through short-lived, scoped access tokens rather than sharing credentials directly.
+
+### What is a JWT?
+
+A JSON Web Token — a compact, URL-safe token format consisting of a signed JSON payload. JWTs encode claims about the bearer and can be validated without contacting the issuer.
+
+### What is mTLS?
+
+Mutual Transport Layer Security — a TLS handshake where both the client and server present and validate X.509 certificates, providing bidirectional cryptographic identity verification.
+
+### What is HMAC?
+
+Hash-based Message Authentication Code — a mechanism for computing a message authentication code using a cryptographic hash function and a secret key, ensuring both integrity and authenticity.
+
+### What is a bearer token?
+
+A token that grants access to whoever possesses it (the "bearer"). Bearer tokens must be transmitted over encrypted channels because anyone who intercepts the token can use it.
+
+### What is a JWKS endpoint?
+
+A JSON Web Key Set endpoint — a URL that exposes the public keys used by an authorisation server to sign tokens. APIs use JWKS endpoints to retrieve keys for local token validation.
+
+### What is rate limiting?
+
+The practice of restricting the number of API requests a client can make within a given time window to protect against abuse, denial-of-service, and resource exhaustion.
+
+### What is a token bucket?
+
+A rate limiting algorithm that models a bucket of tokens refilled at a constant rate. Each request consumes a token; requests are rejected when the bucket is empty, while idle periods allow tokens to accumulate for burst capacity.
+
+### What is scope?
+
+A string that represents a specific permission within OAuth 2.0. Scopes define the boundaries of what an access token is authorised to do (e.g. `read:orders`, `write:users`).
+
+### What is an API gateway?
+
+An infrastructure component that sits in front of backend APIs and acts as the single entry point for all traffic. Gateways typically handle authentication, rate limiting, routing, and observability.
+
+### What is certificate rotation?
+
+The practice of periodically replacing TLS certificates before they expire, ensuring continuous encrypted communication and reducing the risk of compromised certificates.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

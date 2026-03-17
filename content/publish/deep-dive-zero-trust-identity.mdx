@@ -1,0 +1,861 @@
+---
+title: "Deep Dive - Zero Trust Identity"
+date: "2025-07-15"
+slug: "deep-dive-zero-trust-identity"
+status: "publish"
+feature_image: "/blog/deep-dive-zero-trust-identity/feature-image.png"
+tags: ["Zero Trust", "Identity", "Conditional Access", "Device Trust", "Risk-Based Authentication", "JIT Access", "ITDR", "Azure Entra", "AWS IAM", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Zero Trust Identity | Robert Leggett"
+  description: "A comprehensive deep dive into Zero Trust Identity — covering continuous authentication, context-aware access, device trust, risk-based authentication, conditional access policies, JIT access, session management, and identity threat detection across major cloud providers."
+  keywords: ["Zero Trust Identity", "Continuous Authentication", "Conditional Access", "Device Trust", "Risk-Based Authentication", "JIT Access", "ITDR", "Identity Threat Detection", "Azure Entra ID", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-zero-trust-identity"
+  image: "https://robertleggett.com.au/blog/deep-dive-zero-trust-identity/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Zero Trust Identity"
+  description: "A comprehensive deep dive into Zero Trust Identity — from continuous authentication and device trust to conditional access policies, JIT access, and identity threat detection across AWS, Azure, and GCP."
+  image: "https://robertleggett.com.au/blog/deep-dive-zero-trust-identity/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-zero-trust-identity"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Zero Trust Identity"
+  description: "From continuous authentication to identity threat detection — a complete technical reference for implementing identity-centric Zero Trust at scale."
+  image: "https://robertleggett.com.au/blog/deep-dive-zero-trust-identity/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Zero Trust Identity — the practice of treating identity as the primary security perimeter, replacing implicit trust with continuous verification of every user, device, and session. Whether you are a security engineer implementing conditional access policies or an architect designing an identity-centric platform, our goal is to provide clear and thorough explanations that will deepen your understanding of how modern organisations protect their resources through identity. The 2024 Verizon Data Breach Investigations Report found that over 80% of breaches involved compromised credentials, making identity the most critical attack surface in any organisation. Join us on this enlightening journey as we move beyond one-time logins and static permissions into a world where every access decision is continuously evaluated, context-aware, and risk-scored in real time. Let's dive in and demystify Zero Trust Identity together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of Zero Trust Identity — from continuous authentication, context-aware access, and device trust through to conditional access policies, JIT access, session management, and identity threat detection across AWS, Azure, and GCP
+*   Practical code examples and configuration snippets for implementing identity-centric Zero Trust using Azure Conditional Access, Google Context-Aware Access, and AWS Verified Access
+*   A maturity model for assessing and advancing your organisation's identity security posture from basic MFA through to continuous adaptive access
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is Zero Trust Identity?
+
+If you have read our previous deep dive on Zero Trust Architecture, you will recall that Zero Trust is built on the principle of **never trust, always verify**. That post explored the architectural foundations — microsegmentation, mTLS, policy engines, and enforcement points. In this post, we zoom in on the most critical dimension of any Zero Trust strategy: **identity**.
+
+**Zero Trust Identity** is the practice of treating identity — not the network — as the primary security perimeter. In a traditional model, once a user authenticates at the network edge (typically through a VPN), they are implicitly trusted to access resources within that network. Zero Trust Identity inverts this assumption entirely. Every access request must be authenticated, authorised, and continuously validated based on the identity of the user, the health of their device, the context of their request, and the sensitivity of the resource they are accessing.
+
+Think of it like an airport. The traditional perimeter model is like checking your passport at the front entrance and then letting you roam freely through every terminal, lounge, and runway. Zero Trust Identity is like having your boarding pass, passport, and identity verified at every gate, every lounge entrance, and every restricted area — and having security continuously monitor whether you still belong there.
+
+The key distinction from network-centric Zero Trust is this: **the network is no longer the trust boundary**. Identity is. A user on the corporate network receives no more implicit trust than a user connecting from a coffee shop. The identity, the device, the behaviour, and the context determine access — not the IP address.
+
+![Zero Trust Identity model showing identity as the new perimeter replacing network boundaries](/blog/deep-dive-zero-trust-identity/inline-1.png)
+
+Zero Trust Identity Model
+
+---
+
+## How did we get here?
+
+Understanding why identity became the new perimeter requires a brief look at how security models have evolved over the past two decades.
+
+### Phase 1 — The perimeter era
+
+In the early 2000s, most organisations relied on the **castle-and-moat model**. Firewalls and VPNs formed the defensive boundary. Employees worked from corporate offices, applications ran in on-premises data centres, and the network perimeter was well-defined. Authentication happened once at the edge, and users were trusted implicitly thereafter.
+
+### Phase 2 — Identity-aware proxies
+
+As cloud adoption accelerated and remote work became common, organisations realised that the perimeter had dissolved. Google's **BeyondCorp** initiative (published in 2014) pioneered the concept of an **identity-aware proxy** — a component that sits in front of applications and makes access decisions based on the identity of the user and the posture of their device, rather than their network location. This was a pivotal shift: access decisions moved from network firewalls to identity-aware middleware.
+
+### Phase 3 — Continuous verification
+
+The most recent evolution — and the focus of this post — is **continuous verification**. Rather than authenticating a user once and issuing a long-lived session token, modern Zero Trust Identity systems continuously evaluate the risk of every session. If a user's device falls out of compliance, if their behaviour changes anomalously, or if their geographic location shifts impossibly, the system can step up authentication, restrict access, or terminate the session entirely. This is where concepts like **risk-based authentication**, **conditional access**, and **identity threat detection** come into play.
+
+![Evolution of security models from perimeter to identity-aware proxy to continuous verification](/blog/deep-dive-zero-trust-identity/inline-2.png)
+
+Security Model Evolution
+
+---
+
+## What are the core principles?
+
+Zero Trust Identity is governed by a set of principles that apply the broader Zero Trust philosophy specifically to the identity domain. Let's walk through each one.
+
+### Never trust, always verify — applied to identity
+
+Every access request must present a verifiable identity. This means strong authentication (not just username and password), validated device identity, and contextual signals. A session token issued five minutes ago does not guarantee that the user's risk profile has not changed since.
+
+### Continuous authentication
+
+Authentication is not a one-time event. The system continuously evaluates the session against evolving risk signals. If the risk score changes — because the user's device lost its endpoint protection, because the IP address changed to a high-risk geography, or because the user's behaviour deviates from their baseline — the system responds dynamically.
+
+### Context-aware access
+
+Access decisions incorporate context beyond identity alone. Where is the user? What device are they using? What time is it? What resource are they accessing? What is the sensitivity classification of that resource? All of these signals feed into the access decision.
+
+### Least privilege
+
+Users, services, and devices receive only the minimum permissions required for their current task. Permissions are not standing — they are granted just in time and revoked automatically when no longer needed.
+
+### Assume breach
+
+The system is designed with the assumption that identities will be compromised. Therefore, it implements layered controls — session monitoring, anomaly detection, lateral movement detection — to contain the blast radius of any single compromised identity.
+
+---
+
+## What is continuous authentication?
+
+In a traditional model, authentication is a binary gate: the user proves their identity once, receives a session token, and is trusted for the lifetime of that token (often hours or even days). **Continuous authentication** fundamentally changes this model.
+
+With continuous authentication, the system does not simply issue a token and walk away. Instead, it maintains a **session risk score** that is continuously recalculated based on real-time signals. The session risk score determines whether the user retains their current level of access, is prompted for step-up authentication, or has their session terminated.
+
+Here is a simplified model of how a continuous authentication engine evaluates a session:
+
+```python
+from dataclasses import dataclass
+from enum import Enum
+
+
+class RiskLevel(Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+@dataclass
+class SessionContext:
+    user_id: str
+    device_compliant: bool
+    ip_reputation_score: float  # 0.0 (malicious) to 1.0 (clean)
+    geo_location: str
+    time_of_access: str
+    behaviour_anomaly_score: float  # 0.0 (normal) to 1.0 (anomalous)
+    mfa_completed: bool
+    minutes_since_auth: int
+
+
+def calculate_session_risk(ctx: SessionContext) -> RiskLevel:
+    score = 0.0
+
+    if not ctx.device_compliant:
+        score += 0.3
+    if ctx.ip_reputation_score < 0.5:
+        score += 0.2
+    if ctx.behaviour_anomaly_score > 0.7:
+        score += 0.25
+    if ctx.minutes_since_auth > 30:
+        score += 0.1
+    if not ctx.mfa_completed:
+        score += 0.15
+
+    if score >= 0.7:
+        return RiskLevel.CRITICAL
+    elif score >= 0.5:
+        return RiskLevel.HIGH
+    elif score >= 0.3:
+        return RiskLevel.MEDIUM
+    return RiskLevel.LOW
+```
+
+The continuous authentication engine then maps risk levels to enforcement actions:
+
+| Risk Level | Action | User Experience |
+|---|---|---|
+| Low | Allow access | Seamless — no interruption |
+| Medium | Step-up authentication | Prompt for MFA or biometric |
+| High | Restrict access | Read-only mode or limited scope |
+| Critical | Terminate session | Forced re-authentication |
+
+This model ensures that a compromised session is detected and contained within minutes, not hours. The user experience remains seamless for legitimate users operating under normal conditions, while anomalous sessions face progressively stricter controls.
+
+![Continuous authentication flow showing session risk scoring and enforcement actions](/blog/deep-dive-zero-trust-identity/inline-3.png)
+
+Continuous Authentication Flow
+
+---
+
+## What is context-aware access?
+
+**Context-aware access** extends the access decision beyond "who is requesting" to include "under what circumstances". A valid identity alone is insufficient — the system also evaluates the context of the request to determine whether access should be granted, restricted, or denied.
+
+The following signals typically feed into a context-aware access decision:
+
+### Device posture
+
+Is the device managed by the organisation? Is disk encryption enabled? Is the operating system patched to the latest version? Is an endpoint detection and response (EDR) agent running? A user authenticating from a jailbroken personal device should not receive the same level of access as a user on a fully managed, compliant corporate laptop.
+
+### Geographic location
+
+Where is the user connecting from? Is this consistent with their normal patterns? Is the location in a sanctioned country or a high-risk jurisdiction?
+
+### Time of access
+
+Is the user accessing resources during their normal working hours? A finance administrator accessing payroll systems at 3:00 AM on a Sunday may warrant additional scrutiny.
+
+### Behaviour anomaly
+
+Does the user's current behaviour match their historical baseline? Are they accessing resources they have never touched before? Are they downloading unusually large volumes of data?
+
+### Network context
+
+Is the user on a trusted corporate network, a known partner network, or an anonymous VPN exit node?
+
+Here is a decision matrix that illustrates how these signals combine:
+
+| Signal | Low Risk | Medium Risk | High Risk |
+|---|---|---|---|
+| Device | Managed, compliant, EDR active | Managed, minor non-compliance | Unmanaged or jailbroken |
+| Location | Home country, known IP | Foreign travel, known IP | Sanctioned country or Tor exit |
+| Time | Business hours | Outside hours, weekday | Outside hours, weekend/holiday |
+| Behaviour | Consistent with baseline | Minor deviation | Significant anomaly |
+| Network | Corporate or trusted VPN | Residential ISP | Anonymous proxy or VPN exit |
+
+The context-aware policy engine evaluates these signals in combination — not in isolation. A user on an unmanaged device (medium risk) accessing from a sanctioned country (high risk) at 3:00 AM (high risk) would trigger a very different response than the same user on a managed device from their home office during business hours.
+
+---
+
+## How does device trust work?
+
+**Device trust** is the practice of evaluating the security posture of a device as part of every access decision. In a Zero Trust Identity model, the device is treated as a first-class identity — it must prove its trustworthiness just as the user must prove theirs.
+
+Here is how device trust typically works in practice:
+
+1.  **Enrolment** — The device is enrolled in a **Mobile Device Management (MDM)** or **Unified Endpoint Management (UEM)** platform (such as Microsoft Intune, Jamf, or Google Endpoint Management). During enrolment, the platform provisions a **device certificate** that uniquely identifies the device.
+
+2.  **Posture assessment** — The MDM platform continuously evaluates the device against a set of compliance policies: operating system version, disk encryption status, firewall enabled, screen lock configured, EDR agent running, latest security patches applied.
+
+3.  **Certificate presentation** — When the device makes an access request, it presents its device certificate as part of the TLS handshake or as a header injected by a local agent. The policy engine validates the certificate against the MDM inventory.
+
+4.  **Compliance check** — The policy engine queries the MDM platform in real time to determine whether the device is currently compliant. If the device has fallen out of compliance (for example, the user disabled disk encryption), access is restricted or denied.
+
+5.  **Continuous monitoring** — The MDM platform continuously monitors device posture and can trigger policy re-evaluation if the device's compliance state changes mid-session.
+
+Here is an example of a device compliance policy defined in Microsoft Intune using a Terraform configuration:
+
+```hcl
+resource "azurerm_intune_device_compliance_policy" "corporate_windows" {
+  display_name = "Corporate Windows Compliance Policy"
+  platform     = "windows10AndLater"
+
+  os_minimum_version             = "10.0.22621"
+  bitlocker_enabled              = true
+  secure_boot_enabled            = true
+  code_integrity_enabled         = true
+  firewall_enabled               = true
+  antivirus_required             = true
+  password_required              = true
+  password_minimum_length        = 12
+  password_required_type         = "alphanumeric"
+  storage_require_encryption     = true
+
+  action_for_noncompliance {
+    action_type             = "block"
+    grace_period_in_hours   = 24
+    notification_template_id = azurerm_intune_notification_template.compliance_warning.id
+  }
+}
+```
+
+![Device trust flow showing enrolment, posture assessment, certificate presentation, and compliance check](/blog/deep-dive-zero-trust-identity/inline-4.png)
+
+Device Trust Flow
+
+The key insight is that device trust is not a one-time check. The device's compliance state can change at any moment — a user might disable their firewall, uninstall the EDR agent, or fail to apply a critical patch. Continuous device posture assessment ensures that the access decision reflects the device's current state, not its state at enrolment time.
+
+---
+
+## What is risk-based authentication?
+
+**Risk-based authentication (RBA)** is the practice of dynamically adjusting the authentication requirements based on the assessed risk of a given access attempt. Rather than applying the same authentication flow to every request, the system evaluates a set of risk signals and selects an appropriate authentication challenge.
+
+The risk scoring engine ingests multiple signals:
+
+*   **Geographic risk** — Is the user's IP address associated with a high-risk country? Has the user logged in from a different country within an impossibly short time window?
+*   **Device risk** — Is the device recognised? Is it compliant? Is there a device certificate present?
+*   **Behavioural risk** — Does this login pattern match the user's historical behaviour? Is the user accessing an unusual resource?
+*   **Temporal risk** — Is this access occurring outside the user's normal hours?
+*   **Credential risk** — Has the user's password appeared in a known breach database? Has the account been targeted by recent brute-force attempts?
+
+Here is a risk scoring table that maps signal combinations to authentication requirements:
+
+| Risk Score | Signals Present | Authentication Requirement |
+|---|---|---|
+| 0 – 20 (Low) | Known device, home country, business hours, normal behaviour | Single sign-on (SSO) — no additional challenge |
+| 21 – 50 (Medium) | Unknown device OR unusual time OR minor behaviour deviation | MFA required (TOTP, push notification, or SMS) |
+| 51 – 75 (High) | Foreign location AND unknown device, OR credential exposure detected | Phishing-resistant MFA required (FIDO2 or certificate-based) |
+| 76 – 100 (Critical) | Impossible travel detected, OR sanctioned country, OR significant anomaly | Access blocked — security team notified — manual review required |
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass
+class RiskSignals:
+    geo_risk: float        # 0.0 to 1.0
+    device_risk: float     # 0.0 to 1.0
+    behaviour_risk: float  # 0.0 to 1.0
+    temporal_risk: float   # 0.0 to 1.0
+    credential_risk: float # 0.0 to 1.0
+
+
+def compute_risk_score(signals: RiskSignals) -> int:
+    weights = {
+        "geo": 0.25,
+        "device": 0.25,
+        "behaviour": 0.20,
+        "temporal": 0.15,
+        "credential": 0.15,
+    }
+
+    raw = (
+        signals.geo_risk * weights["geo"]
+        + signals.device_risk * weights["device"]
+        + signals.behaviour_risk * weights["behaviour"]
+        + signals.temporal_risk * weights["temporal"]
+        + signals.credential_risk * weights["credential"]
+    )
+
+    return int(raw * 100)
+
+
+def determine_auth_requirement(score: int) -> str:
+    if score <= 20:
+        return "SSO_PASSTHROUGH"
+    elif score <= 50:
+        return "MFA_STANDARD"
+    elif score <= 75:
+        return "MFA_PHISHING_RESISTANT"
+    return "ACCESS_BLOCKED"
+```
+
+![Risk-based authentication engine showing signal inputs, scoring, and authentication decision outputs](/blog/deep-dive-zero-trust-identity/inline-5.png)
+
+Risk-Based Authentication Engine
+
+The power of risk-based authentication lies in its ability to balance security and user experience. Low-risk users enjoy a frictionless experience, while high-risk scenarios trigger proportionate controls. This is a significant improvement over the traditional model of applying the same MFA challenge to every login regardless of context.
+
+---
+
+## How do you implement conditional access?
+
+**Conditional access** is the policy framework that brings together identity, device trust, context, and risk into enforceable access rules. Each major cloud provider offers a conditional access service — let's examine how to configure policies across Azure, Google Cloud, and AWS.
+
+### Azure Conditional Access
+
+**Microsoft Entra ID** (formerly Azure AD) provides the most mature conditional access platform. Policies evaluate conditions such as user identity, group membership, device compliance, location, client application, and risk level, and then enforce controls such as MFA, device compliance requirements, or session restrictions.
+
+Here is a Terraform configuration for an Azure Conditional Access policy that requires compliant devices and MFA for all access to sensitive applications from outside the corporate network:
+
+```hcl
+resource "azurerm_conditional_access_policy" "sensitive_apps" {
+  display_name = "Require MFA and compliant device for sensitive apps"
+  state        = "enabled"
+
+  conditions {
+    users {
+      included_groups = [azurerm_group.all_employees.object_id]
+    }
+
+    applications {
+      included_applications = [
+        azurerm_application.finance_portal.application_id,
+        azurerm_application.hr_system.application_id,
+      ]
+    }
+
+    locations {
+      included_locations = ["All"]
+      excluded_locations = [azurerm_named_location.corporate_offices.id]
+    }
+
+    platforms {
+      included_platforms = ["all"]
+    }
+
+    sign_in_risk_levels = ["medium", "high"]
+  }
+
+  grant_controls {
+    operator                          = "AND"
+    built_in_controls                 = ["mfa", "compliantDevice"]
+    authentication_strength_policy_id = azurerm_authentication_strength_policy.phishing_resistant.id
+  }
+
+  session_controls {
+    sign_in_frequency {
+      value = 4
+      type  = "hours"
+    }
+    persistent_browser {
+      mode = "never"
+    }
+  }
+}
+```
+
+### Google Context-Aware Access
+
+**Google Cloud** provides Context-Aware Access through **BeyondCorp Enterprise** and **Access Context Manager**. Access levels define the conditions under which a user can access resources, incorporating device attributes, IP ranges, and geographic location.
+
+```yaml
+# Access Context Manager - Access Level definition
+accessLevel:
+  name: "accessPolicies/123456789/accessLevels/corpDeviceTrustedLocation"
+  title: "Corporate device from trusted location"
+  basic:
+    combiningFunction: "AND"
+    conditions:
+      - devicePolicy:
+          requireScreenlock: true
+          osConstraints:
+            - osType: "DESKTOP_CHROME_OS"
+              minimumVersion: "120.0"
+            - osType: "DESKTOP_WINDOWS"
+              minimumVersion: "10.0.22621"
+            - osType: "DESKTOP_MAC"
+              minimumVersion: "14.0"
+          allowedEncryptionStatuses:
+            - "ENCRYPTED"
+          requireAdminApproval: true
+          requireCorpOwned: true
+      - ipSubnetworks:
+          - "203.0.113.0/24"
+          - "198.51.100.0/24"
+      - regions:
+          - "AU"
+          - "NZ"
+          - "GB"
+```
+
+### AWS Verified Access
+
+**AWS Verified Access** provides application-level Zero Trust access without requiring a VPN. It integrates with AWS IAM Identity Center and third-party identity providers to evaluate trust policies before granting access to applications running in your VPC.
+
+```hcl
+resource "aws_verifiedaccess_trust_provider" "corporate_idp" {
+  trust_provider_type = "user"
+  user_trust_provider_type = "iam-identity-center"
+  policy_reference_name    = "corporate_identity"
+  description              = "Corporate IAM Identity Center trust provider"
+}
+
+resource "aws_verifiedaccess_trust_provider" "device_trust" {
+  trust_provider_type    = "device"
+  device_trust_provider_type = "jamf"
+  policy_reference_name  = "device_posture"
+  description            = "Jamf device trust provider"
+
+  device_options {
+    tenant_id = "your-jamf-tenant-id"
+  }
+}
+
+resource "aws_verifiedaccess_group" "sensitive_apps" {
+  verifiedaccess_instance_id = aws_verifiedaccess_instance.main.id
+  description                = "Sensitive application access group"
+
+  policy_document = <<-CEDAR
+    permit(principal, action, resource)
+    when {
+      context.corporate_identity.groups has "engineering" &&
+      context.corporate_identity.email.address like "*@example.com" &&
+      context.device_posture.risk_score <= 50 &&
+      context.device_posture.disk_encryption_enabled == true
+    };
+  CEDAR
+}
+```
+
+The Cedar policy language used by AWS Verified Access deserves special attention. It is a purpose-built authorisation language that allows you to express fine-grained access policies declaratively — a significant step forward from JSON-based IAM policies for application-level access control.
+
+---
+
+## What is Just-in-Time (JIT) access?
+
+**Just-in-Time (JIT) access** is the practice of granting elevated privileges only when they are needed and automatically revoking them after a defined time window. Instead of granting standing privileged access (for example, a permanent "Admin" role), JIT access ensures that users request elevation, receive approval, and operate with elevated privileges only for the duration of their task.
+
+The JIT access workflow typically follows this pattern:
+
+1.  **Request** — The user submits a request for elevated access, specifying the resource, the level of access required, and a justification.
+2.  **Approval** — The request is routed to an approver (a manager, a security team member, or an automated policy engine). The approver evaluates the justification and either grants or denies the request.
+3.  **Elevation** — If approved, the system grants the elevated role or permission for a defined time window (for example, 4 hours).
+4.  **Monitoring** — During the elevation window, all actions performed under the elevated role are logged and monitored.
+5.  **Revocation** — When the time window expires, the elevated permissions are automatically revoked. No manual cleanup is required.
+
+Here is an example of implementing JIT access using Azure Privileged Identity Management (PIM) with Terraform:
+
+```hcl
+resource "azurerm_pim_eligible_role_assignment" "jit_contributor" {
+  scope              = azurerm_resource_group.production.id
+  role_definition_id = data.azurerm_role_definition.contributor.id
+  principal_id       = azurerm_user.engineer.object_id
+
+  schedule {
+    expiration {
+      duration_hours = 8
+    }
+  }
+
+  justification = "On-call rotation — production incident response"
+
+  ticket {
+    number = "INC-2025-0715"
+    system = "ServiceNow"
+  }
+}
+```
+
+And here is a Python script that implements a simple JIT access broker for AWS using temporary role assumption with STS:
+
+```python
+import boto3
+from datetime import datetime, timezone
+
+
+def request_jit_access(
+    role_arn: str,
+    session_name: str,
+    duration_seconds: int = 3600,
+    justification: str = "",
+) -> dict:
+    """Request JIT elevated access via STS AssumeRole."""
+    sts = boto3.client("sts")
+
+    print(f"[{datetime.now(timezone.utc).isoformat()}] JIT access requested")
+    print(f"  Role: {role_arn}")
+    print(f"  Duration: {duration_seconds}s")
+    print(f"  Justification: {justification}")
+
+    response = sts.assume_role(
+        RoleArn=role_arn,
+        RoleSessionName=session_name,
+        DurationSeconds=duration_seconds,
+        Tags=[
+            {"Key": "JITJustification", "Value": justification},
+            {"Key": "JITRequestTime", "Value": datetime.now(timezone.utc).isoformat()},
+        ],
+    )
+
+    credentials = response["Credentials"]
+    print(f"  Expires: {credentials['Expiration'].isoformat()}")
+    print(f"  Session: {session_name}")
+
+    return {
+        "access_key": credentials["AccessKeyId"],
+        "secret_key": credentials["SecretAccessKey"],
+        "session_token": credentials["SessionToken"],
+        "expiration": credentials["Expiration"].isoformat(),
+    }
+```
+
+![Just-in-Time access workflow showing request, approval, elevation, monitoring, and automatic revocation](/blog/deep-dive-zero-trust-identity/inline-6.png)
+
+JIT Access Workflow
+
+The critical benefit of JIT access is the **reduction of standing privilege**. In a traditional model, an administrator might hold permanent "Owner" or "Global Admin" privileges — meaning that if their account is compromised, the attacker immediately inherits those privileges. With JIT access, compromising the account grants only the user's baseline (minimal) permissions. The attacker would need to also compromise the approval workflow to gain elevated access.
+
+---
+
+## What is session management in Zero Trust?
+
+In a Zero Trust Identity model, **session management** is fundamentally different from the traditional approach. Rather than issuing a long-lived session token and trusting it until expiry, Zero Trust sessions are **short-lived**, **continuously re-evaluated**, and **bound to specific context**.
+
+### Short-lived sessions
+
+Session tokens should have short lifetimes — typically measured in minutes rather than hours. When a token expires, the user must re-authenticate (or the system must silently refresh the token after re-evaluating risk). This limits the window during which a stolen token can be used.
+
+### Continuous re-evaluation
+
+The session is not static. The policy engine continuously evaluates the session against current risk signals. If the user's device falls out of compliance, if their IP address changes to a high-risk location, or if anomalous behaviour is detected, the system can downgrade or terminate the session without waiting for the token to expire.
+
+### Token binding
+
+**Token binding** associates a session token with a specific device or client certificate, preventing token theft and replay. Even if an attacker intercepts a session token, they cannot use it from a different device because the token is cryptographically bound to the original device's TLS connection.
+
+Here is an example of configuring short-lived sessions with continuous access evaluation in a Next.js middleware:
+
+```typescript
+import { NextRequest, NextResponse } from "next/server";
+
+interface SessionClaims {
+  sub: string;
+  deviceId: string;
+  riskLevel: string;
+  iat: number;
+  exp: number;
+}
+
+const MAX_SESSION_AGE_SECONDS = 900; // 15 minutes
+const RISK_RECHECK_INTERVAL_SECONDS = 300; // 5 minutes
+
+export async function middleware(request: NextRequest) {
+  const token = request.cookies.get("session_token")?.value;
+
+  if (!token) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  const claims = await verifyAndDecodeToken(token);
+
+  if (!claims) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  const tokenAge = Math.floor(Date.now() / 1000) - claims.iat;
+
+  // Enforce maximum session lifetime
+  if (tokenAge > MAX_SESSION_AGE_SECONDS) {
+    const response = NextResponse.redirect(
+      new URL("/auth/login", request.url)
+    );
+    response.cookies.delete("session_token");
+    return response;
+  }
+
+  // Periodic risk re-evaluation
+  if (tokenAge > RISK_RECHECK_INTERVAL_SECONDS) {
+    const currentRisk = await evaluateSessionRisk(claims.sub, claims.deviceId);
+
+    if (currentRisk === "critical") {
+      const response = NextResponse.redirect(
+        new URL("/auth/login?reason=risk", request.url)
+      );
+      response.cookies.delete("session_token");
+      return response;
+    }
+
+    if (currentRisk === "high") {
+      return NextResponse.redirect(
+        new URL("/auth/step-up", request.url)
+      );
+    }
+  }
+
+  return NextResponse.next();
+}
+```
+
+The key principle here is that **the session is a living entity**. It is born when the user authenticates, it is continuously monitored throughout its lifetime, and it can be terminated at any moment if the risk profile changes. This is a fundamental departure from the "issue a token and forget" model that most applications still use.
+
+---
+
+## What is identity threat detection?
+
+**Identity Threat Detection and Response (ITDR)** is the practice of monitoring identity-related signals to detect compromised accounts, credential abuse, and identity-based attacks in real time. While traditional security monitoring focuses on network traffic and endpoint behaviour, ITDR focuses specifically on the identity plane — the authentication logs, authorisation decisions, and session behaviours that reveal when an identity has been compromised.
+
+### Impossible travel detection
+
+One of the most well-known ITDR signals is **impossible travel**. If a user authenticates from Sydney at 10:00 AM and then authenticates from London at 10:15 AM, the system flags this as physically impossible. The user cannot have travelled between those locations in 15 minutes, so one of the two authentications is likely fraudulent.
+
+### Credential anomalies
+
+ITDR systems monitor for unusual credential activity: a sudden spike in failed login attempts, successful logins from previously unseen devices, password changes followed immediately by access to sensitive resources, or the use of credentials that have appeared in known breach databases.
+
+### Lateral movement detection
+
+Once an identity is compromised, attackers often attempt **lateral movement** — using the compromised identity to access additional systems, escalate privileges, or pivot to service accounts. ITDR systems detect lateral movement by correlating access patterns across multiple resources and identifying sequences that deviate from normal behaviour.
+
+### Token theft and replay
+
+Sophisticated attackers may steal session tokens (through cross-site scripting, malware, or man-in-the-middle attacks) and replay them from a different device or location. ITDR systems detect this by monitoring for sessions that suddenly change their device fingerprint, IP address, or TLS characteristics.
+
+Here is an example of an ITDR rule implemented as an AWS CloudWatch Logs Insights query to detect impossible travel:
+
+```sql
+fields @timestamp, userIdentity.arn, sourceIPAddress, eventName
+| filter eventSource = "signin.amazonaws.com"
+  and eventName = "ConsoleLogin"
+  and responseElements.ConsoleLogin = "Success"
+| stats earliest(@timestamp) as first_login,
+        latest(@timestamp) as last_login,
+        count_distinct(sourceIPAddress) as distinct_ips
+  by userIdentity.arn
+| filter distinct_ips > 1
+  and dateDiff("minute", first_login, last_login) < 30
+| sort last_login desc
+```
+
+![Identity threat detection system showing impossible travel, credential anomaly, lateral movement, and token theft detection](/blog/deep-dive-zero-trust-identity/inline-7.png)
+
+Identity Threat Detection
+
+ITDR is the final layer of defence in a Zero Trust Identity model. Even if an attacker bypasses MFA, compromises a device certificate, and obtains a valid session token, ITDR provides the continuous monitoring that can detect the compromise through behavioural analysis and cross-signal correlation.
+
+---
+
+## How do you implement Zero Trust Identity?
+
+Bringing together all the concepts we have explored, let's look at the overall architecture of a Zero Trust Identity implementation. The architecture consists of four primary components working in concert.
+
+### Identity Provider (IdP)
+
+The **Identity Provider** is the authoritative source of identity. It authenticates users, issues tokens, and manages the identity lifecycle. In a Zero Trust model, the IdP must support strong authentication (FIDO2, certificate-based), conditional access policies, and risk-based authentication. Examples include Microsoft Entra ID, Okta, and Google Workspace.
+
+### Device trust platform
+
+The **device trust platform** continuously evaluates device posture and reports compliance state to the policy engine. It manages device certificates, enforces compliance policies, and can remotely wipe or restrict non-compliant devices. Examples include Microsoft Intune, Jamf, and Google Endpoint Management.
+
+### Policy engine
+
+The **policy engine** is the decision-making core of the architecture. It evaluates every access request against a set of policies that incorporate identity, device trust, context, and risk signals. It produces a grant, deny, or step-up decision for each request.
+
+### Enforcement points
+
+**Enforcement points** are the inline components that intercept access requests and enforce the policy engine's decisions. These can be reverse proxies, API gateways, identity-aware proxies, or application-level middleware. Every access path to a protected resource must pass through an enforcement point.
+
+![Zero Trust Identity architecture showing IdP, device trust platform, policy engine, and enforcement points](/blog/deep-dive-zero-trust-identity/inline-8.png)
+
+Zero Trust Identity Architecture
+
+---
+
+## What are the real-world implementation patterns?
+
+Let's examine how three major real-world implementations bring these concepts to life.
+
+### Google BeyondCorp
+
+Google's **BeyondCorp** is the original Zero Trust Identity implementation. It eliminates the VPN entirely and routes all access through an **identity-aware proxy**. The proxy evaluates the user's identity (via Google Workspace), the device's trust level (via an endpoint agent that reports to Google's device inventory), and the resource's access tier. BeyondCorp uses **access levels** defined in Access Context Manager to express policies that combine device attributes, IP ranges, and geographic constraints. Every Google employee — whether in a Google office or a café — accesses internal applications through the same identity-aware proxy with the same policies applied.
+
+### Microsoft Entra ID + Intune
+
+Microsoft's approach integrates **Entra ID** (the identity provider) with **Intune** (the device trust platform) and **Conditional Access** (the policy engine). The enforcement points include the Microsoft cloud app proxy, Defender for Cloud Apps (CASB), and application-level integration through the Microsoft Authentication Library (MSAL). This pattern is particularly powerful for organisations already invested in the Microsoft ecosystem, as Conditional Access policies can enforce compliance across Microsoft 365, Azure resources, and third-party SaaS applications simultaneously.
+
+### AWS IAM Identity Center + Verified Access
+
+AWS provides **IAM Identity Center** as the centralised identity provider and **Verified Access** as the enforcement point for application-level Zero Trust. Trust providers supply identity and device signals (from IAM Identity Center and third-party device trust platforms like Jamf or CrowdStrike). Cedar policies express fine-grained authorisation decisions. This pattern is well-suited for organisations with applications running in AWS VPCs that want to eliminate VPN-based access.
+
+Here is an example of a comprehensive Cedar policy for AWS Verified Access that combines identity and device signals:
+
+```cedar
+// Allow engineering team access to production dashboards
+// only from compliant devices during business hours
+permit(
+  principal,
+  action == Action::"access",
+  resource == Application::"production-dashboard"
+)
+when {
+  context.identity.groups has "platform-engineering" &&
+  context.device.managed == true &&
+  context.device.os_version >= "14.0" &&
+  context.device.disk_encryption == true &&
+  context.device.firewall_enabled == true &&
+  context.network.risk_score <= 30 &&
+  context.time.hour >= 6 &&
+  context.time.hour <= 22
+};
+
+// Deny access from non-compliant devices regardless of identity
+forbid(
+  principal,
+  action == Action::"access",
+  resource
+)
+when {
+  context.device.managed == false ||
+  context.device.disk_encryption == false
+};
+```
+
+---
+
+## What does a maturity model look like?
+
+Not every organisation can implement the full Zero Trust Identity model overnight. The following maturity model provides a roadmap for progressive adoption, from basic controls through to continuous adaptive access.
+
+| Level | Name | Identity Controls | Device Controls | Access Model | Session Management |
+|---|---|---|---|---|---|
+| 1 | Basic | Username + password, optional MFA | No device assessment | Static role-based access (RBAC) | Long-lived sessions (8+ hours) |
+| 2 | Foundational | Enforced MFA for all users | Basic device registration | Group-based conditional access | Medium-lived sessions (4 hours) |
+| 3 | Advanced | Risk-based MFA, phishing-resistant (FIDO2) | Device compliance required for access | Context-aware conditional access policies | Short-lived sessions (1 hour), step-up auth |
+| 4 | Progressive | Continuous authentication, passwordless | Real-time device posture assessment | Dynamic risk-based access with JIT elevation | Continuous re-evaluation, token binding |
+| 5 | Optimal | Continuous adaptive access, ITDR | Continuous device trust with automated remediation | AI-driven policy engine with anomaly response | Real-time session risk scoring, automatic termination |
+
+Most organisations today operate at Level 1 or 2. The goal is to progress to Level 3 or 4 within 12–18 months, using the maturity model as a guide for prioritising investments. Level 5 represents the aspirational state — achievable by organisations with mature security programmes and dedicated identity engineering teams.
+
+---
+
+## Okay, what terminology do I need to understand?
+
+### Continuous authentication
+
+The practice of continuously evaluating a user's session risk throughout the lifetime of the session, rather than authenticating once at login. Risk signals such as device posture, location, and behaviour feed into a real-time risk score that determines whether the session should continue, require step-up authentication, or be terminated.
+
+### Context-aware access
+
+An access control model that evaluates the full context of a request — including device posture, geographic location, time of access, network context, and behaviour — in addition to the user's identity, to make dynamic access decisions.
+
+### Device trust
+
+The practice of evaluating the security posture of a device (operating system version, disk encryption, endpoint detection agent, patch level) as part of the access decision. Devices that do not meet required posture may be denied access or granted restricted access.
+
+### Conditional access
+
+A policy framework that evaluates a set of conditions (identity, device, location, risk level) and enforces a set of controls (MFA, device compliance, session restrictions) before granting access. Offered by Microsoft Entra ID, Google BeyondCorp Enterprise, and AWS Verified Access.
+
+### Just-in-Time (JIT) access
+
+A practice where elevated privileges are granted temporarily and automatically revoked after a defined period. It minimises the window of exposure by ensuring users do not hold standing privileged access.
+
+### Risk-based authentication (RBA)
+
+An authentication model that dynamically adjusts the authentication challenge based on the assessed risk of the access attempt. Low-risk attempts may pass through with SSO alone, while high-risk attempts require phishing-resistant MFA or may be blocked entirely.
+
+### Identity Threat Detection and Response (ITDR)
+
+The practice of monitoring identity-related signals — authentication logs, authorisation decisions, session behaviours — to detect compromised accounts, credential abuse, and identity-based attacks in real time.
+
+### Impossible travel
+
+An ITDR detection signal that flags authentication attempts from two geographically distant locations within a time window that makes physical travel impossible. It is a strong indicator of credential theft or session hijacking.
+
+### Token binding
+
+A mechanism that cryptographically binds a session token to a specific device or TLS connection, preventing token theft and replay attacks. Even if a token is intercepted, it cannot be used from a different device.
+
+### Policy engine
+
+The decision-making component in a Zero Trust Identity architecture that evaluates every access request against configured policies incorporating identity, device trust, context, and risk signals. It produces a grant, deny, or step-up decision.
+
+### Phishing-resistant MFA
+
+Multi-factor authentication methods that are immune to phishing attacks — specifically **FIDO2 security keys** and **certificate-based authentication**. Unlike TOTP codes or SMS, these methods cannot be intercepted or replayed by an attacker.
+
+### Standing privilege
+
+A security anti-pattern where users hold permanent elevated permissions (such as "Global Admin" or "Owner" roles) regardless of whether they currently need them. Zero Trust Identity replaces standing privilege with just-in-time access.
+
+### Step-up authentication
+
+An additional authentication challenge triggered when the risk level of a session increases. For example, a user who authenticated with SSO may be prompted for MFA when attempting to access a highly sensitive resource.
+
+### Cedar
+
+A purpose-built authorisation policy language developed by AWS. It allows organisations to express fine-grained, attribute-based access control policies declaratively. Used by AWS Verified Access and Amazon Verified Permissions.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

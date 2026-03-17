@@ -1,0 +1,942 @@
+---
+title: "Deep Dive - OAuth 2.0 and OpenID Connect"
+date: "2025-07-11"
+slug: "deep-dive-oauth2-and-openid-connect"
+status: "publish"
+feature_image: "/blog/deep-dive-oauth2-and-openid-connect/feature-image.png"
+tags: ["OAuth 2.0", "OpenID Connect", "OIDC", "Identity", "Authentication", "Authorization", "PKCE", "JWT", "Tokens", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - OAuth 2.0 and OpenID Connect | Robert Leggett"
+  description: "A comprehensive deep dive into OAuth 2.0 and OpenID Connect — covering authorization flows, token types, PKCE, scopes, claims, and secure implementation patterns for modern applications."
+  keywords: ["OAuth 2.0", "OpenID Connect", "OIDC", "Authorization Code Flow", "PKCE", "Access Token", "ID Token", "Refresh Token", "Identity Provider", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-oauth2-and-openid-connect"
+  image: "https://robertleggett.com.au/blog/deep-dive-oauth2-and-openid-connect/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - OAuth 2.0 and OpenID Connect"
+  description: "A comprehensive deep dive into OAuth 2.0 and OpenID Connect — from authorization flows and PKCE to token validation and real-world implementation."
+  image: "https://robertleggett.com.au/blog/deep-dive-oauth2-and-openid-connect/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-oauth2-and-openid-connect"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - OAuth 2.0 and OpenID Connect"
+  description: "From authorization code flows to PKCE and token validation — a complete technical reference for implementing OAuth 2.0 and OpenID Connect."
+  image: "https://robertleggett.com.au/blog/deep-dive-oauth2-and-openid-connect/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of OAuth 2.0 and OpenID Connect (OIDC), unravelling how modern applications handle authorisation and identity without ever touching a user's password. Whether you are a backend engineer integrating with an identity provider for the first time, or a seasoned architect evaluating token strategies at scale, our goal is to provide clear and thorough explanations that will deepen your understanding of every moving part. Join us on this enlightening journey as we bridge the gap between "just add a login button" and truly understanding the protocols that power secure, delegated access across the web, empowering you to build authentication and authorisation that you can trust. Let's dive in and demystify the world of OAuth 2.0 and OpenID Connect together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of OAuth 2.0 — its history, the problem it solves, and how delegated authorisation works
+*   A detailed walkthrough of every major grant type — Authorization Code, PKCE, Client Credentials, and Device Authorization — with diagrams and code
+*   A clear picture of how OpenID Connect layers identity on top of OAuth 2.0 — ID Tokens, claims, scopes, and the UserInfo endpoint
+*   Practical implementation patterns for token validation, middleware integration, and avoiding common security pitfalls
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is OAuth 2.0?
+
+**OAuth 2.0** is an open authorisation framework defined in [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) that enables a third-party application to obtain limited access to an HTTP service — either on behalf of a resource owner, or on its own behalf. It was published in October 2012 and has since become the de facto standard for delegated authorisation on the web.
+
+Before we can appreciate why OAuth 2.0 matters, it helps to understand what came before it. **OAuth 1.0**, finalised in 2010, required complex cryptographic signature generation for every single request. Every API call demanded that the client compute an HMAC-SHA1 signature over a carefully normalised base string — including the HTTP method, URL, and every parameter in a precise lexicographic order. This was error-prone, difficult to debug, and a nightmare for mobile and browser-based applications that lacked easy access to cryptographic libraries.
+
+OAuth 2.0 took a fundamentally different approach. Instead of per-request signatures, it relies on **bearer tokens** transmitted over TLS. The protocol is simpler, more extensible, and explicitly designed for the diversity of modern clients — server-side web applications, single-page applications, mobile apps, IoT devices, and service-to-service communication.
+
+The critical improvements over OAuth 1.0 include:
+
+*   **No cryptographic signatures** — bearer tokens over HTTPS replaced HMAC signing
+*   **Multiple grant types** — purpose-built flows for different client types
+*   **Short-lived access tokens** — combined with refresh tokens for long-lived sessions
+*   **Scopes** — fine-grained permission control over what a token can access
+*   **Separation of concerns** — the authorisation server and resource server are distinct roles
+
+---
+
+## What problem does OAuth 2.0 solve?
+
+To put this into context, let's use an analogy. Imagine you check into a hotel. The receptionist does not hand you a master key that opens every room, the staff areas, and the maintenance cupboards. Instead, you receive a **key card** that grants access to your room, the pool, and the gym — nothing more. That key card expires at checkout. If you lose it, the hotel can deactivate it without changing any locks. And at no point did you need to know how the hotel's locking system works internally.
+
+This is precisely the problem OAuth 2.0 solves for the web. Before OAuth, if a third-party application wanted to access your data — say, a photo printing service that needed your pictures from a cloud storage provider — the only option was to hand over your username and password. The printing service would then log in as you, with full access to everything in your account. There was no way to limit what it could do, no way to revoke access without changing your password, and no way to audit which third party had your credentials.
+
+OAuth 2.0 introduces **delegated authorisation** — the ability for a user to grant a third-party application specific, limited access to their resources without sharing their credentials. The user authenticates directly with the service they trust (the authorisation server), and that server issues a token to the third party. The token is scoped, time-limited, and revocable.
+
+![OAuth 2.0 Delegated Authorisation Concept](/blog/deep-dive-oauth2-and-openid-connect/inline-1.png)
+
+OAuth 2.0 Delegated Authorisation — the user never shares their password with the third-party application
+
+---
+
+## What are the roles in OAuth 2.0?
+
+OAuth 2.0 defines four distinct roles that participate in every authorisation flow. Understanding these roles is fundamental to understanding how the protocol works.
+
+![OAuth 2.0 Roles](/blog/deep-dive-oauth2-and-openid-connect/inline-2.png)
+
+OAuth 2.0 Roles
+
+1.  **Resource Owner** — The entity (typically a human user) that owns the protected data and can grant access to it. When you click "Allow" on a consent screen, you are acting as the resource owner.
+
+2.  **Client** — The application requesting access to the resource owner's data. This could be a web application, a mobile app, a CLI tool, or a backend service. Clients are classified as either **confidential** (can securely store a secret, such as a server-side app) or **public** (cannot securely store a secret, such as a SPA or mobile app).
+
+3.  **Authorisation Server** — The server that authenticates the resource owner and issues tokens to the client after obtaining consent. Examples include Auth0, AWS Cognito, Okta, Keycloak, and Microsoft Entra ID. It exposes two primary endpoints:
+    *   `/authorize` — for user-facing authorisation requests
+    *   `/token` — for exchanging grants for tokens
+
+4.  **Resource Server** — The server hosting the protected resources (your API). It accepts and validates access tokens, and serves data only when a valid token with the correct scopes is presented.
+
+In many real-world deployments, the authorisation server and resource server may be operated by the same organisation — but the OAuth 2.0 specification treats them as logically separate to maintain a clean separation of concerns.
+
+---
+
+## What are the OAuth 2.0 grant types?
+
+A **grant type** (also called a "flow") defines the sequence of steps a client follows to obtain an access token. OAuth 2.0 defines several grant types, each designed for a specific use case and client type. Let's walk through each one.
+
+---
+
+### Authorization Code Grant
+
+The **Authorization Code Grant** is the most widely used and most secure flow for applications that have a server-side component. It is the recommended flow for traditional web applications, and when combined with PKCE (which we will cover next), it is also the recommended flow for single-page applications and mobile apps.
+
+![Authorization Code Flow](/blog/deep-dive-oauth2-and-openid-connect/inline-3.png)
+
+Authorization Code Flow
+
+Let's trace through the flow step by step:
+
+1.  The **user** clicks "Log in" in the client application
+2.  The **client** redirects the user's browser to the authorisation server's `/authorize` endpoint, including the `client_id`, `redirect_uri`, `response_type=code`, `scope`, and a `state` parameter for CSRF protection
+3.  The **authorisation server** authenticates the user (login page) and presents a consent screen
+4.  The **user** grants consent
+5.  The **authorisation server** redirects the browser back to the client's `redirect_uri` with an **authorisation code** and the `state` parameter
+6.  The **client** (server-side) exchanges the authorisation code for tokens by making a back-channel POST to the `/token` endpoint, including the `client_id`, `client_secret`, `grant_type=authorization_code`, the `code`, and the `redirect_uri`
+7.  The **authorisation server** validates the code and returns an **access token**, a **refresh token** (optionally), and an **ID token** (if OIDC is used)
+
+Here is what the initial authorisation request looks like:
+
+```bash
+# Step 2: Redirect the user to the authorisation server
+GET https://auth.example.com/authorize?\
+  response_type=code&\
+  client_id=my-web-app&\
+  redirect_uri=https://myapp.com/callback&\
+  scope=openid%20profile%20email&\
+  state=abc123xyz
+```
+
+And the token exchange on the back-channel:
+
+```bash
+# Step 6: Exchange the authorisation code for tokens
+curl -X POST https://auth.example.com/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code" \
+  -d "code=SplxlOBeZQQYbYS6WxSbIA" \
+  -d "redirect_uri=https://myapp.com/callback" \
+  -d "client_id=my-web-app" \
+  -d "client_secret=my-client-secret"
+```
+
+The response:
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "dhl1kJdsa9_GBk3Nfat2LQ",
+  "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+The critical security property here is that the access token is never exposed to the user's browser — it is exchanged entirely over the back-channel between the client server and the authorisation server.
+
+---
+
+### Authorization Code Grant with PKCE
+
+**Proof Key for Code Exchange (PKCE)**, pronounced "pixy", is an extension to the Authorization Code Grant defined in [RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636). It was originally designed for public clients (mobile apps, SPAs) that cannot securely store a client secret, but it is now recommended for **all** clients — including confidential ones — as a defence-in-depth measure.
+
+The core problem PKCE solves is the **authorisation code interception attack**. In the standard Authorization Code flow, if an attacker intercepts the authorisation code (e.g., through a malicious app registered with the same custom URI scheme on a mobile device), they could exchange it for tokens. PKCE prevents this by binding the authorisation request to the token exchange with a cryptographic proof.
+
+![Authorization Code Flow with PKCE](/blog/deep-dive-oauth2-and-openid-connect/inline-4.png)
+
+Authorization Code Flow with PKCE
+
+Here is how PKCE works:
+
+1.  The **client** generates a random string called the **code verifier** (43–128 characters, using `[A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~"`)
+2.  The **client** computes a **code challenge** by taking the SHA-256 hash of the code verifier and base64url-encoding the result
+3.  The **client** sends the `code_challenge` and `code_challenge_method=S256` in the authorisation request
+4.  The **authorisation server** stores the code challenge alongside the authorisation code
+5.  When the client exchanges the code at the `/token` endpoint, it sends the original `code_verifier`
+6.  The **authorisation server** hashes the received `code_verifier`, compares it with the stored `code_challenge`, and only issues tokens if they match
+
+Let's look at generating the PKCE values in TypeScript:
+
+```typescript
+import crypto from "crypto";
+
+// Generate a cryptographically random code verifier
+function generateCodeVerifier(): string {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+// Derive the code challenge from the verifier using SHA-256
+function generateCodeChallenge(verifier: string): string {
+  return crypto.createHash("sha256").update(verifier).digest("base64url");
+}
+
+const codeVerifier = generateCodeVerifier();
+const codeChallenge = generateCodeChallenge(codeVerifier);
+
+console.log("Code Verifier:", codeVerifier);
+console.log("Code Challenge:", codeChallenge);
+// Code Verifier:  dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
+// Code Challenge: E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
+```
+
+And the same in Python:
+
+```python
+import hashlib
+import base64
+import os
+
+# Generate a cryptographically random code verifier
+code_verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode("utf-8")
+
+# Derive the code challenge using SHA-256
+code_challenge = (
+    base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode("utf-8")).digest())
+    .rstrip(b"=")
+    .decode("utf-8")
+)
+
+print(f"Code Verifier:  {code_verifier}")
+print(f"Code Challenge: {code_challenge}")
+```
+
+The authorisation request with PKCE:
+
+```bash
+# Authorisation request with PKCE code challenge
+GET https://auth.example.com/authorize?\
+  response_type=code&\
+  client_id=my-spa-app&\
+  redirect_uri=https://myapp.com/callback&\
+  scope=openid%20profile%20email&\
+  state=abc123xyz&\
+  code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&\
+  code_challenge_method=S256
+```
+
+And the token exchange includes the original verifier:
+
+```bash
+# Token exchange with PKCE code verifier
+curl -X POST https://auth.example.com/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code" \
+  -d "code=SplxlOBeZQQYbYS6WxSbIA" \
+  -d "redirect_uri=https://myapp.com/callback" \
+  -d "client_id=my-spa-app" \
+  -d "code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+```
+
+Notice that no `client_secret` is needed — the PKCE code verifier serves as the proof that the token request originated from the same client that initiated the authorisation request.
+
+---
+
+### Client Credentials Grant
+
+The **Client Credentials Grant** is used for **machine-to-machine (M2M)** communication where no user is involved. The client authenticates directly with the authorisation server using its own credentials (`client_id` and `client_secret`) and receives an access token.
+
+This is the simplest flow — there is no browser redirect, no user interaction, and no authorisation code.
+
+![Client Credentials Flow](/blog/deep-dive-oauth2-and-openid-connect/inline-5.png)
+
+Client Credentials Flow
+
+1.  The **client** (a backend service) sends its `client_id` and `client_secret` to the `/token` endpoint with `grant_type=client_credentials`
+2.  The **authorisation server** authenticates the client and returns an access token
+3.  The **client** uses the access token to call the resource server
+
+```bash
+# Client Credentials token request
+curl -X POST https://auth.example.com/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=my-backend-service" \
+  -d "client_secret=super-secret-value" \
+  -d "scope=read:orders write:inventory"
+```
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 3600
+}
+```
+
+Note that there is no refresh token returned — since the client already has its credentials, it can simply request a new access token when the current one expires.
+
+---
+
+### Device Authorization Grant
+
+The **Device Authorization Grant** (defined in [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) is designed for devices with limited input capabilities — smart TVs, game consoles, CLI tools, and IoT devices. These devices cannot easily render a browser or accept complex user input.
+
+![Device Authorization Flow](/blog/deep-dive-oauth2-and-openid-connect/inline-6.png)
+
+Device Authorization Flow
+
+1.  The **device** requests a device code and user code from the authorisation server's `/device/code` endpoint
+2.  The **authorisation server** returns a `device_code`, a `user_code`, and a `verification_uri`
+3.  The **device** displays the `user_code` and `verification_uri` to the user (e.g., "Go to https://auth.example.com/device and enter code: WDJB-MJHT")
+4.  The **user** navigates to the verification URI on a separate device (phone, laptop), enters the code, and authenticates
+5.  Meanwhile, the **device** polls the `/token` endpoint with the `device_code` at the specified interval
+6.  Once the user completes authorisation, the **authorisation server** returns an access token to the device
+
+```bash
+# Step 1: Request device and user codes
+curl -X POST https://auth.example.com/device/code \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=my-tv-app" \
+  -d "scope=openid profile"
+```
+
+```json
+{
+  "device_code": "GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS",
+  "user_code": "WDJB-MJHT",
+  "verification_uri": "https://auth.example.com/device",
+  "verification_uri_complete": "https://auth.example.com/device?user_code=WDJB-MJHT",
+  "expires_in": 1800,
+  "interval": 5
+}
+```
+
+```bash
+# Step 5: Poll for the token (repeat every 5 seconds)
+curl -X POST https://auth.example.com/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=urn:ietf:params:oauth:grant-type:device_code" \
+  -d "device_code=GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS" \
+  -d "client_id=my-tv-app"
+```
+
+While the user has not yet authorised, the server responds with `{"error": "authorization_pending"}`. Once authorised, the full token response is returned.
+
+---
+
+### What about the Implicit and Resource Owner Password grants?
+
+Two grant types that were part of the original OAuth 2.0 specification are now **deprecated** and should not be used in new applications.
+
+**Implicit Grant** — This flow returned the access token directly in the URL fragment (`#access_token=...`) after the authorisation step, with no intermediate authorisation code. It was designed for browser-based SPAs before CORS was widely supported. The problem is that tokens in URL fragments are exposed to the browser history, referrer headers, and any JavaScript running on the page. The OAuth 2.0 Security Best Current Practice ([RFC 9700](https://datatracker.ietf.org/doc/html/rfc9700)) explicitly recommends against it. Use Authorization Code with PKCE instead.
+
+**Resource Owner Password Credentials (ROPC)** — This flow allowed the client to directly collect the user's username and password and exchange them for a token. This completely defeats the purpose of OAuth — the whole point is that the client never sees the user's credentials. It was intended only for migration scenarios from legacy systems. Use Authorization Code with PKCE instead.
+
+---
+
+## What are OAuth 2.0 tokens?
+
+OAuth 2.0 issues two primary types of tokens, each with a distinct purpose and lifecycle.
+
+### Access Token
+
+The **access token** is the credential that the client presents to the resource server when making API requests. It represents the authorisation granted by the resource owner.
+
+Key characteristics:
+
+*   **Short-lived** — typically 5 minutes to 1 hour
+*   **Bearer token** — whoever possesses it can use it (hence the need for TLS)
+*   **Format** — the OAuth 2.0 specification does not mandate a format, but **JSON Web Tokens (JWTs)** are the most common choice because they allow the resource server to validate the token locally without calling the authorisation server
+*   **Scoped** — the token carries information about what permissions were granted
+
+Access tokens are sent in the `Authorization` header:
+
+```bash
+curl -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIs..." \
+  https://api.example.com/users/me
+```
+
+### Refresh Token
+
+The **refresh token** is a long-lived credential used to obtain a new access token when the current one expires — without requiring the user to re-authenticate.
+
+Key characteristics:
+
+*   **Long-lived** — days, weeks, or even months
+*   **Confidential** — must be stored securely (server-side session, encrypted storage)
+*   **Single-use** (recommended) — many providers implement **refresh token rotation**, where each use of a refresh token returns a new refresh token and invalidates the old one
+*   **Revocable** — can be invalidated server-side
+
+```bash
+# Refresh token exchange
+curl -X POST https://auth.example.com/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=refresh_token" \
+  -d "refresh_token=dhl1kJdsa9_GBk3Nfat2LQ" \
+  -d "client_id=my-web-app" \
+  -d "client_secret=my-client-secret"
+```
+
+### Token storage best practices
+
+| Client Type | Access Token Storage | Refresh Token Storage |
+|---|---|---|
+| Server-side web app | Server-side session | Server-side session or encrypted database |
+| Single-page app (SPA) | In-memory only | HTTP-only, secure, SameSite cookie (via BFF) |
+| Mobile app | Secure enclave / Keychain / Keystore | Secure enclave / Keychain / Keystore |
+| CLI tool | In-memory or OS credential store | OS credential store |
+
+The golden rule is: **never store tokens in `localStorage` or `sessionStorage`** — these are accessible to any JavaScript running on the page, making them vulnerable to XSS attacks.
+
+---
+
+## What are scopes?
+
+**Scopes** are the mechanism OAuth 2.0 uses to limit the permissions granted to a client. When a client initiates an authorisation request, it specifies the scopes it needs. The authorisation server may grant all, some, or none of the requested scopes.
+
+Scopes are strings — there is no mandated format, but common conventions include:
+
+*   **Colon-separated** — `read:users`, `write:orders`, `admin:billing`
+*   **Dot-separated** — `users.read`, `orders.write`
+*   **URL-based** — `https://api.example.com/users.read`
+
+Here is an example of how scopes appear in practice:
+
+```bash
+# Requesting specific scopes
+GET https://auth.example.com/authorize?\
+  response_type=code&\
+  client_id=my-web-app&\
+  redirect_uri=https://myapp.com/callback&\
+  scope=openid%20profile%20email%20read:orders&\
+  state=abc123xyz
+```
+
+The resulting access token will only grant access to the resources permitted by those scopes. The resource server is responsible for checking that the token's scopes match the requirements of the endpoint being called.
+
+---
+
+## Okay, so where does OpenID Connect fit in?
+
+This is where things get really interesting. OAuth 2.0 answers the question "what is this client allowed to do?" — but it deliberately does not answer the question "who is this user?"
+
+OAuth 2.0 is an **authorisation** framework, not an **authentication** protocol. It tells the resource server that the bearer of this token has been granted certain permissions, but it says nothing about the identity of the user who granted those permissions.
+
+**OpenID Connect (OIDC)** is a thin identity layer built on top of OAuth 2.0 that adds authentication. It was finalised by the OpenID Foundation in 2014 and answers the question: "who is this user, and can I verify their identity?"
+
+To put this in terms of our hotel analogy — OAuth 2.0 is the key card that opens specific doors. OpenID Connect is the check-in process that verifies your identity (passport, booking reference) before handing you the key card.
+
+---
+
+## What does OIDC add on top of OAuth 2.0?
+
+OIDC extends OAuth 2.0 with several important additions:
+
+### 1. The ID Token
+
+The **ID Token** is a JWT that contains claims about the authentication event and the user's identity. Unlike access tokens (which are meant for the resource server), ID Tokens are meant for the **client** — they tell the client who the user is.
+
+### 2. The UserInfo Endpoint
+
+OIDC defines a standardised `/userinfo` endpoint that returns claims about the authenticated user. The client calls this endpoint with a valid access token to retrieve additional profile information.
+
+```bash
+curl -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIs..." \
+  https://auth.example.com/userinfo
+```
+
+```json
+{
+  "sub": "auth0|507f1f77bcf86cd799439011",
+  "name": "Robert Leggett",
+  "email": "robert@example.com",
+  "email_verified": true,
+  "picture": "https://example.com/robert.jpg",
+  "updated_at": "2025-07-10T12:00:00Z"
+}
+```
+
+### 3. Standard Scopes
+
+OIDC defines a set of standard scopes that map to predefined sets of claims:
+
+| Scope | Claims Returned |
+|---|---|
+| `openid` | `sub` (required — this scope is mandatory for OIDC) |
+| `profile` | `name`, `family_name`, `given_name`, `middle_name`, `nickname`, `preferred_username`, `picture`, `website`, `gender`, `birthdate`, `zoneinfo`, `locale`, `updated_at` |
+| `email` | `email`, `email_verified` |
+| `address` | `address` (structured object with `street_address`, `locality`, `region`, `postal_code`, `country`) |
+| `phone` | `phone_number`, `phone_number_verified` |
+
+### 4. Discovery Document
+
+OIDC providers publish a **discovery document** at a well-known URL that describes all the endpoints, supported scopes, signing algorithms, and capabilities:
+
+```bash
+curl https://auth.example.com/.well-known/openid-configuration
+```
+
+```json
+{
+  "issuer": "https://auth.example.com",
+  "authorization_endpoint": "https://auth.example.com/authorize",
+  "token_endpoint": "https://auth.example.com/token",
+  "userinfo_endpoint": "https://auth.example.com/userinfo",
+  "jwks_uri": "https://auth.example.com/.well-known/jwks.json",
+  "scopes_supported": ["openid", "profile", "email", "address", "phone"],
+  "response_types_supported": ["code", "token", "id_token"],
+  "id_token_signing_alg_values_supported": ["RS256", "ES256"],
+  "code_challenge_methods_supported": ["S256"]
+}
+```
+
+This enables clients to automatically configure themselves — a practice known as **dynamic discovery**.
+
+---
+
+## What is an ID Token?
+
+The **ID Token** is a JSON Web Token (JWT) that contains claims about the user and the authentication event. Let's break down its structure.
+
+A JWT consists of three base64url-encoded parts separated by dots: `header.payload.signature`.
+
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImFiYzEyMyJ9.
+eyJpc3MiOiJodHRwczovL2F1dGguZXhhbXBsZS5jb20iLCJzdWIiOiJhd
+XRoMHw1MDdmMWY3N2JjZjg2Y2Q3OTk0MzkwMTEiLCJhdWQiOiJteS13ZW
+ItYXBwIiwiZXhwIjoxNzIwNzA0MDAwLCJpYXQiOjE3MjA3MDAw.
+SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+```
+
+Decoded, the three parts look like this:
+
+**Header:**
+
+```json
+{
+  "alg": "RS256",
+  "typ": "JWT",
+  "kid": "abc123"
+}
+```
+
+*   `alg` — the signing algorithm (RS256 = RSA with SHA-256)
+*   `typ` — token type
+*   `kid` — key ID, used to look up the correct public key from the JWKS endpoint
+
+**Payload (Claims):**
+
+```json
+{
+  "iss": "https://auth.example.com",
+  "sub": "auth0|507f1f77bcf86cd799439011",
+  "aud": "my-web-app",
+  "exp": 1720704000,
+  "iat": 1720700400,
+  "nonce": "n-0S6_WzA2Mj",
+  "name": "Robert Leggett",
+  "email": "robert@example.com",
+  "email_verified": true
+}
+```
+
+*   `iss` — issuer (the authorisation server that issued the token)
+*   `sub` — subject (the unique identifier for the user)
+*   `aud` — audience (the client ID that the token was issued for)
+*   `exp` — expiration time (Unix timestamp)
+*   `iat` — issued at time
+*   `nonce` — a value used to associate a client session with the ID Token, mitigating replay attacks
+
+**Signature:**
+
+The signature is computed over the header and payload using the algorithm specified in the header. For RS256, this is an RSA signature using the authorisation server's private key. The client verifies the signature using the corresponding public key from the JWKS endpoint.
+
+---
+
+## What is token validation?
+
+Token validation is the process by which your application verifies that an incoming token is authentic, has not been tampered with, and is still valid. This is one of the most critical steps in any OAuth 2.0 / OIDC implementation — getting this wrong can lead to serious security vulnerabilities.
+
+Here is the validation checklist:
+
+1.  **Decode the JWT** — base64url-decode the header and payload
+2.  **Verify the signature** — fetch the public key from the JWKS endpoint using the `kid` from the header, and verify the cryptographic signature
+3.  **Check the `iss` claim** — it must match the expected issuer
+4.  **Check the `aud` claim** — it must include your application's client ID
+5.  **Check the `exp` claim** — the token must not be expired
+6.  **Check the `iat` claim** — the token should not have been issued unreasonably far in the past
+7.  **Check the `nonce`** (for ID Tokens) — it must match the nonce sent in the authorisation request
+
+Let's look at a complete token validation implementation in TypeScript using the `jose` library:
+
+```typescript
+import { createRemoteJWKSet, jwtVerify } from "jose";
+
+const ISSUER = "https://auth.example.com";
+const AUDIENCE = "my-web-app";
+
+// Create a JWKS client that fetches and caches public keys
+const jwks = createRemoteJWKSet(
+  new URL("https://auth.example.com/.well-known/jwks.json")
+);
+
+async function validateToken(token: string) {
+  try {
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      algorithms: ["RS256"],
+    });
+
+    console.log("Token is valid");
+    console.log("Subject:", payload.sub);
+    console.log("Email:", payload.email);
+    return payload;
+  } catch (error) {
+    console.error("Token validation failed:", error.message);
+    throw new Error("Unauthorised");
+  }
+}
+```
+
+And the same in Python using `PyJWT`:
+
+```python
+import jwt
+from jwt import PyJWKClient
+
+ISSUER = "https://auth.example.com"
+AUDIENCE = "my-web-app"
+JWKS_URL = "https://auth.example.com/.well-known/jwks.json"
+
+jwk_client = PyJWKClient(JWKS_URL)
+
+def validate_token(token: str) -> dict:
+    try:
+        # Fetch the signing key based on the token's kid header
+        signing_key = jwk_client.get_signing_key_from_jwt(token)
+
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            issuer=ISSUER,
+            audience=AUDIENCE,
+            options={"require": ["exp", "iss", "aud", "sub"]},
+        )
+
+        print(f"Token is valid — subject: {payload['sub']}")
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise Exception("Token has expired")
+    except jwt.InvalidTokenError as e:
+        raise Exception(f"Token validation failed: {e}")
+```
+
+---
+
+## How do you implement this in practice?
+
+Let's walk through practical middleware implementations that you can drop into a real application.
+
+### Express.js (TypeScript) Middleware
+
+```typescript
+import { Request, Response, NextFunction } from "express";
+import { createRemoteJWKSet, jwtVerify, JWTPayload } from "jose";
+
+const ISSUER = process.env.OIDC_ISSUER!;
+const AUDIENCE = process.env.OIDC_AUDIENCE!;
+
+const jwks = createRemoteJWKSet(
+  new URL(`${ISSUER}/.well-known/jwks.json`)
+);
+
+// Extend the Express Request type to include the authenticated user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: JWTPayload;
+    }
+  }
+}
+
+export async function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Missing or invalid Authorization header" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      algorithms: ["RS256"],
+    });
+
+    req.user = payload;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
+// Scope-checking middleware factory
+export function requireScope(scope: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const tokenScopes = (req.user?.scope as string)?.split(" ") ?? [];
+
+    if (!tokenScopes.includes(scope)) {
+      return res.status(403).json({
+        error: `Missing required scope: ${scope}`,
+      });
+    }
+
+    next();
+  };
+}
+```
+
+Usage in your Express application:
+
+```typescript
+import express from "express";
+import { requireAuth, requireScope } from "./middleware/auth";
+
+const app = express();
+
+// Public route — no authentication required
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
+// Protected route — authentication required
+app.get("/api/profile", requireAuth, (req, res) => {
+  res.json({ user: req.user });
+});
+
+// Protected route — authentication + specific scope required
+app.get(
+  "/api/orders",
+  requireAuth,
+  requireScope("read:orders"),
+  (req, res) => {
+    res.json({ orders: [] });
+  }
+);
+
+app.listen(3000, () => console.log("Server running on port 3000"));
+```
+
+### Python Flask Middleware
+
+```python
+from functools import wraps
+from flask import Flask, request, jsonify, g
+import jwt
+from jwt import PyJWKClient
+
+app = Flask(__name__)
+
+ISSUER = "https://auth.example.com"
+AUDIENCE = "my-web-app"
+jwk_client = PyJWKClient(f"{ISSUER}/.well-known/jwks.json")
+
+
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+
+        token = auth_header.split(" ")[1]
+
+        try:
+            signing_key = jwk_client.get_signing_key_from_jwt(token)
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],
+                issuer=ISSUER,
+                audience=AUDIENCE,
+            )
+            g.user = payload
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token has expired"}), 401
+        except jwt.InvalidTokenError as e:
+            return jsonify({"error": f"Invalid token: {e}"}), 401
+
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def require_scope(scope: str):
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            token_scopes = g.user.get("scope", "").split(" ")
+            if scope not in token_scopes:
+                return jsonify({"error": f"Missing required scope: {scope}"}), 403
+            return f(*args, **kwargs)
+
+        return decorated
+
+    return decorator
+
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/profile")
+@require_auth
+def profile():
+    return jsonify({"user": g.user})
+
+
+@app.route("/api/orders")
+@require_auth
+@require_scope("read:orders")
+def orders():
+    return jsonify({"orders": []})
+```
+
+---
+
+## What are the common security pitfalls?
+
+Security in OAuth 2.0 and OIDC is not something you can "set and forget." Let's walk through the most common mistakes and how to avoid them.
+
+### 1. Storing tokens in the wrong place
+
+As mentioned earlier, **never store tokens in `localStorage` or `sessionStorage`**. These storage mechanisms are accessible to any JavaScript running on the page, including injected scripts from XSS vulnerabilities. For SPAs, the recommended pattern is a **Backend for Frontend (BFF)** — a lightweight server-side component that stores tokens in secure, HTTP-only cookies and proxies API requests.
+
+### 2. Not validating redirect URIs
+
+The authorisation server must enforce **exact match** validation on redirect URIs. If wildcard or partial matching is allowed, an attacker could register a redirect URI that sends the authorisation code to their server. Always register the complete, exact redirect URI — including the scheme, host, port, and path.
+
+### 3. Missing CSRF protection
+
+The `state` parameter in the authorisation request exists to prevent **Cross-Site Request Forgery (CSRF)** attacks. Without it, an attacker could initiate an authorisation flow, obtain an authorisation code, and trick the victim's browser into completing the exchange — linking the attacker's account to the victim's session.
+
+Always generate a cryptographically random `state` value, store it in the user's session before redirecting, and verify it matches when the callback is received.
+
+### 4. Not using PKCE
+
+Even if you are building a confidential client, **always use PKCE**. It is a defence-in-depth measure that protects against authorisation code interception. There is no downside to including it — the overhead is a single SHA-256 hash.
+
+### 5. Accepting tokens without validation
+
+Never trust a token at face value. Always:
+
+*   Verify the cryptographic signature
+*   Check the issuer, audience, and expiration claims
+*   Validate scopes before granting access
+*   Use the JWKS endpoint to fetch keys (and cache them appropriately)
+
+### 6. Token leakage through logs and error messages
+
+Tokens should **never** appear in server logs, error responses, or URL query parameters. Use the `Authorization` header for transmitting tokens, and ensure your logging framework redacts sensitive headers.
+
+### 7. Not implementing token revocation
+
+Access tokens are typically short-lived, but refresh tokens can last for weeks. Implement [RFC 7009](https://datatracker.ietf.org/doc/html/rfc7009) token revocation so that tokens can be invalidated on logout, password change, or when suspicious activity is detected.
+
+---
+
+## How do real-world providers compare?
+
+When choosing an identity provider, it helps to understand the trade-offs. Here is a comparison of the most widely used providers:
+
+| Feature | Auth0 | AWS Cognito | Okta | Keycloak | Microsoft Entra ID |
+|---|---|---|---|---|---|
+| **Hosting** | Managed cloud | Managed cloud (AWS) | Managed cloud | Self-hosted / cloud | Managed cloud (Azure) |
+| **OIDC compliant** | Yes | Yes | Yes | Yes | Yes |
+| **PKCE support** | Yes | Yes | Yes | Yes | Yes |
+| **Social login** | Extensive | Google, Apple, Facebook, Amazon | Extensive | Extensive (via identity brokering) | Microsoft, Google, Facebook |
+| **MFA** | Yes (push, OTP, WebAuthn) | Yes (SMS, TOTP, WebAuthn) | Yes (push, OTP, WebAuthn) | Yes (OTP, WebAuthn) | Yes (Authenticator, FIDO2, SMS) |
+| **Machine-to-machine** | Yes | Yes (app clients) | Yes | Yes (service accounts) | Yes (app registrations) |
+| **Custom claims** | Rules, Actions, Hooks | Pre/post token Lambda triggers | Inline hooks, expression language | Protocol mappers | Claims mapping policies |
+| **Pricing** | Free tier, then per MAU | Free tier (50k MAU), then per MAU | Free tier, then per MAU | Free (open source) | Included with Azure AD, P1/P2 tiers |
+| **Best for** | Startups, developer experience | AWS-native workloads | Enterprise, workforce identity | Self-hosted, full control | Microsoft / Azure ecosystems |
+| **SDK ecosystem** | Excellent (all platforms) | AWS SDK, Amplify | Good (all platforms) | Java-centric, adapters for others | MSAL (all platforms) |
+
+Each provider has its strengths. Auth0 excels in developer experience and rapid integration. Cognito is the natural choice for AWS-native architectures. Okta dominates in enterprise workforce identity. Keycloak provides unmatched flexibility for organisations that want full control. Entra ID is deeply integrated into the Microsoft ecosystem and is the obvious choice for organisations already invested in Azure.
+
+---
+
+## A quick reference — putting it all together
+
+Here is a decision tree for choosing the right flow:
+
+*   **User-facing web application with server backend?** → Authorization Code + PKCE
+*   **Single-page application (SPA)?** → Authorization Code + PKCE (with BFF pattern recommended)
+*   **Mobile or native application?** → Authorization Code + PKCE
+*   **Service-to-service (no user)?** → Client Credentials
+*   **Device with limited input (TV, CLI)?** → Device Authorization
+*   **Need to know who the user is?** → Add OpenID Connect (include `openid` scope)
+
+![OAuth 2.0 and OIDC Decision Tree](/blog/deep-dive-oauth2-and-openid-connect/inline-7.png)
+
+OAuth 2.0 and OIDC Flow Decision Tree
+
+And here is a summary of the key endpoints your application will interact with:
+
+| Endpoint | Purpose | Used By |
+|---|---|---|
+| `/authorize` | Initiate authorisation (user-facing) | Authorization Code, PKCE, Device |
+| `/token` | Exchange grants for tokens (back-channel) | All flows |
+| `/userinfo` | Retrieve user profile claims | OIDC clients |
+| `/device/code` | Request device and user codes | Device Authorization |
+| `/.well-known/openid-configuration` | Discover provider capabilities | All OIDC clients |
+| `/.well-known/jwks.json` | Fetch public signing keys | Token validation |
+| `/revoke` | Revoke tokens | Logout, security events |
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+OAuth 2.0 and OpenID Connect are the foundation of modern identity and access management — understanding the flows, the token lifecycle, and the security considerations will serve you well whether you are building a simple login page or architecting an enterprise-grade identity platform. Don't worry if all of this seems overwhelming — bookmark this as a reference and revisit the sections as you encounter each concept in practice.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

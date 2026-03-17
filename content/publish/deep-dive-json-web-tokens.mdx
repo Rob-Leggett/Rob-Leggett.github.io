@@ -1,0 +1,980 @@
+---
+title: "Deep Dive - JSON Web Tokens (JWT)"
+date: "2025-07-13"
+slug: "deep-dive-json-web-tokens"
+status: "publish"
+feature_image: "/blog/deep-dive-json-web-tokens/feature-image.png"
+tags: ["JSON Web Tokens", "JWT", "Authentication", "Authorisation", "OAuth 2.0", "JWKS", "Token Security", "API Security", "Identity", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - JSON Web Tokens (JWT) | Robert Leggett"
+  description: "A comprehensive deep dive into JSON Web Tokens — covering JWT structure, signing algorithms, validation flows, JWKS, refresh token rotation, security pitfalls, and practical middleware examples."
+  keywords: ["JSON Web Tokens", "JWT", "Authentication", "Authorisation", "JWKS", "Token Validation", "Signing Algorithms", "OAuth 2.0", "API Security", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-json-web-tokens"
+  image: "https://robertleggett.com.au/blog/deep-dive-json-web-tokens/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - JSON Web Tokens (JWT)"
+  description: "A comprehensive deep dive into JSON Web Tokens — from header, payload, and signature structure to JWKS discovery, refresh token rotation, and production-grade middleware examples."
+  image: "https://robertleggett.com.au/blog/deep-dive-json-web-tokens/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-json-web-tokens"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - JSON Web Tokens (JWT)"
+  description: "From JWT anatomy to JWKS key rotation — a complete technical reference for building secure, stateless authentication in modern distributed systems."
+  image: "https://robertleggett.com.au/blog/deep-dive-json-web-tokens/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of JSON Web Tokens (JWT), unravelling their structure, signing mechanisms, validation flows, and the security considerations that every engineer must understand when building modern authentication systems. Whether you are implementing your first token-based login flow or hardening an existing identity layer across a distributed microservices architecture, our goal is to provide clear and practical explanations that will deepen your understanding. Join us on this deep dive as we demystify how JWTs work, why they became the backbone of stateless authentication, and how to use them safely at scale. Let's get started.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of JWT structure, signing algorithms, validation patterns, JWKS key rotation, and production security practices for token-based authentication
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is a JSON Web Token?
+
+A **JSON Web Token (JWT)** is a compact, URL-safe token format defined in [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519) that allows two parties to exchange claims — small pieces of structured information — in a way that can be cryptographically verified. Think of a JWT like a tamper-evident sealed envelope. You place a letter inside (the claims), seal the envelope with a wax stamp (the signature), and hand it to a courier (the client). Anyone who receives the envelope can read the letter through a transparent window (the payload is Base64-encoded, not encrypted), but if anyone tampers with the contents, the wax seal breaks — and the recipient knows the message has been altered.
+
+JWTs are self-contained. This means the token itself carries all the information needed to identify the user, determine their permissions, and verify that the token has not been modified. There is no need to call back to a central database or session store to validate the token, which makes JWTs particularly well-suited for distributed systems and microservices architectures.
+
+A JWT looks like this in its serialised form:
+
+```text
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImFiYzEyMyJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IlJvYmVydCBMZWdnZXR0IiwiaWF0IjoxNzIwODY0MDAwLCJleHAiOjE3MjA4Njc2MDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLmNvbSIsImF1ZCI6Imh0dHBzOi8vYXBpLmV4YW1wbGUuY29tIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+```
+
+Three Base64URL-encoded segments separated by dots. That is the anatomy we will dissect throughout this post.
+
+---
+
+## Why do we need JWTs?
+
+Before JWTs, the dominant pattern for web authentication was **server-side sessions**. A user would log in, the server would create a session object (stored in memory or a database), and the server would return a session identifier — typically a random string — as a cookie. On every subsequent request, the client would send the cookie, and the server would look up the session in its store to determine who the user was.
+
+This works perfectly well for monolithic applications running on a single server. The problems emerge when you scale horizontally or adopt a microservices architecture:
+
+*   **Sticky sessions** — If the session is stored in-memory on server A, the load balancer must route every subsequent request from that user to server A. This limits your scaling flexibility and creates single points of failure.
+*   **Centralised session stores** — You can move sessions to a shared store like Redis, but now every single API call requires a round-trip to Redis. In a microservices environment where a single user action may fan out to ten internal services, that is ten Redis lookups per user interaction.
+*   **Cross-domain constraints** — Session cookies are bound to a single domain. If your frontend lives on `app.example.com` and your API on `api.example.com`, sharing cookies becomes complicated and insecure.
+
+JWTs solve these problems through **stateless authentication**. The token itself contains all the information the server needs, and any service that possesses the verification key can independently validate the token without calling back to a central authority. This eliminates the need for shared session stores, enables true horizontal scaling, and works seamlessly across domains and services.
+
+![Comparison of session-based authentication with a centralised store versus JWT-based stateless authentication across distributed services](/blog/deep-dive-json-web-tokens/inline-1.png)
+
+Session-Based vs JWT-Based Authentication
+
+---
+
+## What is the structure of a JWT?
+
+Every JWT consists of exactly three parts, separated by periods:
+
+```text
+Header.Payload.Signature
+```
+
+Or, more precisely:
+
+```text
+Base64URL(Header) + "." + Base64URL(Payload) + "." + Signature
+```
+
+Each part serves a distinct purpose:
+
+1.  **Header** — Metadata about the token: which algorithm was used to sign it and what type of token it is.
+2.  **Payload** — The claims: the actual data the token carries (user identity, permissions, expiry times).
+3.  **Signature** — The cryptographic proof that the header and payload have not been tampered with.
+
+![JWT structure diagram showing the three Base64URL-encoded segments with colour-coded header, payload, and signature sections](/blog/deep-dive-json-web-tokens/inline-2.png)
+
+JWT Structure — Header, Payload, and Signature
+
+Let's break each part down in detail.
+
+---
+
+## What is the Header?
+
+The **header** is a JSON object that describes the token's metadata. It is Base64URL-encoded to form the first segment of the JWT.
+
+```json
+{
+  "alg": "RS256",
+  "typ": "JWT",
+  "kid": "abc123"
+}
+```
+
+The header contains three common fields:
+
+*   **`alg`** (Algorithm) — Identifies the cryptographic algorithm used to create the signature. Common values include `HS256` (HMAC with SHA-256), `RS256` (RSA with SHA-256), and `ES256` (ECDSA with P-256 and SHA-256). This field is required by the specification and is the most critical field in the header from a security perspective — as we will see later when we discuss the `alg: none` attack.
+*   **`typ`** (Type) — Declares the media type of the token. This is almost always `"JWT"`. While technically optional, including it helps intermediaries distinguish JWTs from other token formats.
+*   **`kid`** (Key ID) — A hint indicating which key was used to sign the token. This becomes essential when the authorisation server rotates keys and publishes multiple public keys via a **JWKS** endpoint. The consumer uses the `kid` to select the correct key from the set for verification.
+
+You can decode the header yourself with a simple Base64URL decode:
+
+```bash
+echo 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImFiYzEyMyJ9' | \
+  base64 -d 2>/dev/null | jq .
+```
+
+Output:
+
+```json
+{
+  "alg": "RS256",
+  "typ": "JWT",
+  "kid": "abc123"
+}
+```
+
+---
+
+## What is the Payload?
+
+The **payload** is where the claims live. Claims are statements about an entity (typically the user) and additional metadata. Like the header, the payload is a JSON object that gets Base64URL-encoded — it is not encrypted. Anyone who possesses the token can decode and read the payload.
+
+```json
+{
+  "sub": "1234567890",
+  "name": "Robert Leggett",
+  "email": "robert@example.com",
+  "iat": 1720864000,
+  "exp": 1720867600,
+  "iss": "https://auth.example.com",
+  "aud": "https://api.example.com",
+  "roles": ["admin", "editor"]
+}
+```
+
+### Registered claims
+
+The JWT specification defines a set of **registered claims** — predefined claim names with agreed-upon semantics. None of them are mandatory, but they are strongly recommended:
+
+*   **`iss`** (Issuer) — Identifies the principal that issued the token. Typically the URL of your authorisation server, for example `https://auth.example.com`. Consumers should validate this to ensure the token came from a trusted issuer.
+*   **`sub`** (Subject) — Identifies the principal that is the subject of the token. Usually the user ID. This should be unique within the context of the issuer.
+*   **`aud`** (Audience) — Identifies the recipients that the token is intended for. This could be a single string or an array of strings. A resource server should reject tokens whose `aud` does not include its own identifier.
+*   **`exp`** (Expiration Time) — A NumericDate (seconds since Unix epoch) after which the token must be rejected. This is one of the most important claims — tokens without an `exp` never expire, which is a significant security risk.
+*   **`iat`** (Issued At) — A NumericDate indicating when the token was created. Useful for determining the age of a token.
+*   **`nbf`** (Not Before) — A NumericDate before which the token must not be accepted. This enables issuing tokens that activate in the future.
+*   **`jti`** (JWT ID) — A unique identifier for the token. This can be used to prevent replay attacks by tracking which `jti` values have already been consumed.
+
+### Custom claims
+
+Beyond the registered claims, you can include any custom claims your application needs. Common examples include `roles`, `permissions`, `tenant_id`, and `email`. Be thoughtful about what you include — remember, the payload is readable by anyone who intercepts the token, and larger payloads mean larger HTTP headers on every request.
+
+You can decode the payload just as easily as the header:
+
+```typescript
+const payload = token.split('.')[1];
+const decoded = JSON.parse(
+  Buffer.from(payload, 'base64url').toString('utf-8')
+);
+console.log(decoded);
+```
+
+---
+
+## What is the Signature?
+
+The **signature** is what makes a JWT trustworthy. Without the signature, anyone could craft a payload claiming to be an admin and your API would have no way to distinguish it from a legitimate token.
+
+The signature is created by taking the encoded header and encoded payload, joining them with a period, and then applying the specified cryptographic algorithm with a secret or private key:
+
+```text
+Signature = Algorithm(
+  Base64URL(Header) + "." + Base64URL(Payload),
+  secret_or_private_key
+)
+```
+
+The verification process works in reverse. The consumer takes the header and payload from the received token, computes the expected signature using the shared secret (for symmetric algorithms) or the public key (for asymmetric algorithms), and compares it with the signature in the token. If they match, the token is authentic and untampered.
+
+![Diagram showing the JWT signing process with the header and payload being combined and signed with a private key, and the verification process using the corresponding public key](/blog/deep-dive-json-web-tokens/inline-3.png)
+
+JWT Signing and Verification Flow
+
+There are two fundamental categories of signing:
+
+*   **Symmetric signing (HMAC)** — The same secret key is used to both sign and verify the token. This is simple but means that every service that needs to verify tokens must possess the secret key. If any one service is compromised, the attacker can forge tokens.
+*   **Asymmetric signing (RSA, ECDSA)** — A private key signs the token and a separate public key verifies it. Only the authorisation server holds the private key. Any service can verify tokens using the publicly available public key without being able to forge new tokens. This is the recommended approach for production systems.
+
+---
+
+## What are the signing algorithms?
+
+The choice of signing algorithm has significant implications for security, performance, and key management. Let's compare the most commonly used algorithms.
+
+### HS256 — HMAC with SHA-256
+
+A symmetric algorithm that uses a shared secret key for both signing and verification. It is fast and produces compact signatures, but the shared secret must be distributed to every service that verifies tokens — and that secret must be kept secure everywhere.
+
+```typescript
+import jwt from 'jsonwebtoken';
+
+const token = jwt.sign(
+  { sub: '1234567890', name: 'Robert Leggett' },
+  'your-256-bit-secret',
+  { algorithm: 'HS256', expiresIn: '1h' }
+);
+```
+
+### RS256 — RSA with SHA-256
+
+An asymmetric algorithm using RSA key pairs. The authorisation server signs with a private key; consumers verify with the corresponding public key. RSA keys are larger (2048 or 4096 bits recommended), and signing is slower than HMAC, but the security model is far superior for distributed systems because the private key never leaves the authorisation server.
+
+### ES256 — ECDSA with P-256
+
+An asymmetric algorithm using Elliptic Curve cryptography. ES256 provides the same security guarantees as RS256 but with significantly smaller key sizes (256 bits vs 2048+ bits) and faster operations. The resulting signatures are also smaller, which reduces token size. ES256 is increasingly the preferred choice for new implementations.
+
+### PS256 — RSA-PSS with SHA-256
+
+A more modern RSA variant that uses Probabilistic Signature Scheme (PSS) padding instead of the older PKCS#1 v1.5 padding used by RS256. PS256 is considered more robust against certain theoretical attacks, though RS256 remains widely used and secure in practice.
+
+### Algorithm comparison
+
+| Property | HS256 | RS256 | ES256 | PS256 |
+|---|---|---|---|---|
+| Type | Symmetric | Asymmetric | Asymmetric | Asymmetric |
+| Key size | 256 bits | 2048+ bits | 256 bits | 2048+ bits |
+| Signature size | 32 bytes | 256 bytes | 64 bytes | 256 bytes |
+| Signing speed | Very fast | Slow | Fast | Slow |
+| Verification speed | Very fast | Fast | Fast | Fast |
+| Key distribution | Shared secret | Public/private pair | Public/private pair | Public/private pair |
+| JWKS compatible | Uncommon | Yes | Yes | Yes |
+| Recommended for | Internal/single-service | Production APIs | Modern production APIs | High-security environments |
+
+---
+
+## How do you create a JWT?
+
+Let's walk through creating JWTs in several languages, starting with TypeScript, then Python, and finally using raw command-line tools.
+
+### TypeScript with jsonwebtoken
+
+```typescript
+import jwt from 'jsonwebtoken';
+import fs from 'fs';
+
+const privateKey = fs.readFileSync('./keys/private.pem', 'utf-8');
+
+const payload = {
+  sub: 'user-42',
+  name: 'Robert Leggett',
+  email: 'robert@example.com',
+  roles: ['admin', 'editor'],
+  tenant_id: 'org-acme',
+};
+
+const token = jwt.sign(payload, privateKey, {
+  algorithm: 'RS256',
+  expiresIn: '1h',
+  issuer: 'https://auth.example.com',
+  audience: 'https://api.example.com',
+  keyid: 'abc123',
+});
+
+console.log(token);
+```
+
+### Python with PyJWT
+
+```python
+import jwt
+import datetime
+from pathlib import Path
+
+private_key = Path("./keys/private.pem").read_text()
+
+payload = {
+    "sub": "user-42",
+    "name": "Robert Leggett",
+    "email": "robert@example.com",
+    "roles": ["admin", "editor"],
+    "tenant_id": "org-acme",
+    "iat": datetime.datetime.now(tz=datetime.timezone.utc),
+    "exp": datetime.datetime.now(tz=datetime.timezone.utc)
+    + datetime.timedelta(hours=1),
+    "iss": "https://auth.example.com",
+    "aud": "https://api.example.com",
+}
+
+token = jwt.encode(
+    payload,
+    private_key,
+    algorithm="RS256",
+    headers={"kid": "abc123"},
+)
+
+print(token)
+```
+
+### Bash with OpenSSL
+
+For those who want to understand what is happening under the hood, here is how you can construct a JWT entirely from the command line:
+
+```bash
+# Create the header
+HEADER=$(echo -n '{"alg":"RS256","typ":"JWT","kid":"abc123"}' | \
+  openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+
+# Create the payload
+PAYLOAD=$(echo -n '{"sub":"user-42","name":"Robert Leggett","iat":1720864000,"exp":1720867600}' | \
+  openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+
+# Create the signature
+SIGNATURE=$(echo -n "${HEADER}.${PAYLOAD}" | \
+  openssl dgst -sha256 -sign ./keys/private.pem -binary | \
+  openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+
+# Assemble the JWT
+echo "${HEADER}.${PAYLOAD}.${SIGNATURE}"
+```
+
+This Bash example makes it clear that JWTs are not magic — they are Base64URL encoding and standard cryptographic signing, stitched together with a simple format.
+
+---
+
+## How do you validate a JWT?
+
+Validation is arguably more important than creation. A poorly validated JWT is worse than no JWT at all, because it gives a false sense of security. Here is the step-by-step process that every JWT consumer must follow:
+
+1.  **Split** the token into its three parts (header, payload, signature) by splitting on the `.` character.
+2.  **Decode the header** and extract the `alg` and `kid` fields.
+3.  **Enforce the algorithm** — reject any token whose `alg` is not in your explicitly allowed list. Never trust the `alg` field blindly.
+4.  **Retrieve the verification key** — for asymmetric algorithms, use the `kid` to look up the correct public key from your JWKS endpoint or local key store.
+5.  **Verify the signature** — recompute the signature over the header and payload using the verification key and compare it with the token's signature.
+6.  **Decode the payload** and validate the claims:
+    *   Is `exp` in the future? (with a small clock-skew tolerance, typically 30–60 seconds)
+    *   Is `nbf` in the past?
+    *   Does `iss` match your trusted issuer?
+    *   Does `aud` include your service's identifier?
+7.  **Extract the claims** and proceed with authorisation logic.
+
+![JWT validation flowchart showing each step from token receipt through signature verification, claims validation, and the accept or reject decision](/blog/deep-dive-json-web-tokens/inline-4.png)
+
+JWT Validation Flow
+
+### TypeScript validation
+
+```typescript
+import jwt, { JwtHeader, SigningKeyCallback } from 'jsonwebtoken';
+import jwksClient from 'jwks-rsa';
+
+const client = jwksClient({
+  jwksUri: 'https://auth.example.com/.well-known/jwks.json',
+  cache: true,
+  cacheMaxAge: 600000, // 10 minutes
+  rateLimit: true,
+});
+
+function getSigningKey(header: JwtHeader, callback: SigningKeyCallback) {
+  client.getSigningKey(header.kid, (err, key) => {
+    if (err) return callback(err);
+    const signingKey = key?.getPublicKey();
+    callback(null, signingKey);
+  });
+}
+
+jwt.verify(
+  token,
+  getSigningKey,
+  {
+    algorithms: ['RS256'],
+    issuer: 'https://auth.example.com',
+    audience: 'https://api.example.com',
+    clockTolerance: 30,
+  },
+  (err, decoded) => {
+    if (err) {
+      console.error('Token validation failed:', err.message);
+      return;
+    }
+    console.log('Valid token for user:', decoded?.sub);
+  }
+);
+```
+
+### Python validation
+
+```python
+import jwt
+import requests
+
+jwks_url = "https://auth.example.com/.well-known/jwks.json"
+jwks_response = requests.get(jwks_url)
+jwks = jwks_response.json()
+
+public_keys = {}
+for key_data in jwks["keys"]:
+    kid = key_data["kid"]
+    public_keys[kid] = jwt.algorithms.RSAAlgorithm.from_jwk(key_data)
+
+unverified_header = jwt.get_unverified_header(token)
+kid = unverified_header["kid"]
+
+if kid not in public_keys:
+    raise ValueError(f"Unknown kid: {kid}")
+
+decoded = jwt.decode(
+    token,
+    key=public_keys[kid],
+    algorithms=["RS256"],
+    issuer="https://auth.example.com",
+    audience="https://api.example.com",
+    options={"require": ["exp", "iss", "aud", "sub"]},
+)
+
+print(f"Valid token for user: {decoded['sub']}")
+```
+
+---
+
+## What is JWKS?
+
+**JSON Web Key Set (JWKS)** is a JSON data structure defined in [RFC 7517](https://datatracker.ietf.org/doc/html/rfc7517) that represents a set of cryptographic keys. In the context of JWT authentication, JWKS provides a standardised way for the authorisation server to publish its public keys so that resource servers can retrieve them dynamically for token verification.
+
+The JWKS endpoint is conventionally hosted at:
+
+```text
+https://auth.example.com/.well-known/jwks.json
+```
+
+A typical JWKS response looks like this:
+
+```json
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "kid": "abc123",
+      "use": "sig",
+      "alg": "RS256",
+      "n": "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4...",
+      "e": "AQAB"
+    },
+    {
+      "kty": "RSA",
+      "kid": "def456",
+      "use": "sig",
+      "alg": "RS256",
+      "n": "pjdss8ZaDfEH6K6U7GeW2nxDqR4IP049fk1fK0lndimbMMVBdPv...",
+      "e": "AQAB"
+    }
+  ]
+}
+```
+
+### Key fields in a JWK
+
+*   **`kty`** (Key Type) — The cryptographic algorithm family: `"RSA"`, `"EC"`, or `"OKP"`.
+*   **`kid`** (Key ID) — A unique identifier for the key. This matches the `kid` in the JWT header, allowing consumers to select the correct key.
+*   **`use`** (Public Key Use) — Either `"sig"` (signature) or `"enc"` (encryption).
+*   **`alg`** (Algorithm) — The intended algorithm for this key, such as `"RS256"`.
+*   **`n`** and **`e`** — The RSA modulus and exponent (for RSA keys). For EC keys, you would see `"crv"`, `"x"`, and `"y"` instead.
+
+### Key rotation
+
+One of the most important benefits of JWKS is that it enables seamless **key rotation**. When the authorisation server needs to rotate its signing keys — which should happen regularly as a security best practice — the process is straightforward:
+
+1.  Generate a new key pair and assign it a new `kid`.
+2.  Add the new public key to the JWKS endpoint alongside the existing keys.
+3.  Start signing new tokens with the new private key.
+4.  After all tokens signed with the old key have expired, remove the old public key from the JWKS endpoint.
+
+During the overlap period, the JWKS endpoint publishes both keys. Consumers use the `kid` from the JWT header to select the correct key for verification. This means key rotation happens with zero downtime and zero coordination between services.
+
+![JWKS key rotation timeline showing the overlap period where both old and new keys are published simultaneously](/blog/deep-dive-json-web-tokens/inline-5.png)
+
+JWKS Key Rotation Timeline
+
+### Caching JWKS
+
+Resource servers should cache the JWKS response rather than fetching it on every request. A reasonable caching strategy is:
+
+*   Cache the JWKS for 10 minutes (or use the `Cache-Control` headers from the response).
+*   If a token arrives with a `kid` that is not in the cache, trigger a cache refresh — this handles key rotation gracefully.
+*   Implement rate limiting on JWKS fetches to prevent an attacker from forcing excessive outbound requests.
+
+---
+
+## What are common JWT claims patterns?
+
+Beyond the registered claims, the way you structure custom claims shapes your entire authorisation model. Let's look at three common patterns.
+
+### Role-based access control (RBAC)
+
+The simplest pattern embeds roles directly in the token:
+
+```json
+{
+  "sub": "user-42",
+  "roles": ["admin", "editor"],
+  "iss": "https://auth.example.com",
+  "exp": 1720867600
+}
+```
+
+The resource server checks whether the user's roles include the required role for the requested operation. This is straightforward but coarse-grained — if you need to distinguish between "can edit articles" and "can edit users," you need either very granular roles or a different approach.
+
+### Permission-based access control
+
+A more fine-grained approach embeds specific permissions:
+
+```json
+{
+  "sub": "user-42",
+  "permissions": [
+    "articles:read",
+    "articles:write",
+    "users:read"
+  ],
+  "iss": "https://auth.example.com",
+  "exp": 1720867600
+}
+```
+
+This gives precise control over what the user can do. The trade-off is token size — a user with many permissions will have a large payload, which increases the size of every HTTP request.
+
+### Multi-tenancy claims
+
+In a SaaS platform, tokens often carry tenant context:
+
+```json
+{
+  "sub": "user-42",
+  "tenant_id": "org-acme",
+  "tenant_role": "owner",
+  "org_plan": "enterprise",
+  "iss": "https://auth.example.com",
+  "exp": 1720867600
+}
+```
+
+The `tenant_id` enables the resource server to scope all data access to the correct tenant without an additional lookup. This is critical for enforcing data isolation in multi-tenant architectures.
+
+---
+
+## What are the security pitfalls?
+
+JWTs are powerful, but they come with a collection of well-known security pitfalls. Understanding these is not optional — it is essential for any production deployment.
+
+### The alg:none attack
+
+The JWT specification technically allows an `alg` value of `"none"`, which means the token has no signature at all. Early JWT libraries would accept this at face value — if the header said `"alg": "none"`, the library would skip signature verification entirely. An attacker could strip the signature from a legitimate token, change the `alg` to `"none"`, modify the payload to grant themselves admin privileges, and the server would accept it.
+
+**Mitigation:** Never accept `alg: none`. Always configure your JWT library with an explicit allowlist of algorithms:
+
+```typescript
+// CORRECT — explicit algorithm allowlist
+jwt.verify(token, publicKey, { algorithms: ['RS256'] });
+
+// DANGEROUS — accepts whatever the token header says
+jwt.verify(token, publicKey);
+```
+
+### Key confusion attacks
+
+When a server is configured to accept both HS256 (symmetric) and RS256 (asymmetric), an attacker can exploit this. They take the server's public RSA key (which is, by definition, public), use it as the HMAC secret to sign a forged token with `alg: HS256`, and send it to the server. If the server naively uses the RSA public key as the HMAC verification key, the forged token passes validation.
+
+**Mitigation:** Only accept the specific algorithm you expect. If you sign with RS256, only verify with RS256. Never allow the token to dictate which algorithm family to use.
+
+### Token storage — localStorage vs httpOnly cookies
+
+Where you store JWTs in the browser has significant security implications:
+
+*   **localStorage** — Accessible to any JavaScript running on the page. If your application is vulnerable to Cross-Site Scripting (XSS), an attacker can steal the token and impersonate the user from any device.
+*   **httpOnly cookies** — Not accessible to JavaScript. The browser automatically sends the cookie with every request to the matching domain. This protects against XSS-based token theft but introduces Cross-Site Request Forgery (CSRF) concerns, which can be mitigated with SameSite cookie attributes and CSRF tokens.
+
+The recommended approach for browser-based applications is to store the JWT in an **httpOnly, Secure, SameSite=Strict** cookie. This provides the strongest protection against token theft.
+
+### Excessive token lifetime
+
+Setting `exp` to a week or a month dramatically increases the window of opportunity for a stolen token to be used. If a token is compromised and it does not expire for 30 days, the attacker has 30 days of unimpeded access.
+
+**Mitigation:** Keep access token lifetimes short — 15 minutes to 1 hour — and use refresh tokens to obtain new access tokens when needed.
+
+### Sensitive data in the payload
+
+Remember that the JWT payload is Base64URL-encoded, not encrypted. Do not include passwords, credit card numbers, or other sensitive data in claims. If you need to transmit sensitive claims, use **JSON Web Encryption (JWE)** to encrypt the entire token payload, or limit what you include and retrieve sensitive data server-side.
+
+### Missing audience validation
+
+If you do not validate the `aud` claim, a token intended for one service can be replayed against a completely different service. An access token meant for your billing API should not be accepted by your user management API.
+
+---
+
+## JWT vs opaque tokens — when to use which?
+
+Not every authentication scenario calls for JWTs. **Opaque tokens** — random strings that act as references to server-side session data — have their own strengths. Let's compare the two approaches.
+
+| Property | JWT | Opaque Token |
+|---|---|---|
+| Self-contained | Yes — claims are embedded | No — requires a lookup |
+| Validation | Local (no network call) | Requires introspection endpoint |
+| Revocation | Difficult (token is valid until expiry) | Immediate (delete from store) |
+| Token size | Large (hundreds of bytes to kilobytes) | Small (typically 32–64 bytes) |
+| Visibility | Claims are readable (Base64URL) | Opaque — reveals nothing |
+| Best for | Distributed microservices, APIs, cross-domain | Single-domain apps, sensitive data, strict revocation needs |
+| Scalability | Excellent — no shared state needed | Requires a centralised session store |
+| Offline verification | Yes — with public key | No — always requires the issuer |
+
+The key insight is that JWTs trade revocability for scalability. If you need the ability to instantly revoke a specific user's access — for example, when an employee is terminated — pure JWTs make this difficult because every issued token remains valid until its `exp` time. You can work around this with short-lived access tokens combined with a token revocation list, but this adds complexity.
+
+To put this into context, many production systems use a hybrid approach: JWTs as short-lived access tokens (validated locally by each service) combined with opaque refresh tokens (stored server-side and revocable instantly).
+
+---
+
+## How do you handle token refresh?
+
+Short-lived access tokens create a better security posture, but they also mean users would be forced to re-authenticate every 15 minutes — which is a terrible user experience. This is where **refresh tokens** come in.
+
+A refresh token is a long-lived credential (days or weeks) that is used exclusively to obtain new access tokens. The refresh token is never sent to resource servers — it is only sent to the authorisation server's token endpoint.
+
+### Refresh token rotation
+
+The most secure pattern is **refresh token rotation**, where the authorisation server issues a new refresh token every time a refresh is performed, and the previous refresh token is invalidated:
+
+1.  User authenticates. The authorisation server issues an access token (15 min) and a refresh token (RT-1).
+2.  After 15 minutes, the access token expires. The client sends RT-1 to the token endpoint.
+3.  The authorisation server validates RT-1, issues a new access token and a new refresh token (RT-2), and invalidates RT-1.
+4.  If an attacker steals RT-1 and tries to use it after step 3, the authorisation server detects that RT-1 has already been used. This is a **replay detection** signal — the server invalidates the entire refresh token family (including RT-2), forcing the user to re-authenticate.
+
+![Refresh token rotation sequence diagram showing the exchange of refresh tokens with each access token renewal and the replay detection mechanism](/blog/deep-dive-json-web-tokens/inline-6.png)
+
+Refresh Token Rotation with Replay Detection
+
+```typescript
+import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
+
+interface RefreshTokenRecord {
+  userId: string;
+  family: string;
+  used: boolean;
+}
+
+const refreshTokenStore = new Map<string, RefreshTokenRecord>();
+
+function issueTokenPair(userId: string, family?: string) {
+  const tokenFamily = family ?? uuidv4();
+
+  const accessToken = jwt.sign(
+    { sub: userId, type: 'access' },
+    privateKey,
+    { algorithm: 'RS256', expiresIn: '15m' }
+  );
+
+  const refreshTokenId = uuidv4();
+  const refreshToken = jwt.sign(
+    { sub: userId, jti: refreshTokenId, family: tokenFamily, type: 'refresh' },
+    privateKey,
+    { algorithm: 'RS256', expiresIn: '7d' }
+  );
+
+  refreshTokenStore.set(refreshTokenId, {
+    userId,
+    family: tokenFamily,
+    used: false,
+  });
+
+  return { accessToken, refreshToken };
+}
+
+function refreshAccessToken(refreshToken: string) {
+  const decoded = jwt.verify(refreshToken, publicKey, {
+    algorithms: ['RS256'],
+  }) as { sub: string; jti: string; family: string };
+
+  const record = refreshTokenStore.get(decoded.jti);
+
+  if (!record || record.used) {
+    // Replay detected — invalidate the entire family
+    for (const [id, rec] of refreshTokenStore.entries()) {
+      if (rec.family === decoded.family) {
+        refreshTokenStore.delete(id);
+      }
+    }
+    throw new Error('Refresh token replay detected');
+  }
+
+  // Mark the current refresh token as used
+  record.used = true;
+
+  // Issue a new token pair in the same family
+  return issueTokenPair(decoded.sub, decoded.family);
+}
+```
+
+---
+
+## How do you build JWT middleware in practice?
+
+Let's look at production-style middleware for two popular frameworks.
+
+### Express.js middleware
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+import jwt, { JwtPayload } from 'jsonwebtoken';
+import jwksClient from 'jwks-rsa';
+
+const JWKS_URI = 'https://auth.example.com/.well-known/jwks.json';
+const ISSUER = 'https://auth.example.com';
+const AUDIENCE = 'https://api.example.com';
+
+const client = jwksClient({
+  jwksUri: JWKS_URI,
+  cache: true,
+  cacheMaxAge: 600000,
+  rateLimit: true,
+  jwksRequestsPerMinute: 10,
+});
+
+function getKey(header: jwt.JwtHeader, callback: jwt.SigningKeyCallback) {
+  if (!header.kid) {
+    return callback(new Error('Missing kid in token header'));
+  }
+  client.getSigningKey(header.kid, (err, key) => {
+    if (err) return callback(err);
+    callback(null, key?.getPublicKey());
+  });
+}
+
+export function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing bearer token' });
+  }
+
+  const token = authHeader.slice(7);
+
+  jwt.verify(
+    token,
+    getKey,
+    { algorithms: ['RS256'], issuer: ISSUER, audience: AUDIENCE },
+    (err, decoded) => {
+      if (err) {
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+      (req as any).user = decoded as JwtPayload;
+      next();
+    }
+  );
+}
+
+export function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as any).user as JwtPayload;
+    const userRoles = (user?.roles as string[]) ?? [];
+
+    if (!roles.some((role) => userRoles.includes(role))) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  };
+}
+
+// Usage
+// app.get('/admin/users', requireAuth, requireRole('admin'), handler);
+```
+
+### Python FastAPI middleware
+
+```python
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+import requests
+from functools import lru_cache
+from typing import Any
+
+app = FastAPI()
+security = HTTPBearer()
+
+JWKS_URI = "https://auth.example.com/.well-known/jwks.json"
+ISSUER = "https://auth.example.com"
+AUDIENCE = "https://api.example.com"
+
+
+@lru_cache(maxsize=1)
+def get_jwks() -> dict[str, Any]:
+    response = requests.get(JWKS_URI)
+    response.raise_for_status()
+    jwks = response.json()
+    return {
+        key["kid"]: jwt.algorithms.RSAAlgorithm.from_jwk(key)
+        for key in jwks["keys"]
+    }
+
+
+def get_public_key(kid: str):
+    keys = get_jwks()
+    if kid not in keys:
+        # Cache miss — try refreshing
+        get_jwks.cache_clear()
+        keys = get_jwks()
+    if kid not in keys:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Unknown signing key: {kid}",
+        )
+    return keys[kid]
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> dict:
+    token = credentials.credentials
+
+    try:
+        unverified_header = jwt.get_unverified_header(token)
+        kid = unverified_header.get("kid")
+        if not kid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing kid in token header",
+            )
+
+        public_key = get_public_key(kid)
+
+        decoded = jwt.decode(
+            token,
+            key=public_key,
+            algorithms=["RS256"],
+            issuer=ISSUER,
+            audience=AUDIENCE,
+            options={"require": ["exp", "iss", "aud", "sub"]},
+        )
+        return decoded
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+        )
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token: {str(e)}",
+        )
+
+
+def require_role(*roles: str):
+    async def role_checker(
+        user: dict = Depends(get_current_user),
+    ) -> dict:
+        user_roles = user.get("roles", [])
+        if not any(role in user_roles for role in roles):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+        return user
+    return role_checker
+
+
+@app.get("/admin/users")
+async def list_users(user: dict = Depends(require_role("admin"))):
+    return {"message": f"Hello admin {user['sub']}"}
+
+
+@app.get("/profile")
+async def get_profile(user: dict = Depends(get_current_user)):
+    return {"sub": user["sub"], "name": user.get("name")}
+```
+
+---
+
+## Okay, what terminology do I need to understand?
+
+### JSON Web Token (JWT)
+
+A compact, URL-safe token format consisting of three Base64URL-encoded parts — header, payload, and signature — that enables stateless, verifiable exchange of claims between parties.
+
+### Claim
+
+A piece of information asserted about a subject. Claims are key-value pairs in the JWT payload. Registered claims like `sub`, `iss`, and `exp` have standardised meanings; custom claims are application-specific.
+
+### Signing
+
+The process of applying a cryptographic algorithm to the JWT header and payload to produce a signature that proves the token has not been tampered with.
+
+### Symmetric Algorithm
+
+A cryptographic algorithm where the same key is used for both signing and verification. HMAC-SHA256 (HS256) is the most common symmetric JWT algorithm.
+
+### Asymmetric Algorithm
+
+A cryptographic algorithm that uses a key pair — a private key for signing and a public key for verification. RSA (RS256) and ECDSA (ES256) are the most common asymmetric JWT algorithms.
+
+### JWKS (JSON Web Key Set)
+
+A JSON document containing an array of public keys used by the authorisation server. Resource servers fetch the JWKS to obtain the correct public key for verifying JWT signatures.
+
+### Key Rotation
+
+The practice of periodically replacing cryptographic keys. JWKS enables seamless rotation by publishing new and old keys simultaneously during a transition period.
+
+### Access Token
+
+A short-lived JWT presented to resource servers to authorise API requests. Typically valid for 15 minutes to 1 hour.
+
+### Refresh Token
+
+A long-lived credential used exclusively to obtain new access tokens from the authorisation server. Refresh tokens should be stored securely and are revocable server-side.
+
+### Token Introspection
+
+An OAuth 2.0 mechanism (RFC 7662) where a resource server sends an opaque token to the authorisation server to determine whether it is currently active and to retrieve its associated claims.
+
+### Base64URL Encoding
+
+A URL-safe variant of Base64 encoding that replaces `+` with `-`, `/` with `_`, and omits padding characters (`=`). JWTs use Base64URL to ensure tokens are safe to include in URLs and HTTP headers.
+
+### Clock Skew
+
+The time difference between the clocks on the authorisation server and the resource server. JWT validators typically allow a small tolerance (30–60 seconds) to account for clock skew when checking `exp` and `nbf` claims.
+
+### JWE (JSON Web Encryption)
+
+A companion standard to JWS (JSON Web Signature) that provides confidentiality by encrypting the token payload. Use JWE when the claims themselves must be hidden from intermediaries.
+
+### Replay Attack
+
+An attack where a valid token is intercepted and re-sent by a malicious party. The `jti` claim and refresh token rotation are mechanisms to detect and prevent replay attacks.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

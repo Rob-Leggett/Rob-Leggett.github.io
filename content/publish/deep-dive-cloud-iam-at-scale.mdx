@@ -1,0 +1,912 @@
+---
+title: "Deep Dive - Cloud IAM at Scale"
+date: "2025-07-20"
+slug: "deep-dive-cloud-iam-at-scale"
+status: "publish"
+feature_image: "/blog/deep-dive-cloud-iam-at-scale/feature-image.png"
+tags: ["Cloud", "IAM", "AWS", "GCP", "Azure", "Security", "Infrastructure", "DevOps", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Cloud IAM at Scale | Robert Leggett"
+  description: "A comprehensive exploration of Identity and Access Management across AWS, GCP, and Azure — covering least privilege, cross-account roles, OIDC federation, SCPs, permission boundaries, CIEM, and IAM automation at enterprise scale."
+  keywords: ["Cloud IAM", "AWS IAM", "GCP IAM", "Azure RBAC", "Least Privilege", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-cloud-iam-at-scale"
+  image: "https://robertleggett.com.au/blog/deep-dive-cloud-iam-at-scale/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Cloud IAM at Scale"
+  description: "A comprehensive deep dive into Identity and Access Management across AWS, GCP, and Azure. Covers least privilege, cross-account roles, OIDC federation, SCPs, permission boundaries, CIEM, and IAM automation strategies for enterprise-scale organisations."
+  image: "https://robertleggett.com.au/blog/deep-dive-cloud-iam-at-scale/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-cloud-iam-at-scale"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Cloud IAM at Scale"
+  description: "Identity and Access Management across AWS, GCP, and Azure — least privilege, cross-account roles, OIDC federation, SCPs, permission boundaries, and IAM automation at enterprise scale."
+  image: "https://robertleggett.com.au/blog/deep-dive-cloud-iam-at-scale/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Identity and Access Management across the major cloud providers — unravelling how principals are authenticated, how policies govern authorisation decisions, how cross-account trust is established, and how organisations build scalable, auditable IAM frameworks that protect thousands of workloads without slowing teams down. Whether you are a cloud engineer beginning to move beyond basic IAM users or a seasoned architect designing multi-account governance for an enterprise, our goal is to provide clear and practical explanations that will deepen your understanding of the most critical service in any cloud platform. Join us on this deep dive as we demystify how modern organisations design, automate, and audit IAM at scale. Let's get started.
+
+---
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A thorough understanding of how IAM works across AWS, GCP, and Azure — and where they differ
+*   Practical patterns for achieving least privilege, cross-account access, and OIDC federation with real code examples
+*   Strategies for structuring, automating, and auditing IAM at enterprise scale using CDK, Terraform, and policy-as-code
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is Cloud IAM?
+
+Think of a large office building. There is a front desk that checks your identity badge, a security system that controls which floors you can access, and a set of policies that determine what you can do once you are inside — can you enter the server room, or only the meeting rooms? **Cloud IAM (Identity and Access Management)** is the digital equivalent of that entire security apparatus. It is the framework that controls _who_ can do _what_ on _which resources_ in your cloud environment.
+
+Every single API call made to a cloud provider — whether it is launching a virtual machine, reading a file from object storage, or querying a database — passes through the IAM layer first. The cloud provider evaluates the identity making the request, the action being requested, the resource being targeted, and any conditions that apply. If the evaluation results in an explicit allow and no explicit deny, the action proceeds. Otherwise, it is rejected.
+
+This makes IAM arguably the most critical service in any cloud platform. A misconfigured network can expose a single service. A misconfigured IAM policy can expose every service. IAM is not a feature you bolt on after deployment — it is the foundation upon which every other security control is built.
+
+![Cloud IAM Decision Flow — Every API Call Passes Through Policy Evaluation](/blog/deep-dive-cloud-iam-at-scale/inline-1.png)
+
+Cloud IAM Decision Flow — Every API Call Passes Through Policy Evaluation
+
+---
+
+## How does AWS IAM work?
+
+**AWS IAM** is the most mature and arguably the most flexible IAM system across the major cloud providers. It operates on a model of **principals**, **policies**, **actions**, and **resources** — and understanding how these pieces fit together is essential for building secure AWS environments.
+
+### Principals
+
+A principal is the entity making a request. In AWS, principals include:
+
+*   **IAM Users** — long-lived identities with credentials (access keys or passwords)
+*   **IAM Roles** — temporary identities assumed by users, services, or external entities
+*   **AWS Services** — services like Lambda or EC2 that assume roles to perform actions
+*   **Federated Users** — identities from external providers (SAML, OIDC) that assume roles
+
+The key insight is that in a well-architected AWS environment, almost nothing should be an IAM user. Roles are the building block.
+
+### Policies
+
+AWS IAM policies are JSON documents that define permissions. There are several types:
+
+*   **Identity-based policies** — attached to users, groups, or roles
+*   **Resource-based policies** — attached to resources (S3 buckets, SQS queues, KMS keys)
+*   **Service Control Policies (SCPs)** — attached to AWS Organisations OUs
+*   **Permission boundaries** — the maximum permissions an identity can have
+*   **Session policies** — passed when assuming a role or federating
+
+Here is a typical identity-based policy granting read access to a specific S3 bucket:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowS3ReadAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::my-application-data",
+        "arn:aws:s3:::my-application-data/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalOrgID": "o-abc123def4"
+        }
+      }
+    }
+  ]
+}
+```
+
+Notice the **Condition** block — this ensures only principals from our AWS Organisation can access the bucket, even if the policy is attached to a resource-based policy. Conditions are one of the most powerful and underused features of AWS IAM.
+
+### Trust policies
+
+Every IAM role has a **trust policy** that defines who can assume it. This is a resource-based policy on the role itself:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::123456789012:root"
+      },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": {
+          "sts:ExternalId": "cross-account-audit-2025"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Policy evaluation logic
+
+When a request arrives, AWS evaluates policies in a specific order. The effective permission is the intersection of all applicable policy types. An explicit **Deny** in any policy always wins. If there is no explicit Allow, the default is implicit Deny. The evaluation chain is: SCPs → Resource-based policies → Permission boundaries → Session policies → Identity-based policies. Understanding this chain is fundamental to debugging access issues.
+
+![AWS IAM Policy Evaluation Chain — SCPs Through Identity Policies](/blog/deep-dive-cloud-iam-at-scale/inline-2.png)
+
+AWS IAM Policy Evaluation Chain — SCPs Through Identity Policies
+
+---
+
+## How does GCP IAM work?
+
+**Google Cloud Platform IAM** takes a fundamentally different approach from AWS. Rather than attaching policies to identities, GCP attaches **bindings** to resources. The mental model shifts from "what can this identity do?" to "who can act on this resource?"
+
+### Members, roles, and bindings
+
+In GCP, the core concepts are:
+
+*   **Members** — identities such as Google accounts, service accounts, Google groups, or federated identities
+*   **Roles** — collections of permissions (e.g., `roles/storage.objectViewer` includes `storage.objects.get` and `storage.objects.list`)
+*   **Bindings** — the association of a member to a role on a specific resource
+
+GCP offers three types of roles:
+
+*   **Basic roles** — Owner, Editor, Viewer (overly broad, avoid in production)
+*   **Predefined roles** — curated by Google for specific services
+*   **Custom roles** — user-defined collections of permissions
+
+A GCP IAM policy binding looks like this:
+
+```yaml
+bindings:
+  - role: roles/storage.objectViewer
+    members:
+      - serviceAccount:data-reader@my-project.iam.gserviceaccount.com
+      - group:analytics-team@example.com
+    condition:
+      title: "Only production bucket"
+      expression: "resource.name.startsWith('projects/_/buckets/prod-')"
+  - role: roles/storage.objectAdmin
+    members:
+      - serviceAccount:data-writer@my-project.iam.gserviceaccount.com
+```
+
+### Resource hierarchy and inheritance
+
+One of GCP's strengths is its **resource hierarchy**: Organisation → Folder → Project → Resource. IAM bindings set at a higher level are inherited by all children. A binding at the organisation level applies to every project and resource beneath it. This makes it straightforward to grant broad access to platform teams while restricting application teams to specific projects.
+
+### IAM Conditions
+
+GCP supports **IAM Conditions** using Common Expression Language (CEL). Conditions can restrict access based on resource attributes, request time, IP address, and more — similar to AWS Conditions but with a different syntax.
+
+---
+
+## How does Azure IAM work?
+
+**Azure IAM** is tightly integrated with **Microsoft Entra ID** (formerly Azure Active Directory). Unlike AWS and GCP, where IAM is a standalone service, Azure's identity layer is a full-featured identity provider that handles authentication, single sign-on, conditional access, and more.
+
+### Core concepts
+
+*   **Entra ID** — the identity provider managing users, groups, service principals, and managed identities
+*   **RBAC (Role-Based Access Control)** — Azure's authorisation system that assigns roles to principals at specific scopes
+*   **Management Groups** — a hierarchy above subscriptions for organising and governing at scale
+*   **Azure Lighthouse** — cross-tenant access management for managed service providers
+
+### RBAC assignments
+
+Azure RBAC works by creating **role assignments** that bind a **security principal** to a **role definition** at a specific **scope**. The scope hierarchy is: Management Group → Subscription → Resource Group → Resource.
+
+```bash
+# Assign the Reader role to a group at the subscription scope
+az role assignment create \
+  --assignee "00000000-0000-0000-0000-000000000000" \
+  --role "Reader" \
+  --scope "/subscriptions/11111111-1111-1111-1111-111111111111"
+
+# Assign a custom role at the resource group scope
+az role assignment create \
+  --assignee "data-team@example.com" \
+  --role "Custom Data Reader" \
+  --scope "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/analytics-rg"
+```
+
+Azure provides over 100 built-in roles and supports custom role definitions, similar to GCP's predefined and custom roles.
+
+---
+
+## AWS vs GCP vs Azure — how do they compare?
+
+Understanding the differences between the three providers is essential when operating in a multi-cloud environment or migrating between platforms. Here is a comparison of the key IAM dimensions:
+
+| Dimension | AWS | GCP | Azure |
+|---|---|---|---|
+| **Identity Provider** | IAM Users, Roles, Identity Centre | Google Workspace, Cloud Identity | Microsoft Entra ID |
+| **Policy Model** | Identity-based JSON policies | Resource-based bindings (YAML/JSON) | RBAC role assignments at scopes |
+| **Principals** | Users, Roles, Federated, Services | Members (accounts, groups, SAs) | Users, Groups, Service Principals, Managed Identities |
+| **Role Types** | AWS-managed, Customer-managed | Basic, Predefined, Custom | Built-in, Custom |
+| **Cross-Account** | AssumeRole with trust policies | Cross-project IAM bindings, Workload Identity | Azure Lighthouse, cross-tenant access |
+| **Conditions** | IAM Condition keys (JSON) | CEL expressions | ABAC with conditions |
+| **Hierarchy** | Org → OU → Account | Org → Folder → Project → Resource | Management Group → Subscription → RG → Resource |
+| **Guardrails** | SCPs, Permission Boundaries | Org Policies (boolean constraints) | Azure Policy, Blueprints |
+| **Federation** | SAML 2.0, OIDC, Identity Centre | Workload Identity Federation | Entra ID federation, Managed Identities |
+| **Audit** | CloudTrail, Access Advisor | Cloud Audit Logs, Policy Analyser | Azure Monitor, Activity Log |
+
+The most important takeaway is that while the terminology differs, the underlying concepts are remarkably similar. Every provider has principals, permissions, resource scoping, conditions, and hierarchy-based inheritance. Master the concepts once, and you can navigate any provider.
+
+---
+
+## What is the principle of least privilege?
+
+**The principle of least privilege** states that every identity should have only the minimum permissions required to perform its function — nothing more, nothing less. It sounds simple, but achieving it at scale is one of the hardest challenges in cloud security.
+
+The problem is that least privilege is a moving target. A deployment pipeline might need broad permissions during initial setup but should be scoped down once infrastructure is stable. A developer might need write access during a sprint but only read access afterwards. Organisations that set permissions once and never revisit them inevitably drift towards over-provisioning.
+
+### How do we achieve least privilege?
+
+AWS provides several tools to help:
+
+**IAM Access Analyser** identifies resources shared with external entities and validates policies against best practices:
+
+```bash
+# Create an analyser for the current account
+aws accessanalyzer create-analyzer \
+  --analyzer-name org-analyser \
+  --type ORGANIZATION
+
+# List findings — resources accessible from outside your org
+aws accessanalyzer list-findings \
+  --analyzer-arn arn:aws:access-analyzer:ap-southeast-2:123456789012:analyzer/org-analyser \
+  --filter '{"status": {"eq": ["ACTIVE"]}}'
+```
+
+**IAM Policy Simulator** tests whether a set of policies grants or denies a specific action:
+
+```bash
+# Simulate whether a role can read from a specific S3 bucket
+aws iam simulate-principal-policy \
+  --policy-source-arn arn:aws:iam::123456789012:role/DataReaderRole \
+  --action-names s3:GetObject \
+  --resource-arns arn:aws:s3:::production-data/reports/quarterly.csv
+```
+
+**Access Advisor** shows the last time each service was used by a principal, allowing you to identify and remove unused permissions:
+
+```bash
+# Generate a service last accessed report
+JOB_ID=$(aws iam generate-service-last-accessed-details \
+  --arn arn:aws:iam::123456789012:role/LegacyAdminRole \
+  --query 'JobId' --output text)
+
+# Retrieve the report
+aws iam get-service-last-accessed-details \
+  --job-id "$JOB_ID" \
+  --query 'ServicesLastAccessed[?LastAuthenticated!=`null`].[ServiceName,LastAuthenticated]' \
+  --output table
+```
+
+The combination of these tools — analyse, simulate, and advise — forms a feedback loop that progressively tightens permissions over time.
+
+---
+
+## What are cross-account roles?
+
+In a multi-account AWS environment, workloads in one account frequently need to access resources in another. Rather than creating IAM users with long-lived credentials in each account, the recommended pattern is **cross-account role assumption** using `sts:AssumeRole`.
+
+The flow works as follows:
+
+1.  **Account B** (the target) creates an IAM role with a trust policy that allows Account A to assume it
+2.  **Account A** (the source) has an identity policy granting `sts:AssumeRole` on the target role
+3.  The workload in Account A calls `sts:AssumeRole`, providing the ARN of the role in Account B
+4.  AWS STS returns temporary credentials (access key, secret key, session token) scoped to the target role
+5.  The workload uses these temporary credentials to access resources in Account B
+6.  The credentials expire automatically (default 1 hour, configurable up to 12 hours)
+
+![Cross-Account Role Assumption Flow — STS AssumeRole With Temporary Credentials](/blog/deep-dive-cloud-iam-at-scale/inline-3.png)
+
+Cross-Account Role Assumption Flow — STS AssumeRole With Temporary Credentials
+
+Here is the cross-account role defined in AWS CDK:
+
+```typescript
+import * as cdk from "aws-cdk-lib";
+import * as iam from "aws-cdk-lib/aws-iam";
+import { Construct } from "constructs";
+
+export interface CrossAccountRoleProps {
+  readonly trustedAccountId: string;
+  readonly externalId: string;
+  readonly roleName: string;
+  readonly managedPolicies?: iam.IManagedPolicy[];
+}
+
+export class CrossAccountRole extends Construct {
+  public readonly role: iam.Role;
+
+  constructor(scope: Construct, id: string, props: CrossAccountRoleProps) {
+    super(scope, id);
+
+    this.role = new iam.Role(this, "Role", {
+      roleName: props.roleName,
+      assumedBy: new iam.AccountPrincipal(props.trustedAccountId),
+      externalId: props.externalId,
+      maxSessionDuration: cdk.Duration.hours(4),
+    });
+
+    props.managedPolicies?.forEach((policy) => {
+      this.role.addManagedPolicy(policy);
+    });
+  }
+}
+```
+
+And the equivalent in Terraform:
+
+```hcl
+resource "aws_iam_role" "cross_account_reader" {
+  name               = "cross-account-data-reader"
+  max_session_duration = 14400
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.trusted_account_id}:root"
+        }
+        Action = "sts:AssumeRole"
+        Condition = {
+          StringEquals = {
+            "sts:ExternalId" = var.external_id
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Environment = "production"
+    ManagedBy   = "terraform"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "reader_policy" {
+  role       = aws_iam_role.cross_account_reader.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+```
+
+The **ExternalId** in the trust policy is a critical security control. It prevents the **confused deputy problem** — where a malicious third party tricks a service into assuming a role on their behalf. Always use external IDs for cross-account roles accessed by third-party services.
+
+---
+
+## What is OIDC federation?
+
+One of the most impactful IAM improvements organisations can make is eliminating long-lived credentials entirely. **OIDC (OpenID Connect) federation** allows external identity providers — such as GitHub Actions, GitLab CI, or Kubernetes — to assume IAM roles using short-lived tokens, with no access keys stored anywhere.
+
+### GitHub Actions OIDC
+
+When a GitHub Actions workflow runs, GitHub's OIDC provider issues a signed JWT containing claims about the repository, branch, environment, and workflow. AWS can validate this token and exchange it for temporary credentials.
+
+![OIDC Federation Flow — GitHub Actions to AWS STS](/blog/deep-dive-cloud-iam-at-scale/inline-4.png)
+
+OIDC Federation Flow — GitHub Actions to AWS STS
+
+Here is the CDK construct to set up the OIDC provider and deployment role:
+
+```typescript
+import * as cdk from "aws-cdk-lib";
+import * as iam from "aws-cdk-lib/aws-iam";
+import { Construct } from "constructs";
+
+export interface GitHubOidcRoleProps {
+  readonly githubOrg: string;
+  readonly githubRepo: string;
+  readonly roleName: string;
+  readonly allowedBranches?: string[];
+}
+
+export class GitHubOidcRole extends Construct {
+  public readonly role: iam.Role;
+
+  constructor(scope: Construct, id: string, props: GitHubOidcRoleProps) {
+    super(scope, id);
+
+    const provider = new iam.OpenIdConnectProvider(this, "GitHubOidc", {
+      url: "https://token.actions.githubusercontent.com",
+      clientIds: ["sts.amazonaws.com"],
+      thumbprints: ["6938fd4d98bab03faadb97b34396831e3780aea1"],
+    });
+
+    const branches = props.allowedBranches ?? ["main"];
+    const conditions: Record<string, Record<string, string>> = {
+      StringEquals: {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+      },
+      StringLike: {
+        "token.actions.githubusercontent.com:sub": branches.map(
+          (b) => `repo:${props.githubOrg}/${props.githubRepo}:ref:refs/heads/${b}`
+        ).join(","),
+      },
+    };
+
+    this.role = new iam.Role(this, "DeployRole", {
+      roleName: props.roleName,
+      assumedBy: new iam.FederatedPrincipal(
+        provider.openIdConnectProviderArn,
+        conditions,
+        "sts:AssumeRoleWithWebIdentity"
+      ),
+      maxSessionDuration: cdk.Duration.hours(1),
+    });
+  }
+}
+```
+
+And the corresponding GitHub Actions workflow step:
+
+```yaml
+name: Deploy Infrastructure
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/github-actions-deploy
+          aws-region: ap-southeast-2
+
+      - name: Deploy with CDK
+        run: npx cdk deploy --all --require-approval never
+```
+
+### Kubernetes IRSA
+
+**IAM Roles for Service Accounts (IRSA)** extends this same OIDC pattern to Kubernetes pods on Amazon EKS. Each Kubernetes service account is annotated with an IAM role ARN, and the EKS OIDC provider issues tokens that AWS STS can validate. This means pods only get the permissions defined in their specific role — no more node-level IAM roles shared across all pods.
+
+---
+
+## What are Service Control Policies?
+
+**Service Control Policies (SCPs)** are the guardrails of an AWS Organisation. They define the _maximum_ permissions available to accounts within an Organisational Unit (OU). SCPs do not grant permissions — they restrict what identity-based policies can allow.
+
+Think of SCPs as the walls of a corridor. Identity policies let you walk through the corridor, but SCPs determine which doors exist in the first place. If an SCP does not allow an action, no identity policy can override it.
+
+Here is an SCP that prevents any account in the OU from disabling CloudTrail or leaving the organisation:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyCloudTrailDisable",
+      "Effect": "Deny",
+      "Action": [
+        "cloudtrail:StopLogging",
+        "cloudtrail:DeleteTrail",
+        "cloudtrail:UpdateTrail"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyLeaveOrganisation",
+      "Effect": "Deny",
+      "Action": "organizations:LeaveOrganization",
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyRegionsOutsideApproved",
+      "Effect": "Deny",
+      "NotAction": [
+        "iam:*",
+        "sts:*",
+        "support:*",
+        "organizations:*"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:RequestedRegion": [
+            "ap-southeast-2",
+            "us-east-1"
+          ]
+        }
+      }
+    }
+  ]
+}
+```
+
+The third statement is particularly powerful — it restricts all regional services to only `ap-southeast-2` and `us-east-1` while exempting global services like IAM and STS that must operate across regions. This is a common pattern for organisations with data sovereignty requirements.
+
+---
+
+## What are Permission Boundaries?
+
+**Permission boundaries** solve a specific delegation problem: how do you allow developers to create IAM roles without risking privilege escalation? A permission boundary is a managed policy that sets the _maximum_ permissions an identity can have. The effective permissions are the _intersection_ of the identity-based policy and the permission boundary.
+
+![Permission Boundaries — Effective Permissions as the Intersection of Identity Policy and Boundary](/blog/deep-dive-cloud-iam-at-scale/inline-5.png)
+
+Permission Boundaries — Effective Permissions as the Intersection of Identity Policy and Boundary
+
+Here is a practical example. A platform team creates a permission boundary that limits developers to specific services:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowedServices",
+      "Effect": "Allow",
+      "Action": [
+        "s3:*",
+        "dynamodb:*",
+        "lambda:*",
+        "sqs:*",
+        "sns:*",
+        "logs:*",
+        "cloudwatch:*",
+        "xray:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyBoundaryChanges",
+      "Effect": "Deny",
+      "Action": [
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:PutRolePermissionsBoundary"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Even if a developer's identity policy grants `iam:*`, the permission boundary restricts them to the listed services. The second statement prevents anyone from removing or modifying the boundary itself — a critical safeguard against escalation.
+
+---
+
+## What is CIEM?
+
+As organisations scale to hundreds of accounts with thousands of roles, manually tracking who has access to what becomes impossible. **Cloud Infrastructure Entitlement Management (CIEM)** is a category of tooling designed to solve this problem by continuously analysing entitlements across cloud environments, identifying over-provisioned access, and recommending right-sized policies.
+
+![CIEM Architecture — Continuous Entitlement Analysis Across Multi-Cloud Environments](/blog/deep-dive-cloud-iam-at-scale/inline-6.png)
+
+CIEM Architecture — Continuous Entitlement Analysis Across Multi-Cloud Environments
+
+CIEM platforms typically:
+
+*   **Discover** all identities, roles, and policies across accounts and providers
+*   **Analyse** actual usage patterns against granted permissions
+*   **Detect** over-provisioned access, dormant identities, and risky permission combinations
+*   **Recommend** right-sized policies based on observed behaviour
+*   **Remediate** by generating least-privilege policies or triggering automated workflows
+
+AWS provides native CIEM capabilities through **IAM Access Analyser** (external access findings and unused access findings) and **Access Advisor** (service last accessed data). For multi-cloud environments, third-party tools like Ermetic, CrowdStrike, and Prisma Cloud extend these capabilities across AWS, GCP, and Azure.
+
+The key insight with CIEM is that it shifts IAM from a point-in-time configuration exercise to a continuous governance process. Permissions are no longer static — they are continuously monitored, analysed, and refined.
+
+---
+
+## How do you structure IAM at scale?
+
+When an organisation grows beyond a handful of accounts, the question of _where_ IAM is managed becomes critical. There are two primary models: **centralised** and **federated** — and most mature organisations use a hybrid of both.
+
+### Centralised model
+
+In a centralised model, a dedicated security or platform team owns all IAM policies, roles, and permission boundaries. Application teams request access through a ticketing process or self-service portal, and the platform team provisions it.
+
+**Pros:** Consistent policies, strong governance, clear audit trail
+**Cons:** Bottleneck on the platform team, slow turnaround, friction for developers
+
+### Federated model
+
+In a federated model, application teams manage their own IAM within guardrails set by the platform team (SCPs, permission boundaries). Teams can create roles and policies as needed, provided they stay within the boundaries.
+
+**Pros:** Fast iteration, team autonomy, reduced bottleneck
+**Cons:** Harder to audit, risk of policy drift, requires strong guardrails
+
+### The hub account pattern
+
+The most common pattern at scale is a **hub account** (sometimes called an identity account or SSO account) that serves as the single entry point for human access. Users authenticate through AWS IAM Identity Centre (or a federated IdP), and then assume roles in spoke accounts. Service-to-service access uses cross-account roles directly.
+
+![Hub Account Architecture — Centralised Identity With Federated Workload Accounts](/blog/deep-dive-cloud-iam-at-scale/inline-7.png)
+
+Hub Account Architecture — Centralised Identity With Federated Workload Accounts
+
+A typical multi-account structure looks like this:
+
+*   **Management Account** — AWS Organisations root, SCPs, billing
+*   **Identity Account** — IAM Identity Centre, SSO, break-glass access
+*   **Security Account** — CloudTrail aggregation, GuardDuty, Security Hub
+*   **Shared Services Account** — CI/CD pipelines, artifact repositories
+*   **Workload Accounts** — dev, staging, production per application
+
+Each account has a set of standardised roles provisioned by the platform team (e.g., `Admin`, `Developer`, `ReadOnly`, `CiCdDeploy`), and application teams can create additional roles within their permission boundaries.
+
+---
+
+## How do you automate IAM?
+
+Manual IAM management does not scale. At enterprise scale, IAM must be defined as code, reviewed through pull requests, and deployed through pipelines — just like application code. Here are the key automation patterns.
+
+### CDK constructs for standardised roles
+
+```typescript
+import * as iam from "aws-cdk-lib/aws-iam";
+import { Construct } from "constructs";
+
+export interface StandardRolesProps {
+  readonly permissionBoundaryArn: string;
+  readonly environment: string;
+}
+
+export class StandardRoles extends Construct {
+  public readonly developerRole: iam.Role;
+  public readonly cicdRole: iam.Role;
+
+  constructor(scope: Construct, id: string, props: StandardRolesProps) {
+    super(scope, id);
+
+    const boundary = iam.ManagedPolicy.fromManagedPolicyArn(
+      this, "Boundary", props.permissionBoundaryArn
+    );
+
+    this.developerRole = new iam.Role(this, "DeveloperRole", {
+      roleName: `${props.environment}-developer`,
+      assumedBy: new iam.AccountRootPrincipal(),
+      permissionsBoundary: boundary,
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName("ReadOnlyAccess"),
+      ],
+    });
+
+    this.cicdRole = new iam.Role(this, "CiCdRole", {
+      roleName: `${props.environment}-cicd-deploy`,
+      assumedBy: new iam.ServicePrincipal("codepipeline.amazonaws.com"),
+      permissionsBoundary: boundary,
+      inlinePolicies: {
+        deploy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ["cloudformation:*", "s3:*", "lambda:*", "iam:PassRole"],
+              resources: ["*"],
+            }),
+          ],
+        }),
+      },
+    });
+  }
+}
+```
+
+### Terraform modules for reusable policies
+
+```hcl
+module "workload_roles" {
+  source = "./modules/iam-workload-roles"
+
+  environment          = "production"
+  account_id           = "123456789012"
+  trusted_cicd_account = "999888777666"
+  permission_boundary  = aws_iam_policy.boundary.arn
+
+  services = {
+    api = {
+      managed_policies = ["arn:aws:iam::aws:policy/AmazonDynamoDBReadOnlyAccess"]
+      inline_policy    = data.aws_iam_policy_document.api_policy.json
+    }
+    worker = {
+      managed_policies = ["arn:aws:iam::aws:policy/AmazonSQSFullAccess"]
+      inline_policy    = data.aws_iam_policy_document.worker_policy.json
+    }
+  }
+}
+```
+
+### Policy-as-code with OPA
+
+**Open Policy Agent (OPA)** allows you to write policies in Rego that validate IAM configurations before deployment. This catches issues like wildcard resources or missing permission boundaries in the CI pipeline:
+
+```bash
+# Run OPA against a Terraform plan
+terraform plan -out=tfplan.binary
+terraform show -json tfplan.binary > tfplan.json
+
+opa eval \
+  --data policies/iam/ \
+  --input tfplan.json \
+  "data.iam.deny" \
+  --format pretty
+```
+
+A Rego policy that denies wildcard resource statements:
+
+```rego
+package iam
+
+deny[msg] {
+  resource := input.resource_changes[_]
+  resource.type == "aws_iam_policy"
+
+  policy := json.unmarshal(resource.change.after.policy)
+  statement := policy.Statement[_]
+
+  statement.Resource == "*"
+  statement.Effect == "Allow"
+
+  msg := sprintf(
+    "IAM policy '%s' contains a wildcard resource with Allow effect. Use specific resource ARNs.",
+    [resource.address]
+  )
+}
+```
+
+---
+
+## How do you audit IAM?
+
+Automation handles the _creation_ of IAM resources, but auditing handles the _ongoing verification_ that everything remains as expected. IAM auditing answers three questions: who has access, who is _using_ their access, and what has _changed_?
+
+### CloudTrail for IAM activity
+
+Every IAM API call is logged in CloudTrail. You can query these logs to detect suspicious activity:
+
+```bash
+# Find all AssumeRole events in the last 24 hours
+aws cloudtrail lookup-events \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRole \
+  --start-time "$(date -u -v-1d +%Y-%m-%dT%H:%M:%SZ)" \
+  --query 'Events[].{Time:EventTime,User:Username,Role:Resources[0].ResourceName}' \
+  --output table
+```
+
+### Finding unused credentials
+
+Long-lived credentials that are not being used are a security risk. Here is how to find them:
+
+```bash
+# Generate a credential report
+aws iam generate-credential-report
+
+# Download and parse the report — find users with keys older than 90 days
+aws iam get-credential-report \
+  --query 'Content' \
+  --output text | base64 --decode | \
+  awk -F',' 'NR>1 && $9=="true" {
+    split($10, a, "T");
+    print "User:", $1, "Key1 Last Used:", a[1]
+  }'
+```
+
+### Automated compliance checks
+
+For continuous auditing, AWS Config rules can detect non-compliant IAM resources:
+
+```json
+{
+  "ConfigRuleName": "iam-no-inline-policies",
+  "Source": {
+    "Owner": "AWS",
+    "SourceIdentifier": "IAM_NO_INLINE_POLICY_CHECK"
+  },
+  "Scope": {
+    "ComplianceResourceTypes": [
+      "AWS::IAM::User",
+      "AWS::IAM::Role",
+      "AWS::IAM::Group"
+    ]
+  }
+}
+```
+
+---
+
+## What are the most common IAM anti-patterns?
+
+Over the years, certain IAM practices have proven to be consistently problematic. Recognising these anti-patterns is as important as knowing the best practices.
+
+**Wildcard resources** — Using `"Resource": "*"` in Allow statements grants access to every resource of that type across the entire account. Always scope to specific ARNs or use conditions.
+
+**Long-lived access keys** — IAM user access keys that are never rotated are a major breach vector. Use roles with temporary credentials instead. If you absolutely must use keys, rotate them every 90 days and monitor for compromise.
+
+**Shared accounts** — When multiple humans or services share a single IAM identity, you lose the ability to audit who did what. Every human should have their own identity; every service should have its own role.
+
+**Inline policies** — Policies embedded directly on users or roles cannot be reused, versioned, or audited as easily as managed policies. Use managed policies and attach them to roles.
+
+**Overly broad admin roles** — Granting `AdministratorAccess` to CI/CD pipelines or application services is a ticking time bomb. Scope down to exactly the actions and resources required.
+
+**No permission boundaries** — Without boundaries, any developer who can create roles can create a role with more permissions than their own — classic privilege escalation.
+
+**Ignoring SCPs** — Organisations that rely solely on identity policies for governance miss the safety net that SCPs provide. SCPs are your last line of defence.
+
+**No MFA on console access** — Human users with console access and no multi-factor authentication are vulnerable to credential stuffing and phishing attacks.
+
+---
+
+## What does an IAM maturity model look like?
+
+Organisations progress through distinct stages of IAM maturity. Understanding where you are helps you plan where to go next.
+
+| Level | Name | Characteristics |
+|---|---|---|
+| **Level 1** | Ad-hoc | Shared root credentials, no MFA, inline policies, wildcard resources, no audit trail |
+| **Level 2** | Foundational | Individual IAM users with MFA, managed policies, CloudTrail enabled, basic password policy |
+| **Level 3** | Structured | Federated access via SSO, cross-account roles, SCPs on OUs, permission boundaries for delegation, credential report reviews |
+| **Level 4** | Automated | IAM as code (CDK/Terraform), policy-as-code validation (OPA), automated credential rotation, CIEM tooling, unused access remediation |
+| **Level 5** | Continuous | Just-in-time access, continuous entitlement analysis, automated right-sizing, zero standing privileges, real-time anomaly detection, full OIDC federation with no long-lived keys |
+
+Most organisations operate between Level 2 and Level 3. The goal is not to jump directly to Level 5 — it is to make incremental, sustained progress. Each level builds on the foundations of the previous one.
+
+---
+
+## Okay, so what terminology do I need to understand?
+
+Before we wrap up, let us consolidate the key terms we have covered:
+
+**Principal** — the entity (user, role, service, federated identity) making a request to the cloud provider.
+
+**Policy** — a document that defines permissions — what actions are allowed or denied on which resources under what conditions.
+
+**Role** — a temporary identity that can be assumed by principals, granting them a specific set of permissions for a limited duration.
+
+**Trust Policy** — a resource-based policy on an IAM role that specifies which principals are allowed to assume it.
+
+**SCP (Service Control Policy)** — an Organisation-level policy that defines the maximum available permissions for accounts in an OU.
+
+**Permission Boundary** — a managed policy that sets the maximum permissions an identity can have, regardless of the identity's own policies.
+
+**OIDC Federation** — a mechanism for external identity providers to authenticate and assume cloud roles using short-lived tokens.
+
+**CIEM** — Cloud Infrastructure Entitlement Management — tooling that continuously analyses and right-sizes cloud permissions.
+
+**RBAC** — Role-Based Access Control — assigning permissions based on the role a user plays in the organisation.
+
+**ABAC** — Attribute-Based Access Control — granting access based on attributes (tags, departments, projects) rather than static role assignments.
+
+**Least Privilege** — the principle that every identity should have only the minimum permissions necessary to perform its function.
+
+**Confused Deputy** — a security vulnerability where a trusted service is tricked into performing actions on behalf of an unauthorised party.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

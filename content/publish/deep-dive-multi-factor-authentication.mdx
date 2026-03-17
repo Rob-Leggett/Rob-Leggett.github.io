@@ -1,0 +1,1147 @@
+---
+title: "Deep Dive - Multi-Factor Authentication"
+date: "2025-07-14"
+slug: "deep-dive-multi-factor-authentication"
+status: "publish"
+feature_image: "/blog/deep-dive-multi-factor-authentication/feature-image.png"
+tags: ["MFA", "Authentication", "Security", "TOTP", "WebAuthn", "FIDO2", "Zero Trust", "Cloud Security", "Identity", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Multi-Factor Authentication | Robert Leggett"
+  description: "A comprehensive deep dive into Multi-Factor Authentication — covering authentication factors, TOTP, WebAuthn, FIDO2, hardware security keys, implementation patterns, and cloud provider MFA strategies across AWS, GCP, and Azure."
+  keywords: ["Multi-Factor Authentication", "MFA", "Two-Factor Authentication", "TOTP", "WebAuthn", "FIDO2", "Hardware Security Keys", "Passwordless Authentication", "Cloud Security", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-multi-factor-authentication"
+  image: "https://robertleggett.com.au/blog/deep-dive-multi-factor-authentication/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Multi-Factor Authentication"
+  description: "A comprehensive deep dive into Multi-Factor Authentication — covering authentication factors, TOTP, WebAuthn, hardware security keys, and production implementation across major cloud providers."
+  image: "https://robertleggett.com.au/blog/deep-dive-multi-factor-authentication/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-multi-factor-authentication"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Multi-Factor Authentication"
+  description: "From TOTP and WebAuthn to hardware security keys and MFA fatigue mitigations — a complete technical reference for implementing multi-factor authentication in production."
+  image: "https://robertleggett.com.au/blog/deep-dive-multi-factor-authentication/feature-image.png"
+---
+
+Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Multi-Factor Authentication (MFA), unravelling its foundational principles, authentication factors, technical implementation patterns, and real-world deployment architectures across modern cloud platforms. Whether you are a security engineer hardening authentication flows or a platform architect designing identity infrastructure from scratch, our goal is to provide clear and thorough explanations that will deepen your understanding of MFA. From time-based one-time passwords and biometric verification to phishing-resistant hardware keys, MFA has become a cornerstone of every Zero Trust security model. Join us on this enlightening journey as we explore the full spectrum of multi-factor authentication — from the simplest SMS code to the most advanced cryptographic ceremony. Let's dive in and demystify MFA together.
+
+## Before you start
+
+About this post:
+
+*   10 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A comprehensive understanding of Multi-Factor Authentication — from foundational authentication factors and protocol mechanics through to hands-on implementation with TOTP, WebAuthn, hardware security keys, and cloud-native MFA services across AWS, GCP, and Azure
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is authentication?
+
+At its core, **authentication** is the process of proving that you are who you claim to be. Every time you unlock your phone, log into an email account, or badge into a building, you are performing an act of authentication.
+
+Authentication factors are typically grouped into three classical categories:
+
+*   **Something you know** — a password, PIN, or security question answer
+*   **Something you have** — a physical device such as a phone, smart card, or hardware key
+*   **Something you are** — a biometric characteristic such as a fingerprint, face, or iris pattern
+
+Think of it like entering a secure office building. The receptionist might ask for your name and employee ID number (something you know), check your badge (something you have), and scan your fingerprint (something you are). Each layer adds confidence that the person standing at the desk is genuinely who they claim to be.
+
+The challenge with single-factor authentication — most commonly a password alone — is that it places your entire security posture on a single point of failure. If that password is guessed, stolen, or leaked in a data breach, the attacker inherits your identity with zero resistance.
+
+---
+
+## What is Multi-Factor Authentication?
+
+**Multi-Factor Authentication (MFA)** is the practice of requiring two or more independent authentication factors before granting access. The key word is *independent* — the factors must come from different categories. Entering two passwords is not MFA because both factors fall under "something you know."
+
+Think of MFA like a bank vault with multiple locks. One lock requires a physical key held by the branch manager (something you have). A second lock requires a combination code known only to the vault officer (something you know). A third lock requires a biometric scan of an authorised employee (something you are). No single person can open the vault alone, and compromising one lock does not compromise the others.
+
+When we refer to **Two-Factor Authentication (2FA)**, we specifically mean MFA with exactly two factors. 2FA is the most common deployment pattern — typically a password combined with a one-time code from a mobile app. MFA is the broader term that encompasses 2FA and extends to three or more factors.
+
+![Multi-Factor Authentication combining knowledge, possession, and inherence factors](/blog/deep-dive-multi-factor-authentication/inline-1.png)
+
+The Three Classical Authentication Factor Categories
+
+The critical principle is **defence in depth**. Even if an attacker steals a user's password through a phishing campaign, they still cannot authenticate without access to the second factor — the user's phone, hardware key, or biometric. Each additional factor exponentially increases the effort required for a successful attack.
+
+---
+
+## Why is MFA critical?
+
+The numbers paint a stark picture. According to Microsoft's research, MFA blocks over **99.9%** of account compromise attacks. Despite this, a significant proportion of organisations still rely on passwords alone for at least some of their workforce.
+
+### Credential stuffing and password reuse
+
+**Credential stuffing** is an attack where adversaries take username-password pairs leaked from one breach and systematically try them against other services. Because users routinely reuse passwords across multiple sites, these attacks have an alarmingly high success rate. MFA renders stolen credentials largely useless — the attacker has the password but lacks the second factor.
+
+### The phishing resistance hierarchy
+
+Not all MFA methods are created equal. There is a clear hierarchy of phishing resistance:
+
+| MFA Method | Phishing Resistant | Replay Resistant | Man-in-the-Middle Resistant |
+|---|---|---|---|
+| SMS OTP | ✗ | ✓ | ✗ |
+| Email OTP | ✗ | ✓ | ✗ |
+| TOTP (Authenticator App) | ✗ | ✓ | ✗ |
+| Push Notification | Partial | ✓ | Partial |
+| Push with Number Matching | ✓ | ✓ | ✓ |
+| Hardware Security Key (FIDO2) | ✓ | ✓ | ✓ |
+| Platform Biometric (WebAuthn) | ✓ | ✓ | ✓ |
+
+The key takeaway is that **phishing-resistant MFA** — specifically FIDO2 security keys and WebAuthn — should be the target for any organisation serious about identity security. Methods like SMS OTP, whilst better than no MFA at all, are vulnerable to interception and social engineering.
+
+---
+
+## What are the authentication factors?
+
+We introduced the three classical categories earlier, but modern authentication frameworks recognise five distinct factor types. Let us examine each in detail.
+
+### Knowledge factors — something you know
+
+This is the oldest and most common authentication factor. Passwords, PINs, passphrases, and security question answers all fall into this category. Knowledge factors are easy to implement but suffer from significant weaknesses: they can be guessed, phished, leaked in breaches, and users tend to choose weak or reused values.
+
+### Possession factors — something you have
+
+Possession factors prove that a user holds a specific physical object. This includes mobile phones (receiving SMS codes or running authenticator apps), hardware security keys (YubiKey, Google Titan), smart cards, and even printed backup codes stored in a safe. The strength of possession factors lies in the physical requirement — an attacker must obtain or control the device.
+
+### Inherence factors — something you are
+
+Biometric factors leverage unique physical or behavioural characteristics: fingerprints, facial geometry, iris patterns, voice prints, and even typing rhythm. Inherence factors are difficult to forge and impossible to forget, but they come with an important caveat — once compromised, a biometric cannot be changed like a password can.
+
+### Location factors — somewhere you are
+
+Location-based authentication uses the user's geographic position or network origin as a signal. For example, an organisation might block authentication attempts originating from countries where it has no employees, or require additional verification when a user logs in from a new location. GPS data, IP geolocation, and network proximity (such as Bluetooth beacons in an office) all serve as location signals.
+
+### Behaviour factors — something you do
+
+**Behavioural biometrics** analyse patterns in how a user interacts with their device — typing speed, mouse movement patterns, swipe gestures, and even the angle at which they hold their phone. These factors operate continuously in the background rather than at a single point-in-time challenge.
+
+| Factor Type | Examples | Strengths | Weaknesses |
+|---|---|---|---|
+| Knowledge | Password, PIN, security question | Easy to implement, no hardware needed | Phishable, reusable, forgettable |
+| Possession | Phone, hardware key, smart card | Requires physical access | Can be lost, stolen, or cloned |
+| Inherence | Fingerprint, face, iris, voice | Hard to forge, always available | Cannot be changed if compromised |
+| Location | GPS, IP geolocation, network proximity | Transparent to user, continuous | Spoofable, privacy concerns |
+| Behaviour | Typing rhythm, mouse patterns, gait | Continuous, transparent | Accuracy varies, privacy concerns |
+
+---
+
+## How does TOTP work?
+
+**Time-based One-Time Password (TOTP)** is one of the most widely deployed MFA mechanisms. It is defined in **RFC 6238** and builds upon the earlier HMAC-based One-Time Password (HOTP) algorithm from **RFC 4226**.
+
+The concept is elegant: the user and the server share a secret key. Both sides use that secret, combined with the current time, to independently generate the same six-digit code. Because both parties derive the code from the same inputs, the server can verify the code without the user needing to transmit the secret itself.
+
+### The TOTP generation flow
+
+1.  During enrolment, the server generates a random **shared secret** and encodes it into a QR code
+2.  The user scans the QR code with an authenticator app (Google Authenticator, Authy, 1Password, etc.)
+3.  Both the server and the authenticator app now hold the same secret
+4.  When authentication is required, the app divides the current Unix timestamp by a **time step** (typically 30 seconds) to produce a counter value
+5.  The app computes `HMAC-SHA1(secret, counter)` and truncates the result to a 6-digit code
+6.  The user enters the code, and the server performs the identical computation to verify it
+7.  To account for clock drift, the server typically accepts codes from the current time step and one step either side (a 90-second validity window)
+
+![TOTP token generation flow showing shared secret, time step, and HMAC computation](/blog/deep-dive-multi-factor-authentication/inline-2.png)
+
+TOTP Token Generation and Verification Flow
+
+### Generating and verifying TOTP in TypeScript
+
+```typescript
+import { authenticator } from "otplib";
+import * as QRCode from "qrcode";
+
+// Generate a new shared secret for a user
+const secret = authenticator.generateSecret();
+console.log("Secret:", secret);
+
+// Create the otpauth URI for QR code generation
+const service = "MyApp";
+const user = "user@example.com";
+const otpauthUrl = authenticator.keyuri(user, service, secret);
+
+// Generate a QR code as a data URL (for display in a web app)
+async function generateQRCode(uri: string): Promise<string> {
+  return QRCode.toDataURL(uri);
+}
+
+// Verify a token submitted by the user
+function verifyToken(token: string, userSecret: string): boolean {
+  try {
+    return authenticator.verify({ token, secret: userSecret });
+  } catch (error) {
+    console.error("Verification failed:", error);
+    return false;
+  }
+}
+
+// Example usage
+const token = authenticator.generate(secret);
+console.log("Generated token:", token);
+console.log("Token valid:", verifyToken(token, secret));
+```
+
+### Generating and verifying TOTP in Python
+
+```python
+import pyotp
+import qrcode
+
+# Generate a new shared secret
+secret = pyotp.random_base32()
+print(f"Secret: {secret}")
+
+# Create a TOTP object
+totp = pyotp.TOTP(secret)
+
+# Generate the provisioning URI for QR code
+uri = totp.provisioning_uri(
+    name="user@example.com",
+    issuer_name="MyApp"
+)
+
+# Generate QR code image
+qr = qrcode.make(uri)
+qr.save("totp_qr.png")
+
+# Generate the current token
+current_token = totp.now()
+print(f"Current token: {current_token}")
+
+# Verify a token submitted by the user
+user_input = "123456"
+is_valid = totp.verify(user_input)
+print(f"Token valid: {is_valid}")
+
+# Verify with a window to account for clock drift
+is_valid_with_window = totp.verify(user_input, valid_window=1)
+print(f"Token valid (with window): {is_valid_with_window}")
+```
+
+---
+
+## How does HOTP work?
+
+**HMAC-based One-Time Password (HOTP)**, defined in **RFC 4226**, is the predecessor to TOTP. Rather than using the current time as the moving factor, HOTP uses an incrementing **counter**. Each time a code is generated, both the client and server increment their counter by one.
+
+The computation is nearly identical to TOTP:
+
+```typescript
+// HOTP pseudocode
+const counter: number = getCurrentCounter();
+const hmac = HMAC_SHA1(secret, counter);
+const code = truncate(hmac, 6); // Extract 6-digit code
+```
+
+### TOTP vs HOTP comparison
+
+| Property | TOTP | HOTP |
+|---|---|---|
+| Moving factor | Current time ÷ time step | Incrementing counter |
+| Code expiry | Automatic (every 30 seconds) | Never expires until used |
+| Synchronisation | Clock-based (may drift) | Counter-based (may desynchronise) |
+| Offline use | ✓ | ✓ |
+| RFC | RFC 6238 | RFC 4226 |
+| Common use case | Authenticator apps | Hardware tokens, legacy systems |
+
+The main advantage of TOTP over HOTP is that codes expire automatically. With HOTP, if a user generates a code but never submits it, the client counter advances but the server counter does not, causing a desynchronisation that requires a resync protocol.
+
+---
+
+## What is WebAuthn and FIDO2?
+
+**WebAuthn** (Web Authentication API) is a W3C standard that enables **phishing-resistant, passwordless authentication** using public key cryptography. It is part of the broader **FIDO2** framework, which combines WebAuthn (the browser API) with **CTAP2** (Client to Authenticator Protocol — the communication layer between the browser and an external authenticator such as a security key).
+
+### The key players
+
+*   **Relying Party (RP)** — the web application or service requesting authentication (your server)
+*   **Client** — the user's browser, which implements the WebAuthn JavaScript API
+*   **Authenticator** — the device that generates and stores the cryptographic key pair. This can be a **platform authenticator** (built into the device, such as Touch ID or Windows Hello) or a **roaming authenticator** (a removable hardware security key such as a YubiKey)
+
+### Why is WebAuthn phishing-resistant?
+
+The magic lies in **origin binding**. When a credential is created, the authenticator binds it to the specific **origin** (domain) of the relying party. If an attacker sets up a phishing site at `evil-bank.com` and tricks the user into attempting to authenticate, the authenticator will not produce a valid assertion because the origin does not match the one stored with the credential. This is fundamentally different from TOTP, where a user can be tricked into typing their code into a phishing page.
+
+### Registration flow
+
+1.  The user clicks "Register security key" on the relying party's website
+2.  The server generates a **challenge** (a random byte string) and sends it to the browser along with relying party information and user details
+3.  The browser calls `navigator.credentials.create()` with the server's options
+4.  The authenticator prompts the user for verification (touch the key, scan a fingerprint, etc.)
+5.  The authenticator generates a new **public-private key pair**, stores the private key internally, and returns the **public key**, a **credential ID**, and an **attestation** signed with its internal attestation key
+6.  The browser sends the attestation response back to the server
+7.  The server verifies the attestation, extracts the public key, and stores it alongside the user's account
+
+### Authentication flow
+
+1.  The user clicks "Sign in" and the server generates a new **challenge**
+2.  The server sends the challenge and the list of registered credential IDs to the browser
+3.  The browser calls `navigator.credentials.get()` with the server's options
+4.  The authenticator locates the matching credential, prompts the user for verification, and signs the challenge with the stored **private key**
+5.  The browser sends the signed **assertion** back to the server
+6.  The server verifies the signature using the stored **public key** and confirms the challenge matches
+
+![WebAuthn registration and authentication ceremony showing challenge-response between relying party, browser, and authenticator](/blog/deep-dive-multi-factor-authentication/inline-3.png)
+
+WebAuthn Registration and Authentication Ceremony
+
+### WebAuthn registration in TypeScript
+
+```typescript
+import {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+} from "@simplewebauthn/server";
+import type {
+  GenerateRegistrationOptionsOpts,
+  VerifiedRegistrationResponse,
+} from "@simplewebauthn/server";
+
+const rpName = "MyApp";
+const rpID = "myapp.example.com";
+const origin = `https://${rpID}`;
+
+async function startRegistration(userId: string, userName: string) {
+  const opts: GenerateRegistrationOptionsOpts = {
+    rpName,
+    rpID,
+    userID: userId,
+    userName,
+    attestationType: "none",
+    authenticatorSelection: {
+      residentKey: "preferred",
+      userVerification: "preferred",
+    },
+  };
+
+  const options = await generateRegistrationOptions(opts);
+
+  // Store the challenge in session for verification later
+  // await storeChallenge(userId, options.challenge);
+
+  return options;
+}
+
+async function finishRegistration(
+  userId: string,
+  response: any,
+  expectedChallenge: string
+) {
+  const verification: VerifiedRegistrationResponse =
+    await verifyRegistrationResponse({
+      response,
+      expectedChallenge,
+      expectedOrigin: origin,
+      expectedRPID: rpID,
+    });
+
+  if (verification.verified && verification.registrationInfo) {
+    const { credentialPublicKey, credentialID, counter } =
+      verification.registrationInfo;
+
+    // Store credential in database
+    // await storeCredential(userId, credentialID, credentialPublicKey, counter);
+  }
+
+  return verification.verified;
+}
+```
+
+### WebAuthn authentication in TypeScript
+
+```typescript
+import {
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} from "@simplewebauthn/server";
+
+async function startAuthentication(userId: string) {
+  // Retrieve stored credentials for this user
+  const userCredentials = []; // await getCredentials(userId);
+
+  const options = await generateAuthenticationOptions({
+    rpID: "myapp.example.com",
+    allowCredentials: userCredentials.map((cred) => ({
+      id: cred.credentialID,
+      type: "public-key",
+    })),
+    userVerification: "preferred",
+  });
+
+  // Store challenge in session
+  // await storeChallenge(userId, options.challenge);
+
+  return options;
+}
+
+async function finishAuthentication(
+  userId: string,
+  response: any,
+  expectedChallenge: string
+) {
+  const credential = {}; // await getCredentialById(response.id);
+
+  const verification = await verifyAuthenticationResponse({
+    response,
+    expectedChallenge,
+    expectedOrigin: `https://myapp.example.com`,
+    expectedRPID: "myapp.example.com",
+    authenticator: {
+      credentialPublicKey: (credential as any).publicKey,
+      credentialID: (credential as any).id,
+      counter: (credential as any).counter,
+    },
+  });
+
+  if (verification.verified) {
+    // Update the counter to prevent replay attacks
+    // await updateCounter(credential.id, verification.authenticationInfo.newCounter);
+  }
+
+  return verification.verified;
+}
+```
+
+---
+
+## How does push notification MFA work?
+
+**Push notification MFA** sends an authentication request directly to the user's registered mobile device. Instead of typing a code, the user simply taps "Approve" or "Deny" on their phone. This approach is used by services such as Microsoft Authenticator, Duo Push, and Okta Verify.
+
+### The push notification flow
+
+1.  The user enters their username and password on the login page
+2.  The server validates the password and initiates an MFA challenge
+3.  The server sends a push notification to the user's registered device via a push notification service (APNs for iOS, FCM for Android)
+4.  The user's authenticator app displays the request with context (application name, location, timestamp)
+5.  The user reviews the request and taps "Approve" or "Deny"
+6.  The app sends the user's response back to the MFA server
+7.  The server grants or denies access based on the response
+
+![Push notification MFA flow showing server, push service, mobile device, and user approval](/blog/deep-dive-multi-factor-authentication/inline-4.png)
+
+Push Notification MFA Approval Flow
+
+### Server-side push notification initiation
+
+```typescript
+interface PushMFARequest {
+  userId: string;
+  deviceToken: string;
+  applicationName: string;
+  ipAddress: string;
+  location?: string;
+}
+
+async function initiatePushMFA(request: PushMFARequest): Promise<string> {
+  const challengeId = crypto.randomUUID();
+
+  // Store the pending challenge
+  await storePendingChallenge({
+    id: challengeId,
+    userId: request.userId,
+    status: "pending",
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + 60_000), // 60-second expiry
+  });
+
+  // Send push notification to user's device
+  await sendPushNotification(request.deviceToken, {
+    title: "Sign-in request",
+    body: `Approve sign-in to ${request.applicationName}?`,
+    data: {
+      challengeId,
+      applicationName: request.applicationName,
+      ipAddress: request.ipAddress,
+      location: request.location ?? "Unknown",
+    },
+  });
+
+  return challengeId;
+}
+
+async function verifyPushResponse(
+  challengeId: string,
+  approved: boolean
+): Promise<boolean> {
+  const challenge = await getPendingChallenge(challengeId);
+
+  if (!challenge || challenge.status !== "pending") {
+    return false;
+  }
+
+  if (new Date() > challenge.expiresAt) {
+    await updateChallengeStatus(challengeId, "expired");
+    return false;
+  }
+
+  await updateChallengeStatus(
+    challengeId,
+    approved ? "approved" : "denied"
+  );
+
+  return approved;
+}
+```
+
+Push notification MFA offers excellent user experience — tapping a button is far easier than typing a six-digit code. However, as we will discuss later, it introduces the risk of **MFA fatigue attacks** where adversaries bombard users with repeated push notifications until they tap "Approve" out of frustration.
+
+---
+
+## What are hardware security keys?
+
+**Hardware security keys** are dedicated physical devices designed specifically for cryptographic authentication. Unlike a phone that runs authenticator software, a hardware key is a purpose-built piece of tamper-resistant hardware that stores private keys in a secure element and performs cryptographic operations on-chip.
+
+### Leading hardware security keys
+
+*   **YubiKey** (Yubico) — the most widely adopted hardware security key, available in USB-A, USB-C, NFC, and Lightning form factors. Supports FIDO2, U2F, TOTP, PIV, OpenPGP, and more.
+*   **Google Titan Security Key** — Google's FIDO2-compliant key, available in USB-C and Bluetooth variants. Includes firmware integrity verification by Google.
+*   **Feitian ePass** — a cost-effective FIDO2 key popular in enterprise deployments.
+
+### U2F vs FIDO2
+
+**Universal 2nd Factor (U2F)** was the original FIDO Alliance specification for hardware security keys. It was designed purely as a second factor — the user still needed a password, and the key provided the second factor.
+
+**FIDO2** supersedes U2F and introduces two major capabilities: **discoverable credentials** (also called resident keys) that enable passwordless authentication, and **user verification** (biometric or PIN on the device itself).
+
+| Feature | U2F | FIDO2 |
+|---|---|---|
+| Specification | FIDO U2F | FIDO2 (WebAuthn + CTAP2) |
+| Authentication type | Second factor only | Second factor or passwordless |
+| Discoverable credentials | ✗ | ✓ |
+| User verification on device | ✗ | ✓ (PIN or biometric) |
+| Phishing resistant | ✓ | ✓ |
+| Browser support | Legacy (deprecated) | Native WebAuthn API |
+| Backward compatibility | — | Supports U2F credentials |
+
+Hardware security keys are considered the gold standard for authentication because the private key **never leaves the device**. There is no shared secret to steal from a server, no code to intercept, and no notification to socially engineer. An attacker would need to physically steal the key and bypass its user verification (PIN or biometric) to compromise the credential.
+
+---
+
+## What is SMS and email OTP?
+
+**SMS OTP** and **email OTP** deliver one-time codes to a user's phone number or email address. The user receives a 4-8 digit code and enters it on the login page to complete authentication. These are the simplest forms of MFA to implement and the most familiar to end users.
+
+However, they are also the **weakest** forms of MFA, and security-conscious organisations are actively migrating away from them.
+
+### Why SMS OTP is weak
+
+*   **SIM swapping** — An attacker convinces (or bribes) a mobile carrier to transfer the victim's phone number to a SIM card the attacker controls. All SMS messages — including OTP codes — now arrive on the attacker's device. High-profile cryptocurrency thefts and account takeovers have been executed through SIM swapping.
+*   **SS7 attacks** — Signalling System 7 (SS7) is the protocol suite that underpins the global telephone network. Known vulnerabilities in SS7 allow attackers to intercept SMS messages in transit without ever touching the victim's phone. These attacks have been demonstrated by security researchers and exploited in the wild.
+*   **Malware and notification interception** — Mobile malware can read incoming SMS messages or notification content, silently extracting OTP codes before the user sees them.
+*   **Social engineering** — Attackers posing as support staff can trick users into reading out their OTP codes over the phone.
+*   **No origin binding** — Unlike WebAuthn, an SMS code is not bound to any particular domain. A user can be phished into entering their code on a fake site, and the attacker relays it to the legitimate site in real time (a man-in-the-middle attack).
+
+```python
+# Demonstrating why SMS OTP is vulnerable to relay attacks
+# An attacker's proxy server might do something like this:
+
+# 1. Victim enters credentials on phishing site
+victim_username = "user@example.com"
+victim_password = "stolen_password"
+
+# 2. Attacker's proxy forwards credentials to real site
+# real_site.login(victim_username, victim_password)
+# This triggers an SMS OTP to the victim's phone
+
+# 3. Victim enters the SMS code on the phishing site
+victim_otp = "482917"
+
+# 4. Attacker's proxy forwards the OTP to the real site
+# real_site.verify_otp(victim_otp)
+# The attacker is now authenticated as the victim
+
+# With WebAuthn, this attack is impossible because the
+# authenticator checks the origin and refuses to sign
+# a challenge for a mismatched domain.
+```
+
+NIST Special Publication 800-63B explicitly warns against SMS as an out-of-band authenticator, recommending that organisations treat it as a **restricted** channel and prefer stronger alternatives.
+
+---
+
+## How do you implement TOTP in a production application?
+
+Let us walk through a complete TOTP implementation covering secret generation, QR code provisioning, and token verification.
+
+### Step 1 — Generate and store the secret
+
+```typescript
+import { authenticator } from "otplib";
+import * as QRCode from "qrcode";
+
+interface TOTPSetupResult {
+  secret: string;
+  qrCodeDataUrl: string;
+  backupCodes: string[];
+}
+
+async function setupTOTP(
+  userId: string,
+  userEmail: string
+): Promise<TOTPSetupResult> {
+  // Generate a cryptographically random secret
+  const secret = authenticator.generateSecret(20);
+
+  // Create the otpauth URI
+  const otpauthUrl = authenticator.keyuri(userEmail, "MyApp", secret);
+
+  // Generate QR code as data URL for the frontend
+  const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
+
+  // Generate backup codes for account recovery
+  const backupCodes = Array.from({ length: 10 }, () =>
+    crypto.randomUUID().slice(0, 8).toUpperCase()
+  );
+
+  // Store encrypted secret and hashed backup codes in database
+  // await storeUserMFA(userId, encrypt(secret), hashBackupCodes(backupCodes));
+
+  return { secret, qrCodeDataUrl, backupCodes };
+}
+```
+
+### Step 2 — Verify the token during authentication
+
+```typescript
+interface TOTPVerificationResult {
+  valid: boolean;
+  method: "totp" | "backup_code";
+}
+
+function verifyTOTPToken(
+  token: string,
+  userSecret: string
+): TOTPVerificationResult {
+  // otplib's verify method accepts a window option for clock drift
+  authenticator.options = {
+    window: 1, // Accept tokens from ±1 time step (90-second window)
+  };
+
+  const isValid = authenticator.verify({
+    token,
+    secret: userSecret,
+  });
+
+  return { valid: isValid, method: "totp" };
+}
+
+async function verifyMFAToken(
+  userId: string,
+  token: string
+): Promise<TOTPVerificationResult> {
+  const userMFA = {}; // await getUserMFA(userId);
+  const secret = ""; // decrypt(userMFA.encryptedSecret);
+
+  // First, try TOTP verification
+  const totpResult = verifyTOTPToken(token, secret);
+  if (totpResult.valid) {
+    return totpResult;
+  }
+
+  // If TOTP fails, check if it is a backup code
+  // const backupValid = await verifyAndConsumeBackupCode(userId, token);
+  // if (backupValid) {
+  //   return { valid: true, method: "backup_code" };
+  // }
+
+  return { valid: false, method: "totp" };
+}
+```
+
+### Complete TOTP implementation in Python
+
+```python
+import pyotp
+import qrcode
+import hashlib
+import secrets
+import io
+import base64
+
+class TOTPManager:
+    def __init__(self, issuer: str = "MyApp"):
+        self.issuer = issuer
+
+    def generate_secret(self) -> str:
+        """Generate a cryptographically random base32 secret."""
+        return pyotp.random_base32()
+
+    def generate_backup_codes(self, count: int = 10) -> list[str]:
+        """Generate one-time backup codes for account recovery."""
+        return [secrets.token_hex(4).upper() for _ in range(count)]
+
+    def get_provisioning_uri(self, secret: str, email: str) -> str:
+        """Create the otpauth URI for QR code generation."""
+        totp = pyotp.TOTP(secret)
+        return totp.provisioning_uri(name=email, issuer_name=self.issuer)
+
+    def generate_qr_code_base64(self, uri: str) -> str:
+        """Generate a QR code and return as base64 data URL."""
+        qr = qrcode.make(uri)
+        buffer = io.BytesIO()
+        qr.save(buffer, format="PNG")
+        encoded = base64.b64encode(buffer.getvalue()).decode()
+        return f"data:image/png;base64,{encoded}"
+
+    def verify_token(
+        self, token: str, secret: str, valid_window: int = 1
+    ) -> bool:
+        """Verify a TOTP token with clock drift tolerance."""
+        totp = pyotp.TOTP(secret)
+        return totp.verify(token, valid_window=valid_window)
+
+    def setup(self, email: str) -> dict:
+        """Complete TOTP setup for a new user."""
+        secret = self.generate_secret()
+        uri = self.get_provisioning_uri(secret, email)
+        qr_code = self.generate_qr_code_base64(uri)
+        backup_codes = self.generate_backup_codes()
+
+        return {
+            "secret": secret,
+            "qr_code": qr_code,
+            "backup_codes": backup_codes,
+        }
+
+# Usage
+manager = TOTPManager(issuer="MyApp")
+setup_result = manager.setup("user@example.com")
+print(f"Secret: {setup_result['secret']}")
+print(f"Backup codes: {setup_result['backup_codes']}")
+```
+
+---
+
+## How do you implement WebAuthn?
+
+We covered the high-level WebAuthn flows earlier. Let us now look at the complete client-side code that ties the browser to the server.
+
+### Client-side registration
+
+```typescript
+import {
+  startRegistration,
+  startAuthentication,
+} from "@simplewebauthn/browser";
+
+// Registration: called after the server returns registration options
+async function registerWebAuthnCredential(): Promise<void> {
+  // 1. Fetch registration options from the server
+  const response = await fetch("/api/webauthn/register/options", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  const options = await response.json();
+
+  // 2. Prompt the user to create a credential
+  const registration = await startRegistration(options);
+
+  // 3. Send the attestation response to the server for verification
+  const verificationResponse = await fetch("/api/webauthn/register/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(registration),
+  });
+
+  const result = await verificationResponse.json();
+
+  if (result.verified) {
+    console.log("Security key registered successfully");
+  } else {
+    console.error("Registration failed");
+  }
+}
+
+// Authentication: called when the user clicks sign in
+async function authenticateWithWebAuthn(): Promise<void> {
+  // 1. Fetch authentication options from the server
+  const response = await fetch("/api/webauthn/authenticate/options", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  const options = await response.json();
+
+  // 2. Prompt the user to authenticate with their credential
+  const authentication = await startAuthentication(options);
+
+  // 3. Send the assertion response to the server for verification
+  const verificationResponse = await fetch(
+    "/api/webauthn/authenticate/verify",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(authentication),
+    }
+  );
+
+  const result = await verificationResponse.json();
+
+  if (result.verified) {
+    console.log("Authentication successful");
+    // Redirect to authenticated area
+  } else {
+    console.error("Authentication failed");
+  }
+}
+```
+
+The beauty of WebAuthn is that the entire cryptographic ceremony happens transparently. The user simply touches their security key or scans their fingerprint — there are no codes to type, no secrets to remember, and no phishable credentials to steal.
+
+---
+
+## What is step-up authentication?
+
+**Step-up authentication** is the practice of dynamically requiring additional authentication factors when a user attempts to perform a sensitive operation, even if they are already authenticated.
+
+Consider an online banking application. Browsing your account balance might require only a password. But initiating a wire transfer, changing your email address, or downloading account statements might trigger a step-up challenge requiring a second factor.
+
+### When to require step-up authentication
+
+*   **Financial transactions** — transferring funds, adding payees, changing payment limits
+*   **Account changes** — updating email, phone number, or password
+*   **Administrative actions** — modifying user roles, accessing audit logs
+*   **Data export** — downloading sensitive data, generating API keys
+*   **Accessing sensitive resources** — viewing PII, health records, or classified documents
+
+![Step-up authentication flow showing risk assessment triggering additional factor requirements](/blog/deep-dive-multi-factor-authentication/inline-5.png)
+
+Step-Up Authentication Decision Flow
+
+### Implementing step-up authentication
+
+```typescript
+interface AuthContext {
+  userId: string;
+  authenticationLevel: number; // 1 = password only, 2 = MFA, 3 = hardware key
+  lastMFATimestamp: Date;
+  ipAddress: string;
+  userAgent: string;
+}
+
+interface StepUpPolicy {
+  requiredLevel: number;
+  maxMFAAge: number; // Maximum age of MFA in milliseconds
+}
+
+const stepUpPolicies: Record<string, StepUpPolicy> = {
+  "view:account": { requiredLevel: 1, maxMFAAge: 3_600_000 },
+  "transfer:funds": { requiredLevel: 2, maxMFAAge: 300_000 },
+  "change:password": { requiredLevel: 2, maxMFAAge: 120_000 },
+  "admin:manage_users": { requiredLevel: 3, maxMFAAge: 60_000 },
+  "export:sensitive_data": { requiredLevel: 3, maxMFAAge: 60_000 },
+};
+
+function requiresStepUp(
+  action: string,
+  context: AuthContext
+): { required: boolean; targetLevel: number } {
+  const policy = stepUpPolicies[action];
+
+  if (!policy) {
+    return { required: false, targetLevel: 1 };
+  }
+
+  const mfaAge = Date.now() - context.lastMFATimestamp.getTime();
+  const mfaExpired = mfaAge > policy.maxMFAAge;
+
+  if (context.authenticationLevel < policy.requiredLevel || mfaExpired) {
+    return { required: true, targetLevel: policy.requiredLevel };
+  }
+
+  return { required: false, targetLevel: policy.requiredLevel };
+}
+```
+
+Step-up authentication is a core component of **adaptive authentication** — the broader pattern of adjusting security requirements based on risk signals such as device posture, network location, behavioural anomalies, and the sensitivity of the requested action.
+
+---
+
+## What about account recovery?
+
+One of the most overlooked aspects of MFA is what happens when a user loses access to their second factor. A phone is lost, a hardware key is damaged, or an authenticator app is wiped during a device migration. Without a robust recovery mechanism, users are permanently locked out of their accounts.
+
+### Backup codes
+
+The most common recovery mechanism is **backup codes** — a set of single-use codes generated during MFA enrolment. The user is instructed to print them or store them in a password manager. Each code can be used exactly once as a substitute for the second factor.
+
+```python
+import secrets
+import hashlib
+
+def generate_backup_codes(count: int = 10) -> tuple[list[str], list[str]]:
+    """
+    Generate backup codes and their hashed equivalents.
+    Returns (plaintext_codes, hashed_codes).
+    The plaintext codes are shown to the user once.
+    The hashed codes are stored in the database.
+    """
+    plaintext_codes = []
+    hashed_codes = []
+
+    for _ in range(count):
+        code = secrets.token_hex(4).upper()  # e.g., "A3F2B1C9"
+        plaintext_codes.append(code)
+        hashed_codes.append(
+            hashlib.sha256(code.encode()).hexdigest()
+        )
+
+    return plaintext_codes, hashed_codes
+
+def verify_backup_code(
+    submitted_code: str,
+    stored_hashes: list[str]
+) -> tuple[bool, int | None]:
+    """
+    Verify a backup code and return the index to mark as consumed.
+    """
+    submitted_hash = hashlib.sha256(
+        submitted_code.strip().upper().encode()
+    ).hexdigest()
+
+    for index, stored_hash in enumerate(stored_hashes):
+        if stored_hash and submitted_hash == stored_hash:
+            return True, index
+
+    return False, None
+```
+
+### Recovery flow best practices
+
+*   **Generate backup codes at enrolment** — present them once and instruct the user to store them securely
+*   **Hash backup codes before storage** — never store plaintext backup codes in the database
+*   **Consume codes on use** — each backup code should work exactly once
+*   **Require identity verification for recovery** — if all factors are lost, require proof of identity through a support process (photo ID, account verification questions, waiting period)
+*   **Allow multiple authenticators** — encourage users to register more than one security key or authenticator app so that losing one does not lock them out
+*   **Social recovery** — some systems allow trusted contacts to vouch for the user's identity, similar to how some cryptocurrency wallets use social recovery for key restoration
+
+---
+
+## What are MFA fatigue attacks and how do you mitigate them?
+
+**MFA fatigue** (also called **MFA bombing** or **push harassment**) is an attack where an adversary who already possesses the victim's username and password sends repeated MFA push notifications to the victim's device, hoping that the user will eventually tap "Approve" out of annoyance, confusion, or simply to make the notifications stop.
+
+This technique was famously used in the 2022 Uber breach, where an attacker bombarded a contractor with push notifications and then contacted them on WhatsApp, posing as IT support, to convince them to approve the request.
+
+### Mitigation strategies
+
+*   **Number matching** — Instead of a simple "Approve/Deny" prompt, the authentication page displays a two-digit number and the user must type that same number into their authenticator app. This prevents blind approval because the user must actively read and engage with both the login screen and the push notification.
+
+*   **Additional context** — Display geographic location, IP address, device type, and application name in the push notification so the user can identify fraudulent requests.
+
+*   **Rate limiting** — Limit the number of push notifications that can be sent to a single user within a time window. After a threshold (e.g., three denied requests in five minutes), temporarily block further push attempts and alert the security team.
+
+*   **Geo-fencing** — Reject authentication attempts that originate from locations where the organisation does not operate, or flag significant deviations from the user's normal login geography.
+
+*   **Phishing-resistant MFA** — The most robust mitigation is to eliminate push notifications entirely and require FIDO2 security keys or platform authenticators, which are immune to fatigue attacks because they require physical interaction with a specific device on the correct domain.
+
+```typescript
+interface PushMFAConfig {
+  maxAttemptsPerWindow: number;
+  windowDurationMs: number;
+  requireNumberMatching: boolean;
+  requireLocationContext: boolean;
+  geoFenceEnabled: boolean;
+  allowedCountries: string[];
+}
+
+const securePushConfig: PushMFAConfig = {
+  maxAttemptsPerWindow: 3,
+  windowDurationMs: 300_000, // 5 minutes
+  requireNumberMatching: true,
+  requireLocationContext: true,
+  geoFenceEnabled: true,
+  allowedCountries: ["AU", "US", "GB", "NZ"],
+};
+
+function generateNumberMatchingChallenge(): number {
+  // Generate a two-digit number between 10 and 99
+  return Math.floor(Math.random() * 90) + 10;
+}
+
+async function shouldAllowPush(
+  userId: string,
+  config: PushMFAConfig
+): Promise<{ allowed: boolean; reason?: string }> {
+  const recentAttempts = []; // await getRecentPushAttempts(userId, config.windowDurationMs);
+
+  if (recentAttempts.length >= config.maxAttemptsPerWindow) {
+    // await alertSecurityTeam(userId, "MFA fatigue attack suspected");
+    return {
+      allowed: false,
+      reason: "Rate limit exceeded — possible MFA fatigue attack",
+    };
+  }
+
+  return { allowed: true };
+}
+```
+
+---
+
+## What MFA options do cloud providers offer?
+
+Each major cloud provider offers native MFA capabilities for protecting access to cloud consoles and APIs. Let us examine the options across AWS, GCP, and Azure.
+
+### AWS MFA
+
+AWS supports MFA for IAM users and the root account through several mechanisms:
+
+*   **Virtual MFA device** — any TOTP-compatible authenticator app (Google Authenticator, Authy, Microsoft Authenticator)
+*   **Hardware TOTP token** — a physical key fob that displays a TOTP code (e.g., Gemalto token)
+*   **FIDO2 security key** — YubiKey or other WebAuthn-compatible key for phishing-resistant authentication
+*   **AWS IAM Identity Center** — supports MFA with built-in authenticator, security key, or external IdP
+
+```bash
+# Enforce MFA on AWS CLI operations using IAM policy condition
+# This policy denies all actions unless MFA is present
+
+cat <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyAllExceptMFA",
+      "Effect": "Deny",
+      "NotAction": [
+        "iam:CreateVirtualMFADevice",
+        "iam:EnableMFADevice",
+        "iam:ListMFADevices",
+        "iam:ResyncMFADevice",
+        "sts:GetSessionToken"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "BoolIfExists": {
+          "aws:MultiFactorAuthPresent": "false"
+        }
+      }
+    }
+  ]
+}
+EOF
+```
+
+### Google Cloud 2-Step Verification
+
+Google Cloud enforces MFA through Google Workspace's 2-Step Verification:
+
+*   **Google Prompt** — push notification to the user's Android or iOS device with number matching
+*   **Security key** — FIDO2-compliant hardware key (Google strongly recommends Titan Security Keys)
+*   **Google Authenticator** — TOTP-based codes
+*   **Backup codes** — printable single-use recovery codes
+*   Google offers an **Advanced Protection Program** for high-risk accounts that mandates security keys and disables weaker MFA methods
+
+### Azure MFA
+
+Azure Active Directory (now Microsoft Entra ID) provides a rich MFA platform:
+
+*   **Microsoft Authenticator** — push notifications with number matching and additional context
+*   **FIDO2 security keys** — passwordless sign-in with hardware keys
+*   **Windows Hello for Business** — platform authenticator using facial recognition or fingerprint
+*   **OATH hardware and software tokens** — TOTP-compatible tokens
+*   **SMS and voice call** — available but discouraged for high-security scenarios
+*   Azure supports **Conditional Access policies** that dynamically require MFA based on user risk, sign-in risk, device compliance, and location
+
+![Cloud provider MFA options comparison across AWS, GCP, and Azure](/blog/deep-dive-multi-factor-authentication/inline-6.png)
+
+Cloud Provider MFA Options Comparison
+
+| Feature | AWS | GCP | Azure |
+|---|---|---|---|
+| TOTP (Authenticator App) | ✓ | ✓ | ✓ |
+| FIDO2 Security Key | ✓ | ✓ | ✓ |
+| Push Notification | Via IdP | Google Prompt | Microsoft Authenticator |
+| Number Matching | Via IdP | ✓ | ✓ |
+| Conditional Access / Risk-Based | Via IAM conditions | Via Context-Aware Access | ✓ (Conditional Access) |
+| Passwordless | Via IAM Identity Center | Via security keys | ✓ (Windows Hello, FIDO2) |
+| Hardware TOTP Token | ✓ | ✗ | ✓ |
+
+---
+
+## Okay, what terminology do I need to understand?
+
+### Multi-Factor Authentication (MFA)
+
+**Multi-Factor Authentication** is the practice of requiring two or more independent authentication factors — drawn from different categories such as knowledge, possession, and inherence — before granting access to a system or resource.
+
+### Two-Factor Authentication (2FA)
+
+**Two-Factor Authentication** is a specific form of MFA that uses exactly two factors. The most common pattern is a password (knowledge) combined with a TOTP code from an authenticator app (possession).
+
+### TOTP (Time-based One-Time Password)
+
+**TOTP** is an algorithm defined in RFC 6238 that generates time-synchronised one-time passwords using a shared secret and the current time. Codes typically change every 30 seconds and are generated by authenticator apps.
+
+### HOTP (HMAC-based One-Time Password)
+
+**HOTP** is the counter-based predecessor to TOTP, defined in RFC 4226. Instead of using time as the moving factor, HOTP uses an incrementing counter that must be synchronised between client and server.
+
+### WebAuthn
+
+**WebAuthn** is a W3C web standard that enables phishing-resistant authentication using public key cryptography. It allows browsers to interact with platform authenticators (Touch ID, Windows Hello) and roaming authenticators (security keys) through a standardised JavaScript API.
+
+### FIDO2
+
+**FIDO2** is a framework developed by the FIDO Alliance that combines the WebAuthn browser API with the CTAP2 (Client to Authenticator Protocol) to enable passwordless and phishing-resistant authentication.
+
+### Phishing-Resistant Authentication
+
+**Phishing-resistant authentication** refers to methods where the authentication ceremony is cryptographically bound to the origin (domain) of the relying party, making it impossible for an attacker to relay credentials through a phishing site. WebAuthn and FIDO2 security keys are phishing-resistant; TOTP and SMS OTP are not.
+
+### Step-Up Authentication
+
+**Step-up authentication** is the practice of dynamically requiring additional authentication factors when a user attempts a high-risk or sensitive action, even if they are already authenticated at a lower assurance level.
+
+### MFA Fatigue Attack
+
+An **MFA fatigue attack** is a social engineering technique where an attacker repeatedly triggers MFA push notifications to a victim's device, hoping they will eventually approve a request out of frustration or confusion.
+
+### SIM Swapping
+
+**SIM swapping** is an attack where an adversary convinces a mobile carrier to transfer a victim's phone number to a new SIM card controlled by the attacker, enabling interception of SMS-based OTP codes and account takeover.
+
+### Relying Party
+
+In the WebAuthn specification, the **Relying Party** is the web application or service that requests authentication from the user. The relying party generates challenges, verifies attestations, and stores public keys.
+
+### Credential Stuffing
+
+**Credential stuffing** is an automated attack where adversaries use large collections of stolen username-password pairs from data breaches to attempt login across multiple services, exploiting password reuse.
+
+### Adaptive Authentication
+
+**Adaptive authentication** dynamically adjusts authentication requirements based on real-time risk signals such as device posture, network location, user behaviour, and the sensitivity of the requested resource.
+
+### Attestation
+
+In WebAuthn, **attestation** is the process by which an authenticator proves its identity and integrity to the relying party during credential registration. The attestation statement is signed by the authenticator's built-in attestation key.
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+Don't worry if all of this seems overwhelming.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)
