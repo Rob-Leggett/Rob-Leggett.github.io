@@ -262,7 +262,7 @@ Theme variables are defined in `lib/themes.ts` and applied via `app/globals.css`
 ```
 Trigger: push to main | manual dispatch
 → Checkout (fetch-depth: 0)
-→ Setup Node 22 + npm cache
+→ Setup Node 24 + npm cache
 → npm ci
 → npm run build (pre-build scripts + next build)
 → Upload /out as artifact
@@ -274,7 +274,7 @@ Trigger: push to main | manual dispatch
 ```
 Trigger: push to main
 → Checkout (fetch-depth: 0)
-→ Setup Node 22
+→ Setup Node 24
 → npm ci
 → npx semantic-release
 → Creates version tag, CHANGELOG entry, GitHub release
