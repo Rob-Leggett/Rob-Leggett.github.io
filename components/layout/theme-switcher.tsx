@@ -5,14 +5,17 @@ import { useTheme } from "next-themes";
 import { themes, themesByCategory, type ThemeDefinition } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 
+const subscribeNoop = () => () => {};
+
 export function ThemeSwitcher({ className }: { className?: string }) {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
+  // false during SSR/hydration, true on the client; avoids theme mismatch.
+  const mounted = React.useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  );
   const [isOpen, setIsOpen] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
 
   if (!mounted) {
     return (

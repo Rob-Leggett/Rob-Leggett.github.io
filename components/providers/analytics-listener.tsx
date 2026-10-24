@@ -52,9 +52,9 @@ export default function AnalyticsListener() {
     sendPageView(pathname, qs);
   }, [pathname, searchParams]);
 
-  // Report Web Vitals (CLS, LCP, FID, TTFB, INP)
+  // Report Web Vitals (CLS, LCP, TTFB, INP)
   useEffect(() => {
-    import('web-vitals').then(({ onCLS, onLCP, onFID, onTTFB, onINP }) => {
+    import('web-vitals').then(({ onCLS, onLCP, onTTFB, onINP }) => {
       const sendToGA = ({ name, delta, id }: { name: string; delta: number; id: string }) => {
         if (typeof window.gtag !== 'function') return;
         window.gtag('event', name, {
@@ -65,7 +65,6 @@ export default function AnalyticsListener() {
       };
       onCLS(sendToGA);
       onLCP(sendToGA);
-      onFID(sendToGA);
       onTTFB(sendToGA);
       onINP(sendToGA);
     }).catch(() => {});

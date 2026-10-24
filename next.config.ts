@@ -1,3 +1,4 @@
+import type { NextConfig } from "next";
 import createMDX from "@next/mdx";
 
 /**
@@ -12,8 +13,7 @@ const withMDX = createMDX({
   },
 });
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+const nextConfig: NextConfig = {
   // Enable static export for GitHub Pages
   output: "export",
 

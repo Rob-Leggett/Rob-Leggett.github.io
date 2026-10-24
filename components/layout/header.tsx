@@ -3,7 +3,8 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Mail, FileText, Linkedin } from "lucide-react";
+import { Mail, FileText } from "lucide-react";
+import { LinkedInIcon } from "@/components/icons/linkedin-icon";
 import { SiGithub } from "@icons-pack/react-simple-icons";
 import { ThemeSwitcher } from "@/components/layout/theme-switcher";
 import { InteractiveTerminal } from "@/components/layout/interactive-terminal";
@@ -100,7 +101,7 @@ export default function Header() {
               className="h-9 rounded-full px-4 border-primary/30 hover:border-primary hover:text-primary"
             >
               <a href="https://www.linkedin.com/in/rob-leggett/" target="_blank" rel="noreferrer">
-                <Linkedin className="mr-2 h-4 w-4 text-primary" /> LinkedIn
+                <LinkedInIcon className="mr-2 h-4 w-4 text-primary" /> LinkedIn
               </a>
             </Button>
 
