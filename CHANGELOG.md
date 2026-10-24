@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.1.0...v1.2.0) (2026-10-24)
+
+
+### Features
+
+* **blog:** add 5 posts (Jul–Aug 2026) on developer portal, JIT access, Actions minutes, token proxy and AI agents at scale ([e2fb300](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/e2fb3008aa9782108198a40ed417fa7579f9a83c))
+
 # [1.1.0](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.22...v1.1.0) (2026-10-24)
 
 
