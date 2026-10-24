@@ -58,7 +58,7 @@
     "@types/react-dom": "^19.3.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/turndown": "^5.0.6",
-    "eslint": "^9.39.5",
+    "eslint": "^10.13.0",
     "eslint-config-next": "^16.4.3",
     "semantic-release": "^25.0.9",
     "shadcn-ui": "^0.9.5",
