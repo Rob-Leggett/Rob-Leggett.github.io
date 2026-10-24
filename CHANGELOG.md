@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.2.1...v1.3.0) (2026-10-24)
+
+
+### Features
+
+* **analytics:** track reading depth, shares, code copies, contact, repo and post clicks, themes, terminal, 404s and full web vitals; fix duplicated post titles ([66f0f33](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/66f0f3390ec632cc55332fa42360ff2e31428bae))
+
 ## [1.2.1](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.2.0...v1.2.1) (2026-10-24)
 
 
