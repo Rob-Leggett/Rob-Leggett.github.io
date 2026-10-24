@@ -78,6 +78,36 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://robertleggett.com.au/blog/running-ai-coding-agents-across-45-repositories/</loc>
+    <lastmod>2026-08-06T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/</loc>
+    <lastmod>2026-07-30T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/how-dependabot-burned-my-github-actions-minutes/</loc>
+    <lastmod>2026-07-23T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/just-in-time-cloud-access-replacing-standing-privileges/</loc>
+    <lastmod>2026-07-16T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/auto-aggregating-openapi-specs-into-a-developer-portal/</loc>
+    <lastmod>2026-07-09T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://robertleggett.com.au/blog/demystifying-large-language-models/</loc>
     <lastmod>2026-03-15T00:00:00.000Z</lastmod>
     <changefreq>weekly</changefreq>

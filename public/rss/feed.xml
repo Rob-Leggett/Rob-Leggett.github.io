@@ -5,7 +5,7 @@
     <link>https://robertleggett.com.au/blog</link>
     <description><![CDATA[Technology strategy, engineering, and AI platform insights.]]></description>
     <language>en</language>
-    <lastBuildDate>Sat, 24 Oct 2026 11:16:56 GMT</lastBuildDate>
+    <lastBuildDate>Sat, 24 Oct 2026 11:42:37 GMT</lastBuildDate>
     
     <item>
       <title><![CDATA[Implementation Probes - Using AI-Generated PRs to Find Requirement Gaps]]></title>
@@ -94,6 +94,46 @@
       <pubDate>Thu, 13 Aug 2026 00:00:00 GMT</pubDate>
       <description><![CDATA[I'll be upfront about this one: for a long time I treated monitoring as something you bolted on after the "real" infrastructure was done. The compute, networking and data stores lived in Terraform, went through pull requests and were promoted carefully between environments — and then someone would c]]></description>
       <enclosure url="https://robertleggett.com.au/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Running AI Coding Agents Across 45 Repositories]]></title>
+      <link>https://robertleggett.com.au/blog/running-ai-coding-agents-across-45-repositories/</link>
+      <guid>https://robertleggett.com.au/blog/running-ai-coding-agents-across-45-repositories/</guid>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[Every developer I know has a graveyard. Mine lives on GitHub: 45 repositories accumulated over more than a decade — Spring Boot microservices from the Java 8 era, Angular samples that predate standalone components, React apps on webpack configurations nobody should have to read, Go tools, Python exp]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/running-ai-coding-agents-across-45-repositories/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Cutting LLM Token Costs with an OpenAI-Compatible Proxy]]></title>
+      <link>https://robertleggett.com.au/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/</link>
+      <guid>https://robertleggett.com.au/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/</guid>
+      <pubDate>Thu, 30 Jul 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[I'll admit it: the first time I looked properly at what my own tools were sending to a language model, I was a little embarrassed. The question I had typed was one line long. The request that actually went over the wire was thousands of tokens — the same system prompt as every other call, the same f]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[How Dependabot Burned My GitHub Actions Minutes]]></title>
+      <link>https://robertleggett.com.au/blog/how-dependabot-burned-my-github-actions-minutes/</link>
+      <guid>https://robertleggett.com.au/blog/how-dependabot-burned-my-github-actions-minutes/</guid>
+      <pubDate>Thu, 23 Jul 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[Here's a confession that will be familiar to anyone with a pile of personal projects on GitHub: for months, I kept getting the email. "You've used 100% of included GitHub Actions minutes." Every time it arrived, my builds stopped, and every time I shrugged, assumed I had been pushing a lot that mont]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/how-dependabot-burned-my-github-actions-minutes/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Just-In-Time Cloud Access - Replacing Standing Privileges]]></title>
+      <link>https://robertleggett.com.au/blog/just-in-time-cloud-access-replacing-standing-privileges/</link>
+      <guid>https://robertleggett.com.au/blog/just-in-time-cloud-access-replacing-standing-privileges/</guid>
+      <pubDate>Thu, 16 Jul 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[Here is an uncomfortable exercise I recommend to every platform team: export the IAM policy for your production projects and count how many humans hold an editor- or owner-level role right now, while they are asleep, on leave, or answering email on their phone. In almost every cloud estate I have re]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/just-in-time-cloud-access-replacing-standing-privileges/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Auto-Aggregating OpenAPI Specs into a Developer Portal]]></title>
+      <link>https://robertleggett.com.au/blog/auto-aggregating-openapi-specs-into-a-developer-portal/</link>
+      <guid>https://robertleggett.com.au/blog/auto-aggregating-openapi-specs-into-a-developer-portal/</guid>
+      <pubDate>Thu, 09 Jul 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[Truth be told, I have lost count of the number of times I have asked "where is the latest spec for this API?" and received three different answers. One link points to a Confluence page last edited eighteen months ago, another points to a Swagger UI that only runs when someone's laptop is awake, and ]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/auto-aggregating-openapi-specs-into-a-developer-portal/feature-image.png" type="image/png" />
     </item>
     <item>
       <title><![CDATA[Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI]]></title>

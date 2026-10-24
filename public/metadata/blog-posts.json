@@ -77,6 +77,41 @@
     "feature_image": "/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/feature-image.png"
   },
   {
+    "slug": "running-ai-coding-agents-across-45-repositories",
+    "title": "Running AI Coding Agents Across 45 Repositories",
+    "date": "2026-08-06",
+    "excerpt": "Every developer I know has a graveyard. Mine lives on GitHub: 45 repositories accumulated over more than a decade — Spring Boot microservices from the Java 8 era, Angular samples that predate standalone components, React apps on webpack configurations nobody should have to read,…",
+    "feature_image": "/blog/running-ai-coding-agents-across-45-repositories/feature-image.png"
+  },
+  {
+    "slug": "cutting-llm-token-costs-with-an-openai-compatible-proxy",
+    "title": "Cutting LLM Token Costs with an OpenAI-Compatible Proxy",
+    "date": "2026-07-30",
+    "excerpt": "I'll admit it: the first time I looked properly at what my own tools were sending to a language model, I was a little embarrassed. The question I had typed was one line long. The request that actually went over the wire was thousands of tokens — the same system prompt as every ot…",
+    "feature_image": "/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/feature-image.png"
+  },
+  {
+    "slug": "how-dependabot-burned-my-github-actions-minutes",
+    "title": "How Dependabot Burned My GitHub Actions Minutes",
+    "date": "2026-07-23",
+    "excerpt": "Here's a confession that will be familiar to anyone with a pile of personal projects on GitHub: for months, I kept getting the email. *\"You've used 100% of included GitHub Actions minutes.\"* Every time it arrived, my builds stopped, and every time I shrugged, assumed I had been p…",
+    "feature_image": "/blog/how-dependabot-burned-my-github-actions-minutes/feature-image.png"
+  },
+  {
+    "slug": "just-in-time-cloud-access-replacing-standing-privileges",
+    "title": "Just-In-Time Cloud Access - Replacing Standing Privileges",
+    "date": "2026-07-16",
+    "excerpt": "Here is an uncomfortable exercise I recommend to every platform team: export the IAM policy for your production projects and count how many humans hold an editor- or owner-level role *right now*, while they are asleep, on leave, or answering email on their phone. In almost every…",
+    "feature_image": "/blog/just-in-time-cloud-access-replacing-standing-privileges/feature-image.png"
+  },
+  {
+    "slug": "auto-aggregating-openapi-specs-into-a-developer-portal",
+    "title": "Auto-Aggregating OpenAPI Specs into a Developer Portal",
+    "date": "2026-07-09",
+    "excerpt": "Truth be told, I have lost count of the number of times I have asked \"where is the latest spec for this API?\" and received three different answers. One link points to a Confluence page last edited eighteen months ago, another points to a Swagger UI that only runs when someone's l…",
+    "feature_image": "/blog/auto-aggregating-openapi-specs-into-a-developer-portal/feature-image.png"
+  },
+  {
     "slug": "demystifying-large-language-models",
     "title": "Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI",
     "date": "2026-03-15",

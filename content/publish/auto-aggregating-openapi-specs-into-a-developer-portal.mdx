@@ -1,0 +1,502 @@
+---
+title: "Auto-Aggregating OpenAPI Specs into a Developer Portal"
+date: "2026-07-09"
+slug: "auto-aggregating-openapi-specs-into-a-developer-portal"
+status: "publish"
+feature_image: "/blog/auto-aggregating-openapi-specs-into-a-developer-portal/feature-image.png"
+tags: ["OpenAPI", "Developer Portal", "API Design", "GitHub Actions", "Next.js", "Redoc", "Platform Engineering", "Robert Leggett"]
+
+meta:
+  title: "Auto-Aggregating OpenAPI Specs into a Developer Portal | Robert Leggett"
+  description: "How I built a sign-in-gated developer portal that discovers OpenAPI specs across every repository in a GitHub account, validates them, and renders a browsable API reference — with no manual publishing step."
+  keywords: ["OpenAPI", "developer portal", "API catalogue", "GitHub Actions", "Redoc", "Redocly", "swagger-parser", "Next.js", "Auth.js", "Microsoft Entra ID", "API governance", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/auto-aggregating-openapi-specs-into-a-developer-portal"
+  image: "https://robertleggett.com.au/blog/auto-aggregating-openapi-specs-into-a-developer-portal/feature-image.png"
+
+og:
+  type: "article"
+  title: "Auto-Aggregating OpenAPI Specs into a Developer Portal"
+  description: "How I built a sign-in-gated developer portal that discovers OpenAPI specs across every repository in a GitHub account, validates them, and renders a browsable API reference — with no manual publishing step."
+  image: "https://robertleggett.com.au/blog/auto-aggregating-openapi-specs-into-a-developer-portal/feature-image.png"
+  url: "https://robertleggett.com.au/blog/auto-aggregating-openapi-specs-into-a-developer-portal"
+
+twitter:
+  card: "summary_large_image"
+  title: "Auto-Aggregating OpenAPI Specs into a Developer Portal"
+  description: "How I built a sign-in-gated developer portal that discovers OpenAPI specs across every repository in a GitHub account, validates them, and renders a browsable API reference — with no manual publishing step."
+  image: "https://robertleggett.com.au/blog/auto-aggregating-openapi-specs-into-a-developer-portal/feature-image.png"
+---
+
+Truth be told, I have lost count of the number of times I have asked "where is the latest spec for this API?" and received three different answers. One link points to a Confluence page last edited eighteen months ago, another points to a Swagger UI that only runs when someone's laptop is awake, and the third is a YAML file in a repository that nobody outside the team knew existed. API-first design falls apart quickly when the contract is the hardest thing in the room to find.
+
+So I built my developer portal project to make that question boring. It is a **sign-in-gated portal** that automatically discovers the OpenAPI specifications published across every repository in a GitHub account, validates them structurally, commits them into a single catalogue, and renders them as a browsable API reference with **Redoc**. Nobody "publishes" to it. Teams keep their contracts next to their code, and the portal goes and finds them. In this post I will walk through how it actually works — the discovery conventions, the scheduled aggregation, the deliberately tolerant validation, sign-in gating, caching, infrastructure — and the lessons I picked up along the way.
+
+---
+
+## Before you start
+
+About this post:
+
+*   11 – 15-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A practical pattern for discovering OpenAPI specs across many repositories using the GitHub API
+*   A layered discovery convention (manifest → topic → auto-scan) that balances control and zero-effort onboarding
+*   Why structural validation beats strict meta-schema validation for an aggregator, and where strict linting belongs instead
+*   A two-layer sign-in gate using Microsoft Entra ID app assignment and Auth.js
+*   Caching, versioning and failure-handling strategies that keep the catalogue trustworthy
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## The problem — specs everywhere, truth nowhere
+
+Most organisations I have worked with do not have a shortage of API documentation. They have a surplus of it, scattered across too many places, and almost none of it is current. The symptoms are familiar:
+
+*   **Specs live in many repositories.** Each service team owns its own `openapi.yaml`, which is exactly right — but there is no single place to browse them all.
+*   **Copies drift.** Someone exports a spec into a wiki or a shared drive for "visibility", and from that moment it starts going stale.
+*   **Discovery depends on tribal knowledge.** If you do not already know which repository holds the contract, you cannot find it.
+*   **Quality is invisible.** Broken `$ref`s, missing error responses and duplicate keys are only noticed when a consumer tries to generate a client.
+
+The usual fix is a central "API docs" repository where teams are asked to copy their specs. I have done this myself — one of my earlier projects simply merged several service specs with `redocly join` into one file and built a static Redoc page from it. It worked, but only for as long as someone remembered to rerun the merge. Any process that relies on a human remembering to copy a file will eventually serve stale documentation.
+
+The design principle I settled on was simple: **the source repository is the system of record for its contract, and the portal is a read-only projection of it.** The portal must never become a second place where specs are edited. It must pull, not wait to be pushed.
+
+If you are interested in the broader platform thinking behind this — treating developer experience as a product — I covered that in [Deep Dive: Platform Engineering](/blog/deep-dive-platform-engineering).
+
+---
+
+## Architecture overview
+
+The project has two clearly separated halves:
+
+1.  **Aggregation** — a scheduled GitHub Actions job that enumerates every repository in the account, discovers OpenAPI specs, validates them, and commits the results plus a `catalog.json` index into the portal repository.
+2.  **Consumption** — a **Next.js** application protected by **Auth.js** and **Microsoft Entra ID**, which reads the catalogue and renders each spec with Redoc.
+
+![Developer portal architecture — aggregation and consumption](/blog/auto-aggregating-openapi-specs-into-a-developer-portal/inline-1.png)
+
+The two halves communicate through exactly one thing: a folder of JSON files in Git. That decoupling turned out to be the single best decision in the project. The aggregator can fail, be rewritten or be run locally without the portal noticing; the portal can be redeployed, scaled or moved without touching aggregation. Git gives me history, diffs and rollback for free.
+
+The repository layout reflects that split:
+
+```
+portal/        Next.js app (auth-gated UI + Redoc viewer)
+scripts/       aggregate, repository enumeration, validation, Postman conversion
+specs/         aggregated specs, one folder per source repo, + catalog.json
+infra/         Terraform for the hosting stack
+wiki/          source-controlled docs, mirrored to the GitHub wiki
+.github/       aggregation workflow + reusable validation workflow
+```
+
+---
+
+## Discovering specs across every repository
+
+### Enumerating repositories
+
+The first job is to list every repository the aggregator should consider. This sounds trivial until you try to make the same code work for a personal account and a GitHub organisation, with private repositories, using a least-privilege token.
+
+The aggregator uses **Octokit** and starts by asking GitHub what kind of owner it is dealing with. Organisations are listed with the org endpoint; personal accounts are listed through the authenticated-user endpoint when the token belongs to the owner (which is the only way to see private repositories), falling back to the public listing otherwise. If an inventory comes back empty — which happens with some token types — it falls back again to repository search. Forks and archived repositories are filtered out.
+
+Here is a simplified version of that logic:
+
+```typescript
+import { Octokit } from "@octokit/rest";
+
+export async function listRepositories(octokit: Octokit, owner: string) {
+  const { data: account } = await octokit.users.getByUsername({ username: owner });
+
+  let repos =
+    account.type === "Organization"
+      ? await octokit.paginate(octokit.repos.listForOrg, { org: owner, type: "all", per_page: 100 })
+      : await listPersonalRepos(octokit, owner);
+
+  // Only keep repositories genuinely owned by this account
+  repos = repos.filter((r) => r.owner?.login?.toLowerCase() === owner.toLowerCase());
+
+  if (repos.length === 0) {
+    // Some token types cannot enumerate; search is a last resort
+    repos = await octokit.paginate(octokit.search.repos, { q: `user:${owner}`, per_page: 100 });
+  }
+  return repos.filter((r) => !r.fork && !r.archived);
+}
+```
+
+That "auto-detect the owner type" behaviour means the identical workflow runs against a personal account today and an organisation tomorrow without a code change.
+
+### A layered discovery convention
+
+Once I have the repositories, I need to find the specs inside them. I wanted two things that usually pull in opposite directions: **zero-effort onboarding** for teams who just have an `openapi.yaml` lying around, and **explicit control** for teams who want nice display names, grouping and multiple specs per repository.
+
+The answer was a three-tier convention, evaluated in priority order per repository:
+
+| Priority | Mechanism | What it does | When to use it |
+|---|---|---|---|
+| 1 | **`.api-docs.yml` manifest** in the repo root | Lists exactly which specs to publish, with display name, group and optional Postman collection | You want control, multiple specs, or specs in non-standard paths |
+| 2 | **`has-openapi` topic** on the repo | Opts the repo in; the scanner auto-scans for spec files | You want to be explicit but don't need custom naming |
+| 3 | **Auto-scan** (default) | Finds `openapi.{yaml,yml,json}` and `*.openapi.{yaml,yml,json}` anywhere in the tree | Nothing to configure — it just works |
+
+If a manifest exists, it wins outright and only the specs it lists are published. That gives teams a way to *exclude* experimental or internal specs simply by not listing them. An administrator can also flip a `STRICT_TOPIC` setting so that only topic-tagged repositories are scanned, which is useful once an estate grows large enough that auto-scanning everything becomes noisy.
+
+A manifest is deliberately tiny:
+
+```yaml
+# .api-docs.yml — illustrative example
+apis:
+  - name: "Orders API"
+    group: "Commerce"
+    spec: "openapi/orders.yaml"
+  - name: "Loyalty API"
+    group: "Customer"
+    spec: "docs/loyalty.openapi.json"
+    postman: "postman_collection.json"
+```
+
+![Spec discovery order per repository](/blog/auto-aggregating-openapi-specs-into-a-developer-portal/inline-2.png)
+
+### Scanning efficiently with the Git Trees API
+
+The naïve way to auto-scan a repository is to walk it directory by directory with the contents API. That is slow and burns rate limit. Instead, the aggregator makes **one recursive Git Trees call per repository** and filters the blob paths with a regular expression:
+
+```typescript
+const AUTO_SCAN = /^(openapi\.(json|ya?ml)|.+\.openapi\.(json|ya?ml))$/i;
+
+const { data } = await octokit.git.getTree({
+  owner, repo: repo.name, tree_sha: sourceRef(repo), recursive: "1",
+});
+const specPaths = data.tree
+  .filter((n) => n.type === "blob" && AUTO_SCAN.test(path.basename(n.path!)))
+  .map((n) => n.path!);
+```
+
+The tree listing is cached per repository and branch for the duration of the run, because the same listing is reused to locate associated Postman collections. Empty repositories and missing branches return `404` or `409`; those are treated as "nothing to scan" rather than errors, which keeps the job summary clean.
+
+Two escape hatches proved essential in practice: `EXCLUDED_REPOS` to skip specific repositories, and `SOURCE_BRANCH_OVERRIDES`, a JSON map that lets a repository publish from a branch other than its default. The latter is handy while a team is mid-migration and the "real" contract lives on a long-running branch.
+
+---
+
+## Scheduled and on-demand aggregation
+
+Aggregation runs in GitHub Actions on a **weekly cron** plus a manual **Run workflow** button. Weekly was a deliberate cost trade-off — Actions minutes are not free, and for my estate the contracts do not change daily. In a busier environment I would run it nightly, or trigger it from source repositories on merge.
+
+The workflow is intentionally short:
+
+```yaml
+on:
+  schedule:
+    - cron: "0 17 * * 0"     # weekly
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aggregate-openapi
+  cancel-in-progress: false
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --ignore-scripts
+      - name: Check aggregation credential
+        env: { GH_TOKEN: "${{ secrets.READ_TOKEN }}" }
+        run: gh api "users/${{ github.repository_owner }}" --silent
+      - name: Aggregate specs
+        env:
+          GITHUB_TOKEN: "${{ secrets.READ_TOKEN }}"
+          GITHUB_ORG: "${{ github.repository_owner }}"
+        run: npm run aggregate
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          file_pattern: "specs/**"
+          commit_message: "chore: OpenAPI aggregation"
+```
+
+A few details worth calling out:
+
+*   **The token.** The built-in `GITHUB_TOKEN` can only see the repository the workflow runs in, so it cannot read other private repositories. The aggregator uses a **fine-grained personal access token** limited to *Contents: read* and *Metadata: read* on the source repositories. Nothing more.
+*   **Fail fast on credentials.** A dedicated step calls the GitHub API before anything else. An expired token then produces one clear error ("the read token was rejected — rotate it") rather than a confusing cascade of `404`s halfway through the scan.
+*   **Commit only on change.** The auto-commit action only commits `specs/**` if there is a diff, so a week with no contract changes produces no commit and no noise.
+*   **Concurrency guard.** Two overlapping runs could race on the commit. The `concurrency` group queues them instead.
+
+### Refusing to publish an empty catalogue
+
+The most important safety rule in the aggregator is this: **an empty result never replaces the last-known-good catalogue.** If the token cannot enumerate any repositories, or every spec fails, the job throws before writing `catalog.json`. A broken credential should cause a red build, not a blank portal.
+
+Partial failures are handled differently. If ten specs are valid and two are broken, the ten are published and the two are listed in the job summary as skipped. Blocking every team's documentation because one team has a broken `$ref` would be the wrong trade-off.
+
+### The job summary as a feedback channel
+
+Every run writes a Markdown summary to `GITHUB_STEP_SUMMARY` with counts and four buckets:
+
+| Bucket | Meaning |
+|---|---|
+| **Written** | Published successfully |
+| **Warnings** | Published, but with a caveat the owning team should fix (e.g. a duplicate YAML key) |
+| **Skipped** | Could not be published (unresolvable `$ref`, unreadable structure, missing file) |
+| **Errors** | Repository-level failures (e.g. tree scan failed) |
+
+This turned out to be the main way spec quality issues surface. It is far easier to point a team at a single line in a job summary than to explain why their client generator is failing.
+
+---
+
+## Validation — structural in the aggregator, strict at the source
+
+This is the part of the design I changed my mind on most.
+
+### Why the aggregator uses `bundle`, not `validate`
+
+My first version ran `@apidevtools/swagger-parser`'s strict `validate()` on every spec. It promptly rejected several perfectly valid **OpenAPI 3.1** documents, complaining that `webhooks` and server-variable objects "must NOT have unevaluated properties". The strict meta-schema validation simply had gaps for 3.1, while Redoc rendered those specs without complaint.
+
+So the aggregator now performs **structural** validation only: it calls `SwaggerParser.bundle()`, which parses the document and resolves every `$ref`. If a reference is missing or the structure is unreadable, the spec is skipped. Everything else publishes.
+
+```typescript
+export async function validateSpec(spec: unknown, requireCoverage = false) {
+  const bundled = await SwaggerParser.bundle(structuredClone(spec) as never);
+  if (!requireCoverage) return;
+
+  const resolved = await SwaggerParser.dereference(bundled);
+  const issues: string[] = [];
+  for (const [route, item] of Object.entries(resolved.paths ?? {})) {
+    for (const method of ["get", "post", "put", "patch", "delete"] as const) {
+      const op = (item as Record<string, { responses?: object }>)[method];
+      if (!op) continue;
+      const codes = Object.keys(op.responses ?? {});
+      if (!codes.some((c) => /^2\d\d$/.test(c))) issues.push(`${method.toUpperCase()} ${route}: no 2xx`);
+      if (!codes.some((c) => /^[45]\d\d$/.test(c))) issues.push(`${method.toUpperCase()} ${route}: no 4xx/5xx`);
+    }
+  }
+  if (issues.length) throw new Error(issues.join("; "));
+}
+```
+
+The optional `REQUIRE_RESPONSE_COVERAGE` flag adds a stricter check: every operation must declare at least one success **and** one error response. I leave it off in the aggregator so that existing APIs keep publishing, but it is on by default at the source.
+
+### Lenient YAML parsing with a warning
+
+A surprisingly common failure was a **duplicated mapping key** in YAML — usually two `description:` lines after a messy merge. A strict YAML parser rejects the whole file. Rather than hide the API, the aggregator retries with JSON-compatible semantics (last key wins), publishes, and records a **warning** naming the file and the parser error. The documentation stays available and the owning team gets a clear nudge to fix the source.
+
+I also strip a leading byte-order mark before parsing. That one line removed an entire class of mysterious "unexpected token" failures from specs authored on Windows.
+
+### Strict linting belongs in the source repository
+
+Tolerance in the aggregator only works if strictness exists somewhere else. For that, the project ships a **reusable workflow** that source repositories call from their own pipeline. It:
+
+1.  Runs an optional generation hook, so code-first services can emit their spec from source before validation.
+2.  Lints every discovered spec with **Redocly CLI** (`minimal` ruleset), resolves references, and enforces the success-plus-error response rule.
+3.  Generates deterministic **Postman collections** from each spec.
+4.  Publishes changed contract files back to the calling repository in a separate, write-scoped job — only for an allowlisted set of contract paths.
+
+The validation job runs read-only; only the publish job has write permission, and anything generated outside the allowlist fails explicitly. Callers pin the reusable workflow to a **full commit SHA** rather than `@main`, so validation rules change only when a team deliberately upgrades.
+
+![Where validation happens — strict at source, tolerant at aggregation](/blog/auto-aggregating-openapi-specs-into-a-developer-portal/inline-3.png)
+
+The portal repository also carries a `redocly.yaml` extending the `recommended` ruleset for local linting of aggregated specs. The split looks like this:
+
+| Stage | Tool | Strictness | Failure behaviour |
+|---|---|---|---|
+| Source repo CI | Redocly lint + response coverage | Strict | Blocks the source pipeline |
+| Aggregator | swagger-parser `bundle` | Structural | Skip and report; never block others |
+| Rendering | Redoc | Very tolerant | Renders whatever is structurally valid |
+
+---
+
+## The catalogue
+
+Everything the portal needs to build its navigation lives in one generated file:
+
+```json
+{
+  "generatedAt": "2026-07-01T17:04:12.000Z",
+  "org": "example-account",
+  "apis": [
+    {
+      "name": "Orders API",
+      "group": "Commerce",
+      "spec": "specs/commerce-service/orders-api.json",
+      "postman": "specs/commerce-service/orders-api.postman_collection.json"
+    }
+  ]
+}
+```
+
+Specs are normalised to JSON on the way in, written to `specs/<repo-slug>/<name-slug>.json`, and the catalogue is sorted by group and name so diffs stay readable. The portal derives display names, initials and URL slugs from the catalogue at read time, which keeps the aggregator free of presentation concerns.
+
+---
+
+## Sign-in gating — two independent layers
+
+API contracts are not secrets, but they are not public either. They reveal internal service boundaries, field names and error semantics that I would rather not hand to the internet. The portal is therefore **sign-in gated with no unauthenticated path to any spec**, enforced in two independent layers.
+
+![Two-layer sign-in gate](/blog/auto-aggregating-openapi-specs-into-a-developer-portal/inline-4.png)
+
+### Layer 1 — the identity provider
+
+The portal is registered as an application in **Microsoft Entra ID**. Its service principal has **app role assignment required** switched on, and only a single developer security group is assigned. Anyone outside that group is stopped by Entra *before* a token is ever issued — they never reach the application at all. Granting access is a group membership change, not a code change.
+
+The app registration, service principal, client secret and group assignment are all managed in **Terraform** with the `azuread` provider. One subtle detail: the CI identity that runs Terraform holds only the Microsoft Graph `Application.ReadWrite.OwnedBy` permission, so it can only manage applications it owns. Terraform therefore sets the creating principal as owner of both the app and its service principal, which also lets it assign the group's app role without needing a tenant-wide role-assignment permission.
+
+```hcl
+resource "azuread_service_principal" "portal" {
+  client_id                    = azuread_application.portal.client_id
+  app_role_assignment_required = true
+  owners                       = [data.azuread_client_config.current.object_id]
+}
+
+resource "azuread_app_role_assignment" "developers" {
+  app_role_id         = "00000000-0000-0000-0000-000000000000" # default access
+  principal_object_id = var.developer_group_object_id
+  resource_object_id  = azuread_service_principal.portal.object_id
+}
+```
+
+### Layer 2 — the application
+
+Inside the app, **Auth.js (NextAuth v5)** with the `microsoft-entra-id` provider handles the OIDC flow and issues a JWT session. A Next.js proxy (formerly middleware) wraps every route except the sign-in page, the auth callback endpoints and static assets, and redirects anything without a session to `/login`:
+
+```typescript
+// proxy.ts
+export { auth as proxy } from "./auth";
+
+export const config = {
+  matcher: ["/((?!api/auth|login|_next/static|_next/image|favicon.ico).*)"],
+};
+
+// auth.ts (excerpt)
+callbacks: {
+  authorized: ({ auth }) => Boolean(auth?.user),
+}
+```
+
+Crucially, that matcher covers the API route that serves spec JSON and Postman downloads, not just the HTML pages. It is easy to protect the UI and forget that the viewer fetches raw JSON from an endpoint that someone could hit directly.
+
+### What sign-in is not
+
+I want to be honest about the limits. Authentication is not private networking. The reference hosting uses public ingress, so the endpoint is reachable — it just will not let you in. If you need device compliance, MFA or trusted-network requirements, those belong in **Conditional Access** policies owned by the tenant administrator, rolled out in report-only mode first with monitored emergency-access exclusions. I wrote more about that layered mindset in [Deep Dive: Zero Trust Architecture](/blog/deep-dive-zero-trust-architecture).
+
+---
+
+## Rendering a browsable API reference
+
+The landing page groups APIs into families and shows a card per API with its display name and initials. Selecting one opens `/apis/[slug]`, which renders a client-side **Redoc** viewer pointed at the authenticated spec endpoint.
+
+I chose Redoc over Swagger UI for a simple reason: this is a reference portal, not a try-it-out console. Redoc's three-panel layout is far easier to read for large specs, it handles OpenAPI 2.0, 3.0 and 3.1, and it themes cleanly. The viewer loads the Redoc standalone bundle once, initialises it against `/api/specs/<repo>/<file>.json`, and applies a dark theme with method colours, `requiredPropsFirst` and expanded `200`/`201` responses.
+
+If you do want try-it-out behaviour, the Postman download covers most of that need without exposing an interactive console that would have to handle credentials for every backend.
+
+---
+
+## Caching and freshness
+
+There are two delivery modes for specs, and the choice is a classic freshness-versus-simplicity trade-off.
+
+| Mode | How it works | Freshness | Moving parts |
+|---|---|---|---|
+| **Baked-in** (default) | The Docker image copies `specs/` at build time; the app reads from disk | Updated on each image build | Fewest — no runtime credentials |
+| **Live from GitHub** | The app fetches `specs/...` from the portal repo via the GitHub contents API | Within 60 seconds of an aggregation commit | Needs a read-only runtime token |
+
+The live mode uses a small **in-process cache** keyed by spec path with a configurable TTL (60 seconds by default), and the spec endpoint sets `Cache-Control: private, max-age=60` so browsers can reuse responses without any shared cache storing authenticated content.
+
+```typescript
+const cache = new Map<string, { body: string; expiresAt: number }>();
+
+export async function readSpec(specPath: string): Promise<string> {
+  assertSafePath(specPath);                      // no "..", no absolute paths, .json only
+  const hit = cache.get(specPath);
+  if (hit && hit.expiresAt > Date.now()) return hit.body;
+
+  const body = await fetchFromGitHub(`specs/${specPath}`);
+  cache.set(specPath, { body, expiresAt: Date.now() + TTL_MS });
+  return body;
+}
+```
+
+Two things matter here. First, **path validation**: the spec endpoint takes a path from the URL, so it rejects backslashes, null bytes, absolute paths, any `..` segment and anything that is not `.json`, and in disk mode it confirms the resolved path stays inside the specs directory. Second, **token separation**: the runtime token is scoped to *Contents: read on the portal repository only*. It never sees source repositories and never gets Actions permissions. If it leaks, the blast radius is "someone can read the specs you were already going to show to signed-in developers".
+
+---
+
+## Versioning
+
+Versioning is where I made a conscious decision to keep things simple, and I think it is worth being explicit about what the portal does and does not do.
+
+**What it does:**
+
+*   **Git is the version history.** Every aggregation that changes a contract is a commit to `specs/`. I can diff any two weeks, see exactly which operation changed, and roll back by reverting a commit.
+*   **`info.version` is shown as authored.** The portal renders whatever version the owning team declares in the spec. It does not invent its own.
+*   **Tooling versions are pinned.** Source repositories pin the reusable validation workflow by commit SHA, so a change to lint rules cannot silently break someone's build.
+
+**What it deliberately does not do (yet):** host multiple live versions of the same API side by side. If a team runs `v1` and `v2` concurrently, the cleanest approach today is to publish them as two specs in their manifest — `Orders API v1` and `Orders API v2` — which the catalogue treats as separate entries. A richer model (version selectors, deprecation banners, sunset dates) is on the list, but I would rather drive that from `x-` extensions in the specs themselves than from portal configuration, so that the source repository stays the system of record.
+
+---
+
+## Infrastructure
+
+The portal is a small, stateless container, so I kept the hosting equally small. The Terraform stack provisions an isolated set of resources so changes cannot affect anything else:
+
+*   A dedicated resource group and **Log Analytics** workspace
+*   An **Azure Container Registry** for the portal image
+*   An **Azure Container Apps** environment and the Container App itself
+*   The **Entra ID** app registration, service principal and group assignment described above
+
+The image is a three-stage Node build producing a Next.js standalone server that runs as a non-root user, with the aggregated `specs/` copied in at build time. Deployment uses **OIDC workload identity federation** from GitHub Actions to Azure, so there are no long-lived cloud credentials stored in the repository. A deploy workflow builds the image with ACR Tasks and rolls out a new Container App revision, triggered after aggregation completes.
+
+In my own account, the Azure deploy and infrastructure workflows are currently **disabled** (renamed with a `.disabled` suffix so Actions ignores them) to avoid running cloud resources I don't need day to day, while aggregation keeps running on schedule. Because the two halves only communicate through Git, that is a perfectly valid configuration: the catalogue stays fresh, and I can bring the hosting back with a single rename and a Terraform apply. If you want a deeper look at the CI-to-cloud trust model, see [Deep Dive: Infrastructure as Code at Scale](/blog/deep-dive-infrastructure-as-code-at-scale).
+
+---
+
+## Pitfalls I hit
+
+*   **The built-in Actions token cannot read other private repos.** It is tempting to "just use `github.token`". It will appear to work against public repositories and silently miss every private one.
+*   **Token expiry is an operational event.** A fine-grained PAT expires. Without the fail-fast credential check, the first symptom was a mysteriously shrinking catalogue. Put rotation on a calendar before expiry, not after.
+*   **Strict validators reject valid 3.1.** Validate structure in the aggregator; enforce style and completeness at the source.
+*   **Protect the JSON, not just the page.** The spec endpoint is the real asset.
+*   **Empty is not the same as "no changes".** Treat an empty scan as a failure, never as a valid new state.
+*   **Auto-scan can be too eager.** Test fixtures, vendored specs and examples named `openapi.yaml` will be found. Use the manifest or `EXCLUDED_REPOS` to keep the catalogue curated.
+
+---
+
+## Lessons learned
+
+**Pull beats push for documentation.** The moment publishing becomes an extra step, it stops happening. Making discovery automatic, with conventions that need zero configuration, is what got contracts into the portal.
+
+**Be tolerant where you aggregate and strict where you author.** An aggregator that blocks on one team's mistake punishes every other team. A source pipeline that blocks on a missing error response improves the contract before anyone consumes it.
+
+**Decouple through Git.** Using a folder of JSON files as the interface between aggregation and rendering gave me history, review, rollback and the ability to switch hosting off without losing freshness.
+
+**Least privilege, per credential.** Three distinct tokens — read-only for aggregation, write for publishing in source repos, read-only on one repository for the runtime — each with the smallest scope that works.
+
+**The job summary is a product.** Clear, categorised feedback in the place engineers already look did more for spec quality than any policy document.
+
+---
+
+## Conclusion
+
+*   **Treat each source repository as the system of record** for its OpenAPI contract, and make the portal a read-only projection that pulls rather than waits to be pushed
+*   **Discover specs automatically** across every repository using the GitHub API, with a layered convention: `.api-docs.yml` manifest → `has-openapi` topic → auto-scan
+*   **Aggregate on a schedule and on demand**, fail fast on credentials, commit only on change, and never replace a good catalogue with an empty one
+*   **Validate structurally in the aggregator** (resolve `$ref`s, tolerate valid 3.1) and **lint strictly at the source** with Redocly and response-coverage rules
+*   **Gate sign-in in two layers** — Entra ID app assignment to a developer group, plus an Auth.js session check on every route including the raw spec endpoint
+*   **Choose your freshness model deliberately** — baked-in specs for simplicity, or live GitHub reads with a short in-process cache and a narrowly scoped runtime token
+*   **Use Git as your version history**, and model concurrent API versions explicitly in the source manifest rather than in portal configuration
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

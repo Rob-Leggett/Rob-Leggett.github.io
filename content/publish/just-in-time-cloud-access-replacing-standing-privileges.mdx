@@ -1,0 +1,419 @@
+---
+title: "Just-In-Time Cloud Access - Replacing Standing Privileges"
+date: "2026-07-16"
+slug: "just-in-time-cloud-access-replacing-standing-privileges"
+status: "publish"
+feature_image: "/blog/just-in-time-cloud-access-replacing-standing-privileges/feature-image.png"
+tags: ["Security", "Identity", "IAM", "Google Cloud", "Zero Trust", "Privileged Access", "Platform Engineering", "Robert Leggett"]
+
+meta:
+  title: "Just-In-Time Cloud Access - Replacing Standing Privileges | Robert Leggett"
+  description: "How to replace standing admin access in Google Cloud with just-in-time, time-boxed IAM grants — eligible bindings, approvals, IAM conditions that expire on their own, audit logging, break-glass and the pitfalls I hit along the way."
+  keywords: ["just-in-time access", "JIT access", "just enough access", "privileged access management", "Google Cloud IAM", "IAM conditions", "temporary access", "Azure PIM", "AWS IAM Identity Center", "GCP Privileged Access Manager", "break-glass", "zero trust", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/just-in-time-cloud-access-replacing-standing-privileges"
+  image: "https://robertleggett.com.au/blog/just-in-time-cloud-access-replacing-standing-privileges/feature-image.png"
+
+og:
+  type: "article"
+  title: "Just-In-Time Cloud Access - Replacing Standing Privileges"
+  description: "How to replace standing admin access in Google Cloud with just-in-time, time-boxed IAM grants — eligible bindings, approvals, IAM conditions that expire on their own, audit logging, break-glass and the pitfalls I hit along the way."
+  image: "https://robertleggett.com.au/blog/just-in-time-cloud-access-replacing-standing-privileges/feature-image.png"
+  url: "https://robertleggett.com.au/blog/just-in-time-cloud-access-replacing-standing-privileges"
+
+twitter:
+  card: "summary_large_image"
+  title: "Just-In-Time Cloud Access - Replacing Standing Privileges"
+  description: "How to replace standing admin access in Google Cloud with just-in-time, time-boxed IAM grants — eligible bindings, approvals, IAM conditions that expire on their own, audit logging, break-glass and the pitfalls I hit along the way."
+  image: "https://robertleggett.com.au/blog/just-in-time-cloud-access-replacing-standing-privileges/feature-image.png"
+---
+
+Here is an uncomfortable exercise I recommend to every platform team: export the IAM policy for your production projects and count how many humans hold an editor- or owner-level role *right now*, while they are asleep, on leave, or answering email on their phone. In almost every cloud estate I have reviewed, the number is far higher than anyone expects, and almost none of those people used that access in the last week. The access exists because removing it once felt like friction, and adding it back felt like more friction. So it just stays.
+
+That is what a **standing privilege** is: permission that exists whether or not anyone needs it. In this post I walk through how I replaced standing admin access in Google Cloud with **just-in-time (JIT) access** — a small service in my DevOps platform project that lets engineers *activate* a privileged role for a bounded time, with a justification and optional peer approval, implemented as a native IAM binding that **expires on its own**. I will cover the concepts, the actual mechanics, the audit trail, break-glass, chat notifications, group integration, how it compares with the cloud-native offerings, the threat model and the pitfalls.
+
+---
+
+## Before you start
+
+About this post:
+
+*   12 – 16-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A clear understanding of why standing privileges are risky and what just-in-time and just-enough access actually mean
+*   The mechanics of eligible role bindings and time-boxed IAM grants using IAM conditions with an expiry
+*   A practical design for self-approval, multi-party approval, notifications, audit logging and break-glass
+*   A vendor-neutral comparison with Azure PIM, AWS temporary elevated access and GCP Privileged Access Manager
+*   A threat model and a list of pitfalls to avoid when you roll this out
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why standing admin is a problem
+
+Standing privileges are not a theoretical risk; they are the thing attackers count on. Once a credential is phished, a laptop is compromised or a token leaks into a log, the attacker inherits *everything that identity can do at that moment*. If the identity holds project owner 24/7, so does the attacker.
+
+The risks stack up in a few predictable ways:
+
+| Risk | What it looks like in practice |
+|---|---|
+| **Credential compromise** | A stolen session or token instantly has full admin, with no further hurdle |
+| **Accidental damage** | A script meant for dev runs against prod because the engineer's default credentials could reach it |
+| **Privilege creep** | Access granted for a one-off incident two years ago is still there |
+| **Weak accountability** | Audit logs show *what* changed, but not *why* the person had admin at that moment |
+| **Insider risk** | Broad, permanent access lowers the effort required for misuse |
+| **Audit findings** | "Too many privileged users" is one of the most common findings in any access review |
+
+The usual response is a quarterly access review where managers rubber-stamp a spreadsheet. That reduces creep a little, but it does nothing about the 89 days between reviews. I discussed the governance side of this in [Deep Dive: Identity Governance](/blog/deep-dive-identity-governance); JIT is the runtime control that makes those reviews far less painful.
+
+---
+
+## JIT and JEA — the two halves of least privilege
+
+Two concepts work together here, and it is worth being precise:
+
+*   **Just-in-time (JIT)** constrains **time**. Privilege exists only when it is needed, for a bounded window, then disappears automatically.
+*   **Just-enough access (JEA)** constrains **scope**. When privilege does exist, it is the narrowest role on the narrowest resource that does the job.
+
+You need both. JIT with a giant role is still a giant role — just for four hours. JEA without JIT is a tidy, narrowly scoped permission that an attacker can use at three in the morning.
+
+The model I use introduces one new idea on top of normal IAM: the **eligible role binding**. An eligible binding does not grant access. It records that a user (or group) *may activate* a given role on a given scope. Activation then creates a real, time-bound binding.
+
+![Standing privilege versus just-in-time access](/blog/just-in-time-cloud-access-replacing-standing-privileges/inline-1.png)
+
+---
+
+## The implementation — standing on Google's shoulders
+
+I want to be transparent about where this came from. Rather than writing a privileged-access system from scratch — which is exactly the kind of security-critical code you should not write casually — the service in my platform project is built on Google's open-source [Just-In-Time Access](https://github.com/GoogleCloudPlatform/jit-access) application (Apache 2.0). I keep it alongside the rest of my Google Cloud tooling, build it on a modern Java and Quarkus toolchain, run its unit tests in CI on every change, and configure and deploy it for my own estate. Much of what follows describes how that application works, and the operational decisions I made around it.
+
+The architecture is pleasingly small:
+
+*   A **stateless web application** running on **Cloud Run** (App Engine is also supported) with minimum instances set to one to avoid cold starts.
+*   **Identity-Aware Proxy (IAP)** in front of it for authentication — the app never handles passwords or sessions itself.
+*   The **Policy Analyzer API** (Cloud Asset Inventory) to discover which roles a user is eligible for.
+*   The **Resource Manager API** to write time-bound IAM bindings.
+*   The **IAM Credentials API** to sign approval tokens.
+*   **Cloud Logging** for the audit trail, plus **Pub/Sub** or SMTP for notifications.
+
+There is no database. All state lives in IAM itself — which is exactly where it should live.
+
+![JIT access architecture on Google Cloud](/blog/just-in-time-cloud-access-replacing-standing-privileges/inline-2.png)
+
+---
+
+## Step 1 — granting eligibility
+
+An administrator makes a role *eligible* by creating a normal IAM binding with a special **IAM condition** that can never evaluate to true on its own. The application recognises the marker and treats the binding as eligibility, not access:
+
+| Condition expression | Meaning |
+|---|---|
+| `has({}.jitAccessConstraint)` | Eligible for **self-approved** JIT activation (justification required) |
+| `has({}.multiPartyApprovalConstraint)` | Eligible only with **multi-party approval** from a peer |
+
+Because these are ordinary bindings, you manage them the way you manage any other IAM: in Terraform, at project or folder level, and — importantly — on **groups** rather than individuals.
+
+```hcl
+# Illustrative — make a group eligible to activate a role on every project in a folder
+resource "google_folder_iam_member" "sre_eligible_admin" {
+  folder = var.workloads_folder_id
+  role   = "roles/compute.admin"
+  member = "group:${var.sre_group_email}"
+
+  condition {
+    title      = "Eligible for JIT access"
+    expression = "has({}.jitAccessConstraint)"
+  }
+}
+
+resource "google_folder_iam_member" "sre_eligible_owner" {
+  folder = var.workloads_folder_id
+  role   = "roles/owner"
+  member = "group:${var.sre_group_email}"
+
+  condition {
+    title      = "Requires multi-party approval"
+    expression = "has({}.multiPartyApprovalConstraint)"
+  }
+}
+```
+
+The application discovers eligibility with the Policy Analyzer, which resolves group membership and folder inheritance for you. That means eligibility granted on a folder is visible in every project beneath it, and anyone added to the group becomes eligible immediately. Activations, however, always happen at **project** level — even if the eligibility was inherited from a folder — which keeps every real grant as narrow as possible.
+
+---
+
+## Step 2 — request and justify
+
+From the user's perspective, activating a role is three clicks:
+
+1.  Select the project.
+2.  Select one or more eligible roles.
+3.  Enter a **justification** — typically a ticket or incident number.
+
+The justification is not decorative. The service validates it against a configurable regular expression and rejects anything that does not match, with a hint shown in the UI. If your organisation requires a change ticket format, enforce it here:
+
+```bash
+# Illustrative runtime configuration (environment variables)
+RESOURCE_SCOPE="organizations/<your-org>"   # where to look for eligible bindings
+ELEVATION_DURATION="60"                     # max activation, in minutes
+JUSTIFICATION_PATTERN="^(INC|CHG)-[0-9]{4,}$"
+JUSTIFICATION_HINT="Incident or change number, e.g. INC-12345"
+ACTIVATION_REQUEST_MAX_ROLES="3"            # roles per self-approval
+ACTIVATION_REQUEST_MIN_REVIEWERS="1"
+ACTIVATION_REQUEST_MAX_REVIEWERS="10"
+AVAILABLE_PROJECTS_QUERY="state:ACTIVE"
+```
+
+Before writing anything, the service **re-checks eligibility server-side** for the exact role binding requested. The UI only offers eligible roles, but the API never trusts the UI.
+
+---
+
+## Step 3 — approval: self or multi-party
+
+There are two activation paths, chosen by which marker condition the eligible binding carries.
+
+### Self-approval (JIT)
+
+For lower-risk roles, the user approves their own request. The control here is not a second human; it is the combination of **time-boxing, justification and audit**. In practice this covers the bulk of day-to-day operational access — reading logs with elevated scope, restarting a workload, adjusting an instance.
+
+### Multi-party approval (MPA)
+
+For high-risk roles, the requester picks one or more **peers** — people who are themselves eligible for the same role on the same project — and the request goes to them for approval. A few rules make this robust:
+
+*   **The beneficiary can never be a reviewer.** No approving your own request by another name.
+*   **Reviewers must be eligible too.** The service checks the approver's own eligibility before honouring the approval, so a random colleague cannot wave through owner access.
+*   **Minimum and maximum reviewer counts** are configurable.
+*   **Requests expire.** An unapproved request is useless after its validity window, so a stale link in someone's inbox cannot be approved next week.
+
+The request itself is carried as a **signed token**. Rather than persisting pending requests in a database, the service serialises the request (beneficiary, reviewers, role, justification, start and end time) into a JWT and signs it using its own service account via the IAM Credentials API. When a reviewer opens the approval link, the token's signature and expiry are verified before anything else happens. Stateless, tamper-evident, and nothing to clean up.
+
+![Request, approve, grant, expire](/blog/just-in-time-cloud-access-replacing-standing-privileges/inline-3.png)
+
+---
+
+## Step 4 — the time-boxed IAM grant
+
+This is the heart of the design, and it is elegantly simple. Activation writes a **real IAM binding** for the user with a **temporal IAM condition** — one of the request-time attributes that Google Cloud evaluates on every authorisation decision:
+
+```text
+title:       JIT access activation
+description: Approved by <reviewer>, justification: CHG-10421
+expression:  (request.time >= timestamp("2026-07-14T02:00:00Z") &&
+              request.time <  timestamp("2026-07-14T03:00:00Z"))
+```
+
+A simplified version of the code that builds it looks like this:
+
+```java
+var start  = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+var expiry = start.plus(activationDuration);
+
+var binding = new Binding()
+    .setMembers(List.of("user:" + beneficiary))
+    .setRole(role)
+    .setCondition(new Expr()
+        .setTitle("JIT access activation")
+        .setDescription("Self-approved, justification: " + justification)
+        .setExpression(String.format(
+            "(request.time >= timestamp(\"%s\") && request.time < timestamp(\"%s\"))",
+            start, expiry)));
+
+resourceManager.addProjectIamBinding(project, binding,
+    EnumSet.of(PURGE_EXISTING_TEMPORARY_BINDINGS));
+```
+
+A few subtle details are worth calling out:
+
+*   **The binding is for the user, not the group.** Eligibility can be granted to a group, but activation always names the individual — so the audit trail and the grant both point at a person.
+*   **Minimum and maximum durations are enforced.** Activations must be at least five minutes and no longer than the configured maximum.
+*   **Old temporary bindings are purged.** Every activation replaces existing expired JIT bindings for the same user and role. Without this, policies accumulate junk and eventually hit the per-policy binding limit.
+*   **Approvals are idempotent.** For multi-party approval, the start and end times come from the signed token, not from the moment of approval. If two reviewers click approve at the same time, they produce the identical binding, and the second write fails cleanly rather than double-granting.
+*   **Policy writes are concurrency-safe.** IAM policy updates use the policy `etag`, so a read-modify-write that races with another change is retried rather than silently overwriting it.
+
+---
+
+## Step 5 — automatic revocation (that isn't really revocation)
+
+The best part of using an IAM condition is that **nothing has to run to remove access**. When `request.time` passes the end timestamp, the condition evaluates to false and the binding simply stops granting anything. There is no cron job, no cleanup function, no queue that could back up during an outage and leave people with admin.
+
+That property matters more than it first appears. Designs that grant an unconditional binding and rely on a scheduled job to remove it have a nasty failure mode: if the job fails, access becomes standing. With a conditional binding, **failure is safe** — the default outcome is that access ends.
+
+The expired binding still sits in the policy until the next activation purges it, which is harmless (it grants nothing) and actually useful (it is visible evidence of recent activations when you inspect the policy).
+
+There is one honest caveat. A condition on `request.time` stops *new* authorisations after expiry. It does not reach into resources the user created or modified during the window. If someone used their hour of elevated access to create a service account key, that key outlives the activation. I come back to this in the threat model.
+
+---
+
+## Audit logging
+
+Every API action — listing eligible roles, listing peers, self-activation, requesting approval, approving — writes a **structured audit log entry to Cloud Logging** with labels including:
+
+*   the user who acted, and the beneficiary
+*   the project, role and full resource name
+*   the activation ID, start and end time
+*   the justification and, for multi-party approval, the reviewers
+*   the user's **device ID and satisfied access levels**, taken from the IAP assertion
+*   an error label when something was denied
+
+That last point is a nice bonus of fronting the service with IAP. If you use Context-Aware Access, the log records not just *who* activated owner on production, but *from what device* and *whether that device met your access levels*.
+
+You then have two complementary trails: the JIT application's log explains **why** privilege existed, and Cloud Audit Logs for each service records **what** was done with it. Joining them on user and time window is how you answer the question every auditor asks — "show me that this change was authorised".
+
+Practical suggestions:
+
+*   **Route JIT logs to a dedicated sink** in a separate, locked-down logging project with retention that matches your compliance needs.
+*   **Alert on unusual patterns** — activations outside business hours, the same person activating owner repeatedly, or a high rate of denied requests.
+*   **Report monthly** on who activated what and how often. Roles that are activated constantly are candidates for a narrower standing role; roles never activated are candidates for removal of eligibility.
+
+---
+
+## Notifications and chat approvals
+
+Approvals only work if reviewers notice them quickly. Out of the box, the service can notify by **email (SMTP)** or by publishing events to **Pub/Sub**. I use Pub/Sub, because it decouples the access service from whatever channel the team actually lives in.
+
+Each event is a small JSON document with a type — `RequestActivation`, `ActivationApproved` or `ActivationSelfApproved` — and attributes such as beneficiary, reviewers, project, role, start and end time, justification and an action URL:
+
+```json
+{
+  "type": "RequestActivation",
+  "attributes": {
+    "beneficiary": "alex@example.com",
+    "reviewers": ["sam@example.com", "kim@example.com"],
+    "project_id": "example-prod-project",
+    "role": "roles/owner",
+    "start_time": "2026-07-14T02:00:00Z",
+    "end_time": "2026-07-14T03:00:00Z",
+    "justification": "CHG-10421",
+    "action_url": "https://jit.example.com/?activation=..."
+  }
+}
+```
+
+A small **Pub/Sub-triggered Cloud Function** — the same event-driven pattern I already use elsewhere in the platform to post infrastructure change notifications to Slack — renders that event into a Slack message in an access channel and, for approval requests, mentions the reviewers with a button that opens the signed approval link.
+
+Two design decisions are deliberate here:
+
+*   **The approval itself still happens in the JIT app**, behind IAP. Slack is the doorbell, not the door. An approval button that granted access directly from a chat webhook would make your chat workspace part of your privileged-access trust boundary — and chat accounts are rarely protected as well as cloud identities.
+*   **Self-approved activations are broadcast too.** Visibility is a control. When the whole team sees "Alex activated compute admin on prod for 60 minutes — INC-12345", unusual activity gets noticed by humans long before a SIEM rule fires.
+
+---
+
+## Integrating with groups and on-call
+
+The cleanest operating model I have found is to **grant eligibility to groups and manage the groups elsewhere**:
+
+| Group | Eligibility | Approval |
+|---|---|---|
+| Platform engineers | Viewer-plus and operational roles on non-production | Self-approval |
+| On-call responders | Operational admin roles on production | Self-approval, short duration |
+| Senior platform engineers | Owner on production | Multi-party approval |
+| Security team | Security admin and log access | Multi-party approval |
+
+The on-call row is my favourite. The platform includes a small scheduled function that reads the current on-call users from the paging system's schedules and **syncs them into an on-call Google group**, removing people when their shift ends (with a short list of permanent members who are never removed). Combine that with a JIT eligibility binding on the group and you get a lovely property: *the person holding the pager can self-activate production access, and nobody else can.* When the shift changes, eligibility moves with it — no tickets, no manual IAM edits.
+
+Because eligibility flows from group membership, your joiner-mover-leaver process does the heavy lifting. A leaver removed from the directory loses eligibility immediately, and any activation they had expires on its own shortly after. For more on structuring roles, groups and inheritance across many projects, see [Deep Dive: Cloud IAM at Scale](/blog/deep-dive-cloud-iam-at-scale).
+
+---
+
+## Break-glass
+
+JIT introduces a new dependency into your incident path, and you must plan for it failing. If the JIT service, IAP, the Policy Analyzer or your identity provider is down during a major incident, you still need a way in.
+
+A sound break-glass design looks like this:
+
+*   **A small number of dedicated emergency accounts** (two is common), not tied to any individual's daily identity, with strong phishing-resistant MFA and credentials held under dual control.
+*   **Standing but heavily monitored** — the one place a standing privilege is justified. Any sign-in or use triggers an immediate high-priority alert to security and leadership.
+*   **Excluded from the dependencies that might fail**, such as the JIT service and context-aware policies that rely on a healthy device posture service — but never excluded from logging.
+*   **Tested regularly**, with a documented runbook and a post-use review every single time.
+
+It is also worth noting that the JIT service itself supports break-glass-*style* roles: an owner binding with a multi-party approval constraint is effectively a "two-person rule" for the most dangerous access, without any standing grant. Reserve true break-glass accounts for when the JIT path itself is unavailable.
+
+---
+
+## How this compares with cloud-native offerings
+
+Every major cloud now offers a managed JIT capability. The concepts map closely; the trade-offs are about integration, cost and control.
+
+| Capability | Azure PIM (Entra ID) | AWS (IAM Identity Center + temporary elevated access) | GCP Privileged Access Manager | Self-hosted JIT app on GCP |
+|---|---|---|---|---|
+| **Eligibility model** | Eligible role assignments | Eligible permission sets via an access-management workflow | Entitlements | Eligible IAM bindings with marker conditions |
+| **Time-boxing** | Built-in activation duration | Session duration and time-bound assignments | Built-in grant duration | IAM condition on `request.time` |
+| **Approvals** | Single or multi-stage approvers | Approval workflow (native or partner solution) | Approvers per entitlement | Self or peer multi-party approval |
+| **Justification / ticket** | Yes, optional ticket info | Yes | Yes | Yes, regex-validated |
+| **Notifications** | Email, plus integrations | Event-driven integrations | Email and Pub/Sub | Email or Pub/Sub |
+| **Audit** | Entra audit logs | CloudTrail | Cloud Audit Logs | Cloud Logging with device context |
+| **Operational cost** | Licence tier required | Managed service plus integration effort | Managed | You run and patch it |
+
+My general guidance:
+
+*   **Prefer the native service when it meets your needs.** It is patched, supported and integrated with the platform's own audit and policy tooling. On Google Cloud, **Privileged Access Manager** now covers much of what the open-source JIT application pioneered, and it is where I would start a greenfield deployment.
+*   **A self-hosted service earns its place** when you need behaviour the native service lacks, want full control over the approval UX, or are standardising one pattern across environments. Just accept that you now own a security-critical application.
+
+Whichever you choose, the principles in this post apply unchanged.
+
+---
+
+## Threat model
+
+It is worth being explicit about what JIT does and does not protect against.
+
+| Threat | Mitigated? | How / why not |
+|---|---|---|
+| Stolen credential used outside an activation window | **Yes** | No standing privilege to inherit |
+| Accidental prod change from a dev session | **Mostly** | Requires deliberate activation with justification |
+| Privilege creep | **Yes** | Activations expire; eligibility is group-driven |
+| Insider with eligibility, acting within a window | **Partially** | Justification, broadcast, MPA for high-risk roles, audit |
+| Compromised session *during* an active window | **No** | The attacker inherits the active grant — keep windows short |
+| Persistence created during a window (keys, new bindings, backdoor service accounts) | **No — by itself** | Requires detective controls and preventive org policies |
+| Compromise of the JIT service account | **Critical risk** | It can modify IAM policy; protect it like a crown jewel |
+| Chat workspace compromise | **Yes, by design** | Chat is notification-only; approval happens behind IAP |
+| Replay or tampering of approval links | **Yes** | Signed, expiring tokens; reviewer eligibility re-checked |
+
+Two rows deserve extra attention.
+
+**Persistence during a window.** Pair JIT with organisation policies that block the obvious persistence moves — disabling service account key creation, restricting which domains can be granted IAM roles — and alert on any IAM policy change made by a human outside the JIT service's own writes.
+
+**The JIT service account.** It holds permission to set IAM policy across the scope it manages. Run it in a dedicated, tightly controlled project, put its ingress behind IAP and an internal-plus-load-balancer ingress setting only, grant it nothing it does not need, and alert on any use of its identity that does not originate from the service. Ideally, do not let it manage the project it runs in. This is the same "protect the control plane" principle I covered in [Deep Dive: Zero Trust Architecture](/blog/deep-dive-zero-trust-architecture).
+
+---
+
+## Pitfalls I hit
+
+*   **Policy Analyzer quotas.** Eligibility discovery relies on the Policy Analyzer API, which is subject to quota restrictions — and on Google Cloud, heavier use can require a Security Command Center tier. Check this before you roll out to a large organisation.
+*   **Leaving the old standing bindings in place.** JIT does nothing if people still hold the permanent role. Plan the cut-over: introduce eligibility, give it a few weeks, then remove standing grants role by role.
+*   **Activation durations that are too long.** If the default is eight hours, people will always ask for eight hours. Start at sixty minutes and let people re-activate.
+*   **Over-using multi-party approval.** If every activation needs a peer, approvals become a rubber stamp and people find workarounds. Reserve it for genuinely dangerous roles.
+*   **Forgetting service accounts.** JIT is for humans. Automation should use workload identity federation and narrowly scoped service accounts, not activations.
+*   **IAM propagation delay.** A new binding is not always effective instantly. Tell users to expect a short delay, and design runbooks accordingly.
+*   **No break-glass test.** The day you need break-glass is the wrong day to discover the credentials were rotated and nobody updated the safe.
+
+---
+
+## Conclusion
+
+*   **Standing privileges** turn every compromised credential into a full-admin incident; they are the access an attacker hopes you forgot to remove
+*   **Just-in-time** limits *when* privilege exists and **just-enough access** limits *how much* — you need both
+*   **Eligible role bindings** marked with special IAM conditions let you grant the *right to activate* a role, usually to a group, without granting access itself
+*   **Activation writes a native IAM binding with a `request.time` condition**, so revocation is automatic and fail-safe — no cleanup job required
+*   **Multi-party approval** with signed, expiring tokens and server-side eligibility checks gives you a two-person rule for the most dangerous roles
+*   **Audit everything** — who, why, when, which device — and **broadcast activations to chat**, keeping chat as the doorbell rather than the door
+*   **Drive eligibility from groups** and sync on-call rotations into them, so access follows responsibility automatically
+*   **Plan break-glass**, protect the JIT service account as a crown jewel, and pair JIT with detective controls for persistence
+*   **Prefer native offerings** — Azure PIM, AWS temporary elevated access, GCP Privileged Access Manager — unless you have a clear reason to run your own
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

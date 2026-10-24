@@ -1,0 +1,506 @@
+---
+title: "How Dependabot Burned My GitHub Actions Minutes"
+date: "2026-07-23"
+slug: "how-dependabot-burned-my-github-actions-minutes"
+status: "publish"
+feature_image: "/blog/how-dependabot-burned-my-github-actions-minutes/feature-image.png"
+tags: ["GitHub Actions", "Dependabot", "CI/CD", "DevOps", "Cost Optimisation", "GitHub", "Robert Leggett"]
+
+meta:
+  title: "How Dependabot Burned My GitHub Actions Minutes | Robert Leggett"
+  description: "A real investigation into why a GitHub Free account kept running out of Actions minutes — one private monorepo, daily Dependabot PRs and a 25-job CI matrix — and the fixes I applied across every repository so it never happens again."
+  keywords: ["GitHub Actions minutes", "Dependabot", "GitHub billing API", "CI cost", "workflow concurrency", "paths filter", "matrix builds", "workflow_dispatch", "skip ci", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/how-dependabot-burned-my-github-actions-minutes"
+  image: "https://robertleggett.com.au/blog/how-dependabot-burned-my-github-actions-minutes/feature-image.png"
+
+og:
+  type: "article"
+  title: "How Dependabot Burned My GitHub Actions Minutes"
+  description: "A real investigation into why a GitHub Free account kept running out of Actions minutes — one private monorepo, daily Dependabot PRs and a 25-job CI matrix — and the fixes I applied across every repository so it never happens again."
+  image: "https://robertleggett.com.au/blog/how-dependabot-burned-my-github-actions-minutes/feature-image.png"
+  url: "https://robertleggett.com.au/blog/how-dependabot-burned-my-github-actions-minutes"
+
+twitter:
+  card: "summary_large_image"
+  title: "How Dependabot Burned My GitHub Actions Minutes"
+  description: "A real investigation into why a GitHub Free account kept running out of Actions minutes — one private monorepo, daily Dependabot PRs and a 25-job CI matrix — and the fixes I applied across every repository so it never happens again."
+  image: "https://robertleggett.com.au/blog/how-dependabot-burned-my-github-actions-minutes/feature-image.png"
+---
+
+Here's a confession that will be familiar to anyone with a pile of personal projects on GitHub: for months, I kept getting the email. *"You've used 100% of included GitHub Actions minutes."* Every time it arrived, my builds stopped, and every time I shrugged, assumed I had been pushing a lot that month, and waited for the quota to reset. I'm an architect who spends a decent part of his working life helping teams [reduce their cloud costs](/blog/proven-ways-to-reduce-your-cloud-costs), and I was ignoring a bill in my own backyard.
+
+Eventually I sat down and actually investigated, and the answer was not "you pushed too much". I had barely touched most of my repositories. The minutes were being burned by a robot, on my behalf, every single day — **Dependabot** opening pull requests, each one triggering a CI workflow that fanned out into twenty-five jobs, each job rounded up to the minute. This post is the full story: how I found it with the billing API, why the numbers were so much worse than they looked, every fix I applied across all of my repositories, and how I now keep dependencies up to date without paying a robot to do it badly.
+
+---
+
+## Before you start
+
+About this post:
+
+*   10 – 14-min average reading time
+*   Suitable for beginner through to advanced
+
+What you will gain reading this post:
+
+*   An understanding of how GitHub Actions minutes are counted, including per-job rounding
+*   A repeatable way to find out exactly which repository and workflow is consuming your minutes
+*   Why Dependabot plus a matrix CI pipeline is a perfect storm on a private repository
+*   Before-and-after workflow YAML for cutting a pipeline from 25 jobs to 3
+*   A checklist of guard rails — concurrency, path filters, timeouts, manual deploys — you can apply to every repo
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## How Actions minutes actually work
+
+It is worth being precise about the rules, because the surprises are all in the details.
+
+*   **Public repositories are free.** Workflows on public repositories using GitHub's standard hosted runners do not consume your included minutes.
+*   **Private repositories draw from a monthly quota.** On the GitHub Free plan for personal accounts that quota is **2,000 minutes per month**. Paid plans include more, and you can allow paid overage with a spending limit.
+*   **Every job is rounded up to the whole minute.** A job that runs for 7 seconds is billed as 1 minute. A job that runs for 61 seconds is billed as 2.
+*   **Operating system multipliers apply.** Linux minutes count once; Windows and macOS runners consume minutes at a higher rate. All of my pipelines were Linux, so this one didn't bite me — but if yours use macOS runners, everything below gets several times worse.
+*   **Dependabot's own update jobs are not the problem.** The jobs Dependabot runs to *check* for updates don't count against your quota. The cost comes from the workflows its pull requests *trigger* in your repository.
+
+That rounding rule is the one that hurts. Twenty-five jobs that each run for a minute and ten seconds don't cost 29 minutes — they cost 50. Fan-out is expensive in a way that wall-clock time hides completely.
+
+---
+
+## The investigation
+
+The Actions usage page in the GitHub UI gives you a monthly total, but it was not granular enough to tell me *why*. The billing REST API is much better. With the GitHub CLI authenticated as the account owner:
+
+```bash
+# Usage items for a given month (replace <user>, year and month)
+gh api "/users/<user>/settings/billing/usage?year=2026&month=6" \
+  --jq '.usageItems[] | select(.product == "actions")
+        | [.repositoryName, .sku, .quantity] | @tsv' \
+  | sort -t$'\t' -k3 -nr | head -20
+```
+
+That returns line items with the repository, SKU (runner type) and quantity in minutes. I aggregated by repository, and the result was not subtle:
+
+| Repository | Minutes in the month | Share |
+| --- | --- | --- |
+| A private monorepo | ~2,400 | ~95% |
+| Every other private repo combined | ~130 | ~5% |
+| **Total** | **~2,530** | Quota was 2,000 |
+
+One repository was responsible for almost all of it. A tip from experience: call the endpoint with explicit `year` and `month` parameters. Without them, the response I got was harder to interpret, and I ended up with an incomplete picture until I asked for a specific month.
+
+### Drilling into workflow runs
+
+Knowing *which* repository is half the answer. The other half is *which runs*. Listing recent runs, grouped by the actor that triggered them, made the pattern obvious:
+
+```bash
+gh run list --repo <user>/<repo> --limit 200 \
+  --json event,headBranch,workflowName,createdAt,databaseId \
+  --jq '.[] | [.event, .headBranch, .workflowName] | @tsv' \
+  | sort | uniq -c | sort -nr | head
+```
+
+The top of that list was a wall of `pull_request` runs on branches named `dependabot/npm_and_yarn/...`, `dependabot/github_actions/...`, `dependabot/docker/...` and so on. To see what a single run actually cost, the timing endpoint reports billable milliseconds per runner type:
+
+```bash
+gh api repos/<user>/<repo>/actions/runs/<run-id>/timing \
+  --jq '.billable'
+```
+
+Summing the job durations (rounded up per job) for those runs told the story. In the month I investigated there were **23 CI runs on Dependabot pull requests, averaging around 62 billable minutes each — roughly 1,430 minutes**, before counting any of the re-runs, my own pushes, or the other workflows in the repository.
+
+---
+
+## The root cause: a perfect storm
+
+None of the individual ingredients was unreasonable. It was the combination that did the damage.
+
+![How one Dependabot PR became 60+ billable minutes](/blog/how-dependabot-burned-my-github-actions-minutes/inline-1.png)
+
+### Ingredient 1: Dependabot, daily, across many ecosystems
+
+The monorepo had a `dependabot.yml` that checked **daily** across several ecosystems — npm for the TypeScript workspaces, GitHub Actions, Docker base images, Terraform providers. A busy JavaScript ecosystem produces new patch releases constantly, so on most days at least one ecosystem had something to propose. With an open pull request limit of 10, there were usually ten Dependabot PRs sitting open.
+
+### Ingredient 2: a CI workflow with matrices
+
+The CI workflow ran on every pull request. It had **3 base jobs** (install and lint, build, unit tests) plus **two matrices across 11 services** — one to run each service's tests in isolation, one to type-check each service in isolation. That is:
+
+```text
+3 base jobs + 11 test jobs + 11 typecheck jobs = 25 jobs per push
+```
+
+Matrices like this feel virtuous. Each service gets its own green tick, failures are easy to pinpoint, and the jobs run in parallel so wall-clock time stays low. But on a private repo, parallel is not free — you pay for every job's runner time, and you pay for each job's setup (checkout, install Node, restore cache, install dependencies) twenty-five times over.
+
+### Ingredient 3: rebases re-trigger everything
+
+Every time a Dependabot PR is rebased — because main moved, or because another Dependabot PR merged and touched the lockfile — it is a new push to the PR branch, and the full 25-job pipeline runs again. Ten open PRs and a moving main branch is a recipe for each PR being built several times before anyone looks at it.
+
+### Ingredient 4: per-job rounding
+
+Many of those 25 jobs were short: install, run one service's tests, finish. A job that spends 50 seconds on setup and 30 seconds on work is billed 2 minutes. The real compute was modest; the billed minutes were not.
+
+### Ingredient 5: nobody was watching
+
+This is the human part. I wasn't merging most of those PRs promptly, because I wasn't actively working in that repository. The robot kept proposing, CI kept building, and the minutes kept draining — for changes I was never going to look at that week.
+
+| Factor | Value | Multiplier effect |
+| --- | --- | --- |
+| Dependabot schedule | Daily, several ecosystems | New PRs most days |
+| Open PR limit | 10 | Up to 10 PRs being rebuilt |
+| Jobs per CI run | 25 | 25× setup overhead |
+| Rounding | Per job, up to the minute | Short jobs cost 2–3× their runtime |
+| Rebases | On every main change | Each PR built multiple times |
+| Result | ~62 billable min per run | ~1,430 min from Dependabot PRs alone |
+
+---
+
+## Fix 1: stop the robot
+
+My first instinct was to tame Dependabot rather than remove it: weekly schedule, a single grouped PR for minor and patch updates, a limit of three open PRs, and rebasing disabled. That is a perfectly reasonable configuration, and if you want to keep Dependabot, here's the shape of it:
+
+```yaml
+# A tamed dependabot.yml — if you decide to keep it
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    rebase-strategy: "disabled"
+    groups:
+      all-dependencies:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+```
+
+But when I thought about it honestly, I realised I didn't want automated dependency PRs on personal projects at all. I don't review them promptly, they generate noise across dozens of repositories, and when I do upgrade, I want to do it deliberately — majors included — with time set aside to test properly. So I went further and removed Dependabot updates entirely, across **every** repository:
+
+1.  **Deleted `.github/dependabot.yml`** in every repository.
+2.  **Deleted auto-merge workflows** — a few of my repositories had a workflow that auto-approved and merged Dependabot PRs, which then triggered the full deployment pipeline on main. Double cost.
+3.  **Disabled automated security fixes**, which are configured separately from `dependabot.yml` and will keep opening PRs otherwise:
+
+```bash
+gh api -X DELETE repos/<user>/<repo>/automated-security-fixes
+```
+
+4.  **Closed every open Dependabot PR** and deleted its branch:
+
+```bash
+gh pr list --repo <user>/<repo> --author "app/dependabot" \
+  --json number --jq '.[].number' \
+  | xargs -I{} gh pr close {} --repo <user>/<repo> --delete-branch
+```
+
+I looped those commands over the full list of repositories from `gh repo list <user> --limit 200 --json name`. One quirk: on repositories where vulnerability alerts were not enabled, the security fixes call returned a `422`, which simply means there was nothing to disable.
+
+> Removing Dependabot **updates** is not the same as ignoring vulnerabilities. Dependabot **alerts** are a separate feature, and I left them on. The alerts tell me what needs attention; I decide when and how to fix it.
+
+---
+
+## Fix 2: collapse the matrix, 25 jobs to 3
+
+Removing the trigger stopped the bleeding, but the pipeline itself was still expensive for my *own* pushes. The insight that made the fix easy: the monorepo's package scripts were already **recursive**. Running tests or type-checking from the root already covered every workspace. The matrices were re-doing per service what one job could do in a loop, paying the setup cost eleven times each.
+
+Here is the essence of the *before* (simplified and with generic names):
+
+```yaml
+# BEFORE — 3 base jobs + 2 × 11-service matrices = 25 jobs per push
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with: { node-version: 26, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # ... same checkout / pnpm / node / install steps ...
+      - run: pnpm build
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # ... same checkout / pnpm / node / install steps ...
+      - run: pnpm test
+
+  test-services:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [orders, customers, catalogue, payments, notifications,
+                  search, reporting, identity, documents, scheduling, ai]
+    steps:
+      # ... same checkout / pnpm / node / install steps ...
+      - run: pnpm --filter "./services/${{ matrix.service }}" test
+
+  typecheck-services:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [orders, customers, catalogue, payments, notifications,
+                  search, reporting, identity, documents, scheduling, ai]
+    steps:
+      # ... same checkout / pnpm / node / install steps ...
+      - run: pnpm --filter "./services/${{ matrix.service }}" typecheck
+```
+
+Notice the bare `push:` trigger too. That runs on pushes to *every* branch — including Dependabot's — so each Dependabot PR could be built twice: once for the push and once for the `pull_request` event.
+
+And the *after*:
+
+```yaml
+# AFTER — 3 jobs, filtered, cancellable, time-boxed
+name: CI
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!docs/**"
+      - "docs/ENVIRONMENT_VARIABLES.md"   # validated by a check, so keep it
+  pull_request:
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!docs/**"
+      - "docs/ENVIRONMENT_VARIABLES.md"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with: { node-version: 26, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm -r typecheck          # every workspace, one job
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # ... same checkout / pnpm / node / install steps ...
+      - run: pnpm build
+      - run: pnpm --filter "./services/*" build
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # ... same checkout / pnpm / node / install steps ...
+      - run: pnpm -r test:coverage      # every workspace, one job
+```
+
+A few details that matter:
+
+*   **Order matters in `paths` filters.** Patterns are evaluated in order and later patterns override earlier ones. That is how the example excludes `docs/**` but then re-includes the one documentation file a check validates. Put the exception *after* the exclusion.
+*   **`cancel-in-progress` only for pull requests.** On a PR, a new push makes the previous run worthless, so cancel it. On `main`, I want every commit's run to complete so the history of green and red is trustworthy.
+*   **`timeout-minutes` on every job.** The default job timeout is six hours. A hung test runner on a private repo can eat a third of a monthly quota in a single job. My jobs normally take a few minutes; a 15–20 minute ceiling is generous and safe.
+*   **I lost nothing in coverage.** Every service is still tested and type-checked; I just lost the eleven separate green ticks. When something fails, the log tells me which workspace — it takes a few seconds longer to find, and that is a trade I am happy to make.
+
+![Before and after: 25 jobs to 3](/blog/how-dependabot-burned-my-github-actions-minutes/inline-2.png)
+
+---
+
+## Fix 3: guard rails on every workflow
+
+With the main offender fixed, I audited every workflow in every repository and applied the same set of rules. I wrote them down once and applied them everywhere, which matters more than any individual setting.
+
+### Branch-limited push triggers
+
+Never use a bare `push:`. Limit pushes to the default branch and let `pull_request` cover everything else:
+
+```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+```
+
+One of my infrastructure repositories had a bare `push:` on its deployment pipeline. Every branch push — including every Dependabot branch — ran the full infrastructure pipeline.
+
+### Schedules at most weekly
+
+Scheduled workflows are the silent killers because nobody pushes anything and they still run. Now nothing runs more often than weekly unless it is genuinely essential, and every schedule also has a manual trigger:
+
+```yaml
+on:
+  schedule:
+    - cron: "0 20 * * 0"   # weekly, Sunday 20:00 UTC
+  workflow_dispatch:
+```
+
+### Expensive suites weekly or manual
+
+End-to-end tests with emulators and browsers, security scans, and container image scans are valuable but slow. In the monorepo, the end-to-end suite — which spins up emulators and a browser — was also a pull request gate, so every Dependabot PR that touched code paid for it too. It now runs weekly and on demand via `workflow_dispatch` only. The security scan runs on pull requests (it takes about a minute), weekly, and on demand — but no longer on every push to main.
+
+### Deploys and releases are manual
+
+This was the biggest behavioural change. Deployment and release workflows on my private repositories are now `workflow_dispatch` only. For pipelines that combine build and release in one workflow, a boolean input gates the release jobs, so a normal push builds and tests, and releasing is a deliberate act:
+
+```yaml
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a release after a successful build"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - run: npm ci && npm test && npm run build
+
+  release:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: npm run release
+```
+
+There are a handful of exceptions where automatic deployment is the whole point — this blog, for example, which lives in a public repository and so costs nothing to deploy. Those I left alone deliberately.
+
+### `[skip ci]` for documentation commits
+
+Path filters cover most docs-only changes, but not every workflow has them, and README tweaks are frequent. GitHub skips `push` and `pull_request` workflows when the commit message contains `[skip ci]` (or `[ci skip]`, `[no ci]`, `[skip actions]`, `[actions skip]`):
+
+```bash
+git commit -m "docs(readme): add build badges [skip ci]"
+```
+
+It is a small habit, and across dozens of repositories it adds up.
+
+### A spending limit as the last line of defence
+
+Leave the Actions spending limit at zero (or a deliberately small budget) on accounts where you don't want surprises. When the quota runs out, jobs fail to start instead of quietly running up a bill. That is annoying — I'll come back to *how* annoying — but it fails safe.
+
+### Prefer public where you can
+
+Finally, the cheapest minute is the one you're not billed for. Several of my repositories were private out of habit, not necessity: samples, libraries and tools with nothing sensitive in them. Making those public moved their CI to free minutes and, as a bonus, made them useful to other people. Obviously, anything with real data, credentials in history, or code you don't own the rights to stays private — and if you go this route, scan the full git history for secrets *before* you flip the switch.
+
+![Layered guard rails for Actions minutes](/blog/how-dependabot-burned-my-github-actions-minutes/inline-3.png)
+
+---
+
+## What it cost, and what it costs now
+
+Here is the before-and-after for the monorepo. The "after" per-run figure is an estimate based on the collapsed pipeline's typical job durations, rounded up per job; the point is the order of magnitude.
+
+| Item | Before | After |
+| --- | --- | --- |
+| Jobs per CI run | 25 | 3 |
+| Billable minutes per CI run | ~62 | ~10–12 |
+| Dependabot PR runs per month | ~23 (plus rebuilds) | 0 |
+| Minutes from Dependabot PRs per month | ~1,430 | 0 |
+| Docs-only pushes | Full pipeline | Skipped |
+| E2E suite | Weekly + every code PR | Weekly + on demand only |
+| Deploys | Automatic on merge | Manual (`workflow_dispatch`) |
+| Total monthly usage, account-wide | ~2,530 (over the 2,000 quota) | Comfortably within quota |
+
+The headline isn't any single row. It's that the repository went from consuming more than the whole account's quota to a small fraction of it — while running the same checks.
+
+---
+
+## The annoying bit: running out mid-fix
+
+A practical warning. By the time I started fixing this, the quota was already exhausted, so every workflow run failed instantly with a message about the spending limit. That has two consequences.
+
+First, **you can't use CI to verify your fixes**. I had to run every build, lint and test locally before pushing, which — in hindsight — is a discipline I should have had anyway. Second, **red builds stop meaning anything**. Every repository's latest run was red for billing reasons, which masked a few genuine failures that only became visible when the quota reset and the runs were real again. When your minutes come back, go and look at every latest run properly; don't assume green.
+
+One more gotcha: **re-running an old workflow run uses the workflow file from that run's commit**, not the current one. If you have just fixed a workflow and re-run an old failed run, you are re-running the old, expensive version. Push a new commit or trigger a fresh `workflow_dispatch` instead.
+
+---
+
+## How I keep dependencies up to date now
+
+Turning off automated updates only works if something replaces them. My approach now is **periodic, deliberate upgrades**:
+
+*   **Every month or two**, I set aside time and upgrade a repository (or a group of similar ones) to the latest versions of everything — majors included — following the official migration guides rather than just bumping numbers.
+*   **I verify locally first**: install, build, lint, type-check, test, and actually start the application and smoke-test it. Only then do I push, once, so CI runs once.
+*   **I keep Dependabot alerts on** and review them as part of that cycle. A genuinely urgent vulnerability gets fixed straight away; the rest go into the next upgrade.
+*   **I batch changes**: one well-tested commit per repository rather than twenty single-package PRs.
+
+This is more work per session than clicking "merge" on a bot's PR, but far less work overall, because each upgrade is coherent, tested end to end, and doesn't leave me with a queue of stale PRs. It's also where AI assistance earns its keep — and I've since used exactly this approach to modernise my entire GitHub estate in one programme, which I'll write about separately.
+
+If you work in a team rather than alone, the calculus is different: someone is usually around to review a grouped weekly PR, and the tamed configuration above is a fine choice. The lesson is not "Dependabot is bad". It is "**automation that nobody is watching should be cheap by design**".
+
+---
+
+## Checklist
+
+Here's the checklist I now apply to every repository. Copy it into your own repo template.
+
+| ✓ | Guard rail | Why |
+| --- | --- | --- |
+| ☐ | Check usage per repo with `gh api /users/<user>/settings/billing/usage?year=..&month=..` | Find the real offender before fixing anything |
+| ☐ | Remove `dependabot.yml` **or** make it weekly, grouped, limited, no rebase | Stop robot-driven runs, or make them cheap |
+| ☐ | Remove Dependabot auto-merge workflows | They trigger deploy pipelines on main |
+| ☐ | Disable automated security fixes if you don't want PRs (keep alerts on) | They open PRs independently of `dependabot.yml` |
+| ☐ | Close stale bot PRs and delete their branches | Each rebase is another full run |
+| ☐ | `push` limited to `branches: [main]` | Bare `push:` builds every branch |
+| ☐ | Avoid large matrices; loop inside one job when scripts are recursive | Per-job rounding and repeated setup |
+| ☐ | `paths` / `paths-ignore` for docs (exceptions listed last) | Docs changes shouldn't build services |
+| ☐ | `concurrency` with `cancel-in-progress` on PRs | Superseded runs are wasted minutes |
+| ☐ | `timeout-minutes` on every job | Default is six hours |
+| ☐ | Schedules at most weekly; E2E and scans weekly or manual | Schedules run even when nothing changed |
+| ☐ | Deploys `workflow_dispatch` only; boolean input gates release jobs | Releasing becomes deliberate |
+| ☐ | `[skip ci]` on docs-only commits | Free and instant |
+| ☐ | Spending limit set deliberately | Fail safe instead of a surprise bill |
+| ☐ | Make repos public where nothing sensitive exists | Standard runners are free for public repos |
+
+---
+
+## Conclusion
+
+*   **GitHub Free includes 2,000 Actions minutes a month for private repositories**; public repositories on standard runners are free, and every job is **rounded up to the minute**
+*   The **billing API** (`/users/<user>/settings/billing/usage` with `year` and `month`) shows usage per repository; `gh run list` and the run timing endpoint show which runs and why
+*   In my case, **one private monorepo used ~2,400 of ~2,530 minutes** in a month, driven by **daily Dependabot PRs** triggering a **25-job CI pipeline** that was rebuilt on every rebase
+*   **Removing Dependabot updates** (config, auto-merge workflows, automated security fixes and open PRs) stopped the robot-driven runs; alerts stayed on
+*   **Collapsing two 11-service matrices into recursive single jobs** cut CI from **25 jobs to 3** with no loss of coverage
+*   **Guard rails on every workflow** — branch-limited pushes, path filters, concurrency, timeouts, weekly schedules, manual deploys, `[skip ci]` and a spending limit — make sure it doesn't come back
+*   **Deliberate, periodic, locally verified upgrades** keep dependencies current without paying for automation nobody is watching
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

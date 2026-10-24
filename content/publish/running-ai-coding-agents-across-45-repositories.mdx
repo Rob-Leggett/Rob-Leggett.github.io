@@ -1,0 +1,322 @@
+---
+title: "Running AI Coding Agents Across 45 Repositories"
+date: "2026-08-06"
+slug: "running-ai-coding-agents-across-45-repositories"
+status: "publish"
+feature_image: "/blog/running-ai-coding-agents-across-45-repositories/feature-image.png"
+tags: ["AI", "GitHub Copilot", "AI Agents", "Developer Productivity", "DevOps", "GitHub Actions", "Robert Leggett"]
+
+meta:
+  title: "Running AI Coding Agents Across 45 Repositories | Robert Leggett"
+  description: "How I used GitHub Copilot CLI with parallel background agents, a shared written brief and human decision points to modernise all 45 of my GitHub repositories — upgrades to Node 26 and latest libraries, security fixes, CI cost cuts, wikis and badges — and what went wrong along the way."
+  keywords: ["GitHub Copilot CLI", "AI coding agents", "parallel agents", "repository modernisation", "dependency upgrades", "Node 26", "git worktrees", "AI-assisted delivery", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/running-ai-coding-agents-across-45-repositories"
+  image: "https://robertleggett.com.au/blog/running-ai-coding-agents-across-45-repositories/feature-image.png"
+
+og:
+  type: "article"
+  title: "Running AI Coding Agents Across 45 Repositories"
+  description: "How I used GitHub Copilot CLI with parallel background agents, a shared written brief and human decision points to modernise all 45 of my GitHub repositories — upgrades to Node 26 and latest libraries, security fixes, CI cost cuts, wikis and badges — and what went wrong along the way."
+  image: "https://robertleggett.com.au/blog/running-ai-coding-agents-across-45-repositories/feature-image.png"
+  url: "https://robertleggett.com.au/blog/running-ai-coding-agents-across-45-repositories"
+
+twitter:
+  card: "summary_large_image"
+  title: "Running AI Coding Agents Across 45 Repositories"
+  description: "How I used GitHub Copilot CLI with parallel background agents, a shared written brief and human decision points to modernise all 45 of my GitHub repositories — upgrades to Node 26 and latest libraries, security fixes, CI cost cuts, wikis and badges — and what went wrong along the way."
+  image: "https://robertleggett.com.au/blog/running-ai-coding-agents-across-45-repositories/feature-image.png"
+---
+
+Every developer I know has a graveyard. Mine lives on GitHub: 45 repositories accumulated over more than a decade — Spring Boot microservices from the Java 8 era, Angular samples that predate standalone components, React apps on webpack configurations nobody should have to read, Go tools, Python experiments, AWS CDK stacks, Terraform modules, and a handful of genuinely useful libraries. Some were public, most were private, and nearly all of them were years behind on their dependencies. A few didn't build at all. I had been meaning to "get around to it" for a very long time.
+
+What finally pushed me over the edge was an Actions bill — I've written about [how Dependabot burned my GitHub Actions minutes](/blog/how-dependabot-burned-my-github-actions-minutes) — and the realisation that fixing CI properly meant touching every repository anyway. So I decided to do the whole estate in one programme: upgrade everything to the latest libraries and **Node 26**, remove Dependabot, cut CI minutes, clear the security alerts, add README badges, rewrite the wikis and clean up legacy references. Not by hand, and not by "vibe coding" either, but by running **GitHub Copilot CLI** as a coordinator with a fleet of parallel background agents, all working from a shared written brief, with me making the decisions that mattered. This is how it worked, what went wrong, and what I'd do again.
+
+---
+
+## Before you start
+
+About this post:
+
+*   12 – 16-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A practical operating model for running many AI coding agents in parallel without chaos
+*   How a single shared brief, plus mid-flight overrides, keeps dozens of agents consistent
+*   Patterns for grouping work by tech stack, protecting work-in-progress with git worktrees, and verifying before pushing
+*   An honest list of the things that went wrong — tokens, cloud roles, runners, billing and upgrade blockers — and how each was handled
+*   A lessons-learned table you can apply to your own estate
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## The scope
+
+Here's what "modernise everything" meant in practice. I wrote it down before starting, because a programme without a definition of done is just a mood.
+
+| Workstream | Definition of done |
+| --- | --- |
+| Upgrades | Every dependency, framework, build tool, runtime, Docker base image and Action at its latest version — majors included, migrated properly rather than just bumped |
+| Runtime | Node 26 everywhere, including `.nvmrc`, `engines`, Dockerfiles and `setup-node` in Actions (newest supported version where a cloud runtime lacks 26) |
+| Working software | Install, build, lint, type-check, test, *and* start the app and smoke-test it, locally, before any push |
+| CI cost | No Dependabot, branch-limited triggers, concurrency, timeouts, path filters, weekly-at-most schedules, manual deploys |
+| Security | Open alerts resolved or dismissed with evidence; CodeQL findings fixed |
+| Documentation | Accurate READMEs with a badges row; wikis rewritten with custom navigation and a working publish step |
+| Hygiene | Legacy package scopes, private registry URLs and stale branding replaced with my own or neutral equivalents |
+
+The technology spread was the hard part. Across 45 repositories there were **Java with Gradle and Maven** (Spring Boot, Jersey), **Go** modules, **Python** projects (old `requirements.txt` and Poetry setups), **Angular**, **React** and **Next.js** front ends, shared UI component and design-token libraries, **AWS CDK** applications, **Terraform** infrastructure, Firebase functions, and a static site or two. Each ecosystem has its own toolchain, its own migration guides and its own ways to fail.
+
+---
+
+## The operating model
+
+I've written about [my approach to AI-assisted, architecture-led delivery](/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery) — the short version is that **AI accelerates the movement between artefacts, and humans keep accountability for decisions and quality**. This programme was that model applied to maintenance instead of new features. The shape was simple:
+
+![Coordinator, shared brief and parallel agents](/blog/running-ai-coding-agents-across-45-repositories/inline-1.png)
+
+*   **One coordinator session.** A single Copilot CLI session that I talked to. It investigated, planned, wrote the brief, launched and steered the agents, reviewed their reports, did the fiddly cross-cutting fixes itself, and asked me questions when a decision was needed.
+*   **A shared written brief.** One Markdown file that every agent was told to read in full before starting. This was the single most important artefact in the whole programme.
+*   **Parallel background agents grouped by stack.** Each agent owned a small set of similar repositories end to end — upgrade, verify, commit, push and report.
+*   **Me, at the decision points.** Not reviewing every line of every diff — that would have defeated the point — but deciding policy, answering structured questions, spot-checking, and owning the outcome.
+
+### Why a written brief beats a long prompt
+
+My first instinct was to give each agent a detailed prompt. That breaks down quickly. Prompts drift between agents, you forget to include a rule in the eleventh one, and when the rules change mid-flight you have no single place to change them. A brief file fixes all three: one source of truth, version-able, and something you can point a late-starting agent at.
+
+Here is a short, generic excerpt in the spirit of the real one:
+
+```markdown
+# Repo upgrade brief (read fully before starting)
+
+## Goal per repo
+1. Every dependency on its latest version, majors included. Follow official
+   migration guides and codemods — don't just bump numbers.
+2. Zero known vulnerabilities after the upgrade.
+3. It works: install, build, lint, typecheck and test pass locally, AND you
+   start the app and smoke-test it. Never delete or skip tests to go green.
+4. README and docs updated wherever commands or versions changed.
+
+## Hard rules
+- Verify locally before pushing. Push once per repo, after everything passes.
+- Docs-only commits end with [skip ci].
+- Never deploy, apply infrastructure, or publish packages. Synth/validate only.
+- If the working tree has changes that aren't yours, don't touch them: use
+  `git worktree add` from origin/main and push from there.
+- Never open or print secrets, .env files, keys or data files.
+- Clean up build artefacts and containers you create.
+
+## Report (concise, per repo)
+- Before → after versions, commands run with pass/fail, commit SHA,
+  anything that needs the owner.
+```
+
+The real brief also covered the toolchains installed on my machine (which JDK to export, which Go binary to use, `uv` for Python, `nvm` for Node), the CI cost rules, how to validate OpenAPI specs against the same linting my developer portal uses, and disk hygiene. About 1,300 words in total — long enough to be unambiguous, short enough that an agent would actually read it.
+
+### Owner overrides, broadcast mid-flight
+
+Plans change. Halfway through the first wave I decided I wanted **Node 26 everywhere**, not the LTS version the brief originally specified. Later I decided I didn't want **Dependabot at all** — not tamed, gone. And then I had views about legacy references.
+
+The pattern that worked was two-step: append an **OWNER OVERRIDES** section to the brief that explicitly "takes precedence over everything above", *and* broadcast the same message to every running agent. Copilot CLI can send a message into a running background agent's conversation, which steers its current turn, so in-flight work picked up the change immediately and agents that started later got it from the file.
+
+```markdown
+## OWNER OVERRIDES (take precedence over everything above)
+1. NO Dependabot: delete .github/dependabot.yml and any auto-merge workflow;
+   never create them.
+2. Node 26 everywhere: .nvmrc, engines, @types/node, Docker base images and
+   setup-node. Where a cloud runtime doesn't support 26 yet, use the newest
+   supported version and report it.
+3. Deploys and publishes are workflow_dispatch only, unless listed here.
+```
+
+The Dependabot override has a slightly embarrassing backstory. My original brief told agents to *create* a tamed `dependabot.yml` in any repo with dependencies. One agent dutifully did exactly that on my blog repository, and within hours three Dependabot PRs appeared. The agent had followed the brief perfectly; the brief was wrong. That is the whole accountability argument in miniature: the agent executed, the human owned the policy, and the fix was a policy change, not a prompt tweak.
+
+### Grouping agents by tech stack
+
+I grouped repositories so each agent built up context in one ecosystem rather than context-switching between Gradle and Angular and Terraform:
+
+| Agent group | Typical repositories | Main work |
+| --- | --- | --- |
+| Gradle / Spring Boot | Microservice samples, small Java tools | Gradle wrapper, Spring Boot 4, Java 25, plugin upgrades |
+| Java REST samples | Jersey, Node REST, legacy React/Redux | Jakarta EE, webpack-era front ends rewritten onto modern tooling |
+| Angular + Java | Angular / Spring Security samples | `ng update` through several majors, standalone APIs |
+| Go | Small APIs, CLI tools, automation | Go 1.27, module upgrades, `govulncheck` |
+| Python | Data and AI experiments | `uv`, Python 3.13+, `pip-audit` |
+| UI libraries | Component library, design tokens, UI kit | React, Storybook, package publishing |
+| AWS | CDK apps, portals, agents | CDK v2 latest, Lambda runtimes, manual deploys |
+| Platform | Infrastructure-as-code, Docker images, DevOps tooling | Terraform providers, base images, rebranding |
+| Product apps | Larger personal products and monorepos | Workspaces, Next.js, wikis |
+| Cross-cutting | All repos | Badges, security alerts, wikis |
+
+Work ran in waves — roughly ten agents, then six more, then a final three — around two dozen agents in total once the cross-cutting ones (badges, security, wikis) are counted. Waves weren't about the tooling's limits; they were about **my machine** and **my attention**. Each agent installs dependencies, compiles, runs test containers and starts apps. At one point the disk was 97% full and I had to tell every agent to delete the artefacts and container images it created and to stop and report on `ENOSPC` rather than freeing space anywhere else.
+
+---
+
+## Protecting work in progress with git worktrees
+
+One of my product repositories had a fair amount of uncommitted work in progress in its main clone: half-finished components, new tests, local data. The worst thing an agent could do was `git add -A` and push my unfinished work along with an upgrade.
+
+The rule in the brief was blunt: if the working tree has changes that aren't yours, don't touch them — create a separate **git worktree** from the remote default branch and work there:
+
+```bash
+git fetch origin
+git worktree add "$TMPDIR/app-upgrade" origin/main
+cd "$TMPDIR/app-upgrade"
+# ... upgrade, verify ...
+git commit -m "chore(deps): upgrade to latest"
+git push origin HEAD:main
+```
+
+A worktree shares the repository's object store but has its own working directory and index, so the upgrade happens against a clean checkout while my WIP sits untouched in the original folder. When I later pulled, my WIP was rebased over the upgrade like any other upstream change. It is a two-line habit that removes an entire category of risk.
+
+The same rule set included a line I consider non-negotiable when agents work on a personal machine: **never read sensitive data files**. Service account keys, `.env` files with real values and personal data CSVs were off limits — not just "don't commit", but "don't open". Agents do what the context tells them; the safest secret is one that never enters the context.
+
+---
+
+## Humans at the decision points
+
+The coordinator didn't guess at policy. When it hit a decision with real consequences, it asked me a structured question — a short description, a few concrete options, and a recommendation — and waited. A few examples:
+
+*   **Which deployments stay automatic?** My first instinct was "nothing deploys automatically". Then I realised a few things *should*: this blog (public, free minutes), the release of my CV generator, and one personal finance app I actively use. Everything else — especially cloud deployments to AWS — became manual `workflow_dispatch`, with a boolean input gating release jobs where build and release share a workflow.
+*   **What to do about legacy references?** A scan found package scopes, private registry URLs and branding in a handful of older repositories that no longer belonged in my estate. For each category I chose: rebrand to my own namespace, replace with an open-source equivalent or in-repo code, or leave alone where the "reference" was actually data I wanted to keep.
+*   **Push to main or open PRs?** For a personal estate with no other contributors, I chose direct pushes to main after local verification. Opening 45 PRs would have doubled the CI runs for no reviewer benefit. In a team, I'd make the opposite call.
+*   **How far to take majors?** "All latest majors, with rewrites where needed." That one decision shaped a lot of work, and I'm glad it was made explicitly up front rather than discovered repo by repo.
+
+![Decisions flow up, policy flows down](/blog/running-ai-coding-agents-across-45-repositories/inline-2.png)
+
+This is the same principle as [implementation probes](/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps): let the AI move fast enough to surface the question, then make a human decision and write it down so every subsequent action follows it.
+
+---
+
+## Verification: local first, then green on GitHub
+
+Verification had two layers, and both mattered.
+
+**Local first.** Every agent had to prove the repository worked on my machine before it was allowed to push: install, build, lint, type-check, unit and integration tests, end-to-end tests where they existed, and then actually *run* the thing — start the service and `curl` an endpoint, load the page in a headless browser, run the CLI. Infrastructure repos ran `terraform validate` with no backend, or `cdk synth` with dummy context; nothing was ever applied or deployed. The report had to list each command with pass or fail.
+
+**Then green on GitHub.** A local pass doesn't prove a pipeline passes. Runners have different packages, secrets and permissions. So after each push, the agent watched the triggered run and fixed whatever failed. A push wasn't "done" until the run was green or the failure was clearly something only I could fix — a secret, a cloud permission — and reported as such.
+
+```bash
+# How an agent confirmed its push
+gh run list --repo <owner>/<repo> --branch main --limit 3 \
+  --json status,conclusion,workflowName,headSha
+gh run watch <run-id> --exit-status
+```
+
+Because every Actions minute was precious after the billing incident, the rules around this were strict: push as few times as possible, `[skip ci]` on docs-only commits, cancel redundant runs, and **never** "push to see if CI likes it".
+
+![The verification ladder](/blog/running-ai-coding-agents-across-45-repositories/inline-3.png)
+
+---
+
+## What went wrong
+
+Plenty. None of it was catastrophic, all of it was instructive.
+
+### Expired package tokens
+
+One UI library pulled a private package from GitHub Packages using a long-lived token stored as a repository secret. The token had quietly expired, so the build failed at `npm install`. The fix wasn't a new token — it was removing the token altogether. I granted the consuming repository Actions access on the package's settings page (and unticked "inherit access from source repository"), deleted the secret, and switched the workflow to the built-in `github.token` with `packages: read`. One fewer secret to rotate, forever.
+
+### OIDC AssumeRole denied
+
+The AWS CDK pipelines authenticate with **OIDC** rather than stored keys, which is the right pattern. After the upgrade, the role assumption failed with an access denied error. The upgraded workflow was fine; the IAM role's trust policy simply didn't match the subject claim the workflow presented. Agents can't (and shouldn't) touch cloud IAM, so this landed in my "owner actions" list with the exact trust condition needed: the `sts.amazonaws.com` audience and a `repo:<owner>/<repo>:*` subject. In the meantime, those deploys became manual anyway.
+
+### Missing apt packages on runners
+
+An end-to-end workflow installed a serverless runtime's CLI from the vendor's apt feed, and that feed didn't yet publish packages for the Ubuntu release behind the newer `ubuntu-latest` image. The obvious fallback — the npm installer — failed too, because npm 11's stricter install-script policy blocked its post-install download. Locally everything was green; on the runner it failed at setup. This is exactly why "green on GitHub" is a separate verification step. The agent changed the workflow to download a pinned release directly from the project's GitHub releases and verify its checksum before installing.
+
+### The billing spend limit blocking runs
+
+For part of the programme my Actions quota was already exhausted, so every run failed instantly with a spending-limit message. That had a silver lining — nothing could accidentally deploy — but it also meant red builds were meaningless. When the quota reset and runs became real, a batch of genuine failures appeared that had been hidden behind the billing ones. I had every agent go back and confirm its latest run was actually green. Another subtle trap: **re-running an old run uses that commit's workflow file**, so re-running a pre-fix failure tests the old pipeline, not the new one.
+
+### Upgrade blockers
+
+"Latest everything" sometimes isn't possible yet. **TypeScript 7** and **ESLint 10** were blocked in many front-end repos by peer dependency ranges in `typescript-eslint` and framework ESLint configs that hadn't caught up. Similarly, several cloud runtimes — Lambda, Firebase functions, Azure Functions — didn't support Node 26 yet, so those functions run on the newest supported version while everything else in the repo uses 26. The rule was: **never force it with `--force` or `--legacy-peer-deps` just to get green.** Pin to the newest compatible version, document why, and move on.
+
+| Problem | Symptom | Resolution | Owner |
+| --- | --- | --- | --- |
+| Expired package token | `npm install` 401 in CI | Repository granted package access; secret deleted; `github.token` | Me (settings) + agent (workflow) |
+| OIDC AssumeRole denied | Deploy job fails at credentials | Trust policy condition documented; deploys made manual | Me (IAM) |
+| Missing apt package | E2E setup step fails on runner | Pinned release download with checksum verification | Agent |
+| Spending limit reached | Every run fails instantly | Local verification; re-check every run once quota reset | Agents + me |
+| Peer dependency blockers | TypeScript 7 / ESLint 10 install conflicts | Newest compatible version, documented | Agent |
+| Cloud runtime lag | Node 26 not supported on function runtimes | Newest supported runtime, reported | Agent |
+| My own brief | Agent created `dependabot.yml` | Override in brief + broadcast | Me |
+| Disk 97% full | Builds failing on space | Artefact and image clean-up rules | Agents |
+
+---
+
+## The security sweep
+
+Security got its own cross-cutting agent once the upgrades had landed. Nine repositories had large numbers of open Dependabot alerts — several with more than a hundred each — and nearly all of them were **stale**: they referred to vulnerable versions the upgrades had already removed, or to packages no longer in the dependency tree at all. Rather than bulk-dismissing, the agent verified each alert against the current lockfile and dismissed it with the right reason only when the evidence supported it. **Hundreds of alerts were closed — 678 in that sweep alone** — and a separate pass dismissed dozens more in another repository after the same lockfile check.
+
+**CodeQL** was the more interesting part. It flagged 18 genuine code issues across two older Node.js sample APIs — missing rate limiting and NoSQL operator injection, where a crafted JSON object in a login or query body could change the meaning of a database query — and those were fixed in code, not dismissed: rate limiting middleware (stricter on the authentication route), rejecting non-string credentials, explicit `$eq` queries and allow-listing fields before create and update, each with tests. A couple of CSRF findings in Angular samples were false positives for the token-based pattern those apps use, and were dismissed with that justification recorded. CodeQL default setup and secret scanning with push protection were switched on for the public repositories.
+
+The lesson I took from this: alert counts are a terrible proxy for risk. The repositories with hundreds of alerts were mostly fine once upgraded; the two with real problems had comparatively few.
+
+---
+
+## Documentation, badges and wikis
+
+The last mile was making the estate *look* maintained — because it finally was.
+
+*   **README badges.** A cross-cutting agent added a badges row to the top of 27 READMEs: workflow status for each workflow that actually exists, licence where there is one, runtime version and the key framework. All committed with `[skip ci]`.
+*   **Wikis with custom navigation.** Four of my larger personal products had wikis containing nothing but a placeholder home page. Agents rewrote them from the real code and docs, added a custom `_Sidebar.md` and `_Footer.md` for navigation, and built a publish step that syncs a `wiki/` or `docs/` folder to the GitHub wiki repository, with a dry-run or check mode that validates every sidebar link before publishing. Each wiki was verified by a fresh clone and a link check.
+*   **Rebranding.** Legacy package scopes, module paths, image names and registry URLs were renamed to my own namespace or replaced with open-source equivalents; branding colours and logos were swapped for neutral ones. A final `git grep` per repository confirmed nothing was left.
+
+---
+
+## How it felt, and what it cost
+
+It would be easy to write this up as "AI did my maintenance for me". It didn't. What it did was compress weeks of tedious, context-switching work — reading six migration guides for one Angular app, working out which Gradle plugin version supports which Spring Boot version, tracking down why a Go module won't resolve — into hours of supervised execution. My time went into the things only I could do: setting policy, answering questions, fixing cloud permissions, deciding what to keep and what to retire, and spot-checking the work.
+
+The cost was mostly attention. Running many agents in parallel means many reports arriving at once, and the temptation is to skim them. I learned to insist on a fixed report format (versions, commands, pass/fail, SHA, owner actions) precisely so I could read twenty of them quickly and still spot the one that said "pushed, but E2E fails on the runner".
+
+---
+
+## Lessons learned
+
+| Lesson | What I'd do again (or differently) |
+| --- | --- |
+| A shared brief beats per-agent prompts | One file, read in full by every agent; changes in one place |
+| Policy will change mid-flight | Append an explicit OWNER OVERRIDES section *and* broadcast it to running agents |
+| The brief is code — it can have bugs | Review it like code; my Dependabot mistake was a brief bug, not an agent bug |
+| Group by tech stack | Agents build context in one ecosystem; fewer cross-stack mistakes |
+| Protect work in progress | `git worktree` from the remote branch whenever the clone is dirty |
+| Keep secrets out of context, not just out of commits | "Never read" sensitive files, not just "never commit" them |
+| Verify locally, then confirm green on GitHub | Runners differ from laptops; both layers catch different failures |
+| Minimise pushes when minutes cost money | One verified push per repo, `[skip ci]` for docs |
+| Ask structured questions at real decision points | Options plus a recommendation; record the answer in the brief |
+| Don't force upgrades | Newest compatible version plus a documented blocker beats `--force` |
+| Alert counts aren't risk | Verify against the lockfile; fix real findings in code |
+| Fixed report formats | Makes twenty reports reviewable in minutes |
+| Watch the machine | Disk, memory and container clean-up rules for every agent |
+| Humans own the outcome | I pushed the policy, approved the trade-offs and own the result |
+
+---
+
+## Conclusion
+
+*   I modernised **all 45 repositories** in one programme — latest libraries and **Node 26**, Java/Gradle, Go, Python, Angular, React/Next.js, AWS CDK and Terraform — using **GitHub Copilot CLI** with **parallel background agents**
+*   A **coordinator session** plus a **shared written brief** kept around two dozen agents consistent; **owner overrides** were appended to the brief and broadcast mid-flight
+*   Agents were **grouped by tech stack**, used **git worktrees** to avoid touching work in progress, and were forbidden from reading sensitive files
+*   **Humans stayed at the decision points** — which deploys stay automatic, how to handle legacy references, push strategy, how far to take majors — via structured questions
+*   **Verification was two-layered**: local build, test and smoke run first, then a confirmed green run on GitHub
+*   Real problems — **expired package tokens, OIDC trust policies, missing runner packages, a billing spend limit, peer-dependency blockers** — were handled openly, with owner actions where only a human could act
+*   The result: Dependabot gone, CI minutes cut, **hundreds of stale alerts closed and real CodeQL findings fixed**, badges on every README and wikis that actually document the code
+*   It's the same principle I apply everywhere: **AI accelerates; humans keep accountability**
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

@@ -1,0 +1,558 @@
+---
+title: "Cutting LLM Token Costs with an OpenAI-Compatible Proxy"
+date: "2026-07-30"
+slug: "cutting-llm-token-costs-with-an-openai-compatible-proxy"
+status: "publish"
+feature_image: "/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/feature-image.png"
+tags: ["AI", "LLM", "OpenAI", "GitHub Models", "TypeScript", "Node.js", "Cost Optimisation", "Robert Leggett"]
+
+meta:
+  title: "Cutting LLM Token Costs with an OpenAI-Compatible Proxy | Robert Leggett"
+  description: "How ai-token-minimiser, a small OpenAI-compatible proxy, reduces prompt tokens sent to OpenAI or GitHub Models by stripping whitespace, de-duplicating context, trimming history and caching deterministic responses — without changing what your prompts mean."
+  keywords: ["LLM token cost", "token optimisation", "OpenAI-compatible proxy", "GitHub Models", "prompt tokens", "context window", "response cache", "ai-token-minimiser", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy"
+  image: "https://robertleggett.com.au/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/feature-image.png"
+
+og:
+  type: "article"
+  title: "Cutting LLM Token Costs with an OpenAI-Compatible Proxy"
+  description: "How ai-token-minimiser, a small OpenAI-compatible proxy, reduces prompt tokens sent to OpenAI or GitHub Models by stripping whitespace, de-duplicating context, trimming history and caching deterministic responses — without changing what your prompts mean."
+  image: "https://robertleggett.com.au/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/feature-image.png"
+  url: "https://robertleggett.com.au/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy"
+
+twitter:
+  card: "summary_large_image"
+  title: "Cutting LLM Token Costs with an OpenAI-Compatible Proxy"
+  description: "How ai-token-minimiser, a small OpenAI-compatible proxy, reduces prompt tokens sent to OpenAI or GitHub Models by stripping whitespace, de-duplicating context, trimming history and caching deterministic responses — without changing what your prompts mean."
+  image: "https://robertleggett.com.au/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/feature-image.png"
+---
+
+I'll admit it: the first time I looked properly at what my own tools were sending to a language model, I was a little embarrassed. The question I had typed was one line long. The request that actually went over the wire was thousands of tokens — the same system prompt as every other call, the same file pasted in three times because I'd asked three follow-up questions about it, a long tail of conversation I had mentally moved on from twenty minutes earlier, and an astonishing amount of trailing whitespace. Every one of those tokens was billed, and every one of them had to be read by the model before it could start answering me.
+
+So I built [ai-token-minimiser](https://github.com/Rob-Leggett/ai-token-minimiser), a small **OpenAI-compatible proxy** that sits between your clients and the upstream provider — OpenAI, **GitHub Models**, or any compatible gateway — and removes redundancy from chat completion requests before they leave your machine. It is deliberately conservative: it never rewrites the substance of a message, it only removes things that are provably redundant or older context you have told it you can live without. In this post I'll walk through why tokens matter so much, where the waste actually comes from, exactly how the proxy works (with real code from the repo), how to measure what it saves, and — just as importantly — where it falls short.
+
+---
+
+## Before you start
+
+About this post:
+
+*   12 – 16-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A clear mental model of why prompt tokens drive both cost and latency
+*   A practical breakdown of where token waste comes from in real chat and agent workloads
+*   A walkthrough of an OpenAI-compatible proxy that strips whitespace, de-duplicates messages, trims history and caches deterministic responses
+*   Real measurements of what each preset saves, and how to measure it yourself
+*   An honest list of limitations and trade-offs, including how history trimming interacts with provider-side prompt caching
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why tokens are cost and latency
+
+Large language models do not see characters or words; they see **tokens** — chunks of text produced by a tokeniser, typically three to four characters of English on average. Every hosted model API prices input and output tokens separately, and every request is billed on the full prompt you send, not just the new part you typed. If you have read my [introduction to large language models](/blog/demystifying-large-language-models), you will know that a chat model is stateless: "conversation memory" is simply the client re-sending the entire history on every turn.
+
+That has two consequences that compound quickly.
+
+**Cost grows with conversation length, not with question length.** A ten-turn conversation does not cost ten times a single question; it costs roughly the sum of one, two, three … ten turns of history, because turn ten re-sends turns one to nine. Agent loops are the extreme case, re-sending every previous tool result on every step.
+
+**Latency grows with prompt size too.** Before the model can produce its first output token it has to process the entire prompt (the "prefill" phase). Bigger prompts mean longer time-to-first-token — the latency you actually feel in an editor or chat window.
+
+There is a quality argument too: stale or duplicated material competes for the model's attention with the thing you actually asked about.
+
+---
+
+## Where the waste comes from
+
+Looking at real requests from my own tools — editor assistants, scripts and small agents — the waste fell into a handful of recurring buckets.
+
+### Repeated system prompts
+
+Every request re-sends the same system (or developer) instructions. That is real cost, but instructions define behaviour and their position matters, so this is the part to be most careful with. Most providers now offer automatic **prompt caching** that discounts a stable prompt prefix — a far better answer than rewriting instructions. The proxy deliberately leaves system and developer messages alone.
+
+### Whitespace
+
+This one surprised me. Code pasted from editors carries trailing spaces, tabs at line ends, and runs of blank lines. Generated Markdown and log output are often padded with empty lines. Tokenisers do encode whitespace, so a file with four blank lines between every function costs more than the same file with one. Individually trivial; across a long conversation full of pasted code, it adds up to a few per cent.
+
+### Verbose, duplicated context
+
+The pattern I see most often is "here is the file again". Tools that attach the current file or a set of snippets to every user turn will happily include the identical block five times in one conversation. Agents that re-read the same file between steps do the same. Exact duplicates of large blocks are pure waste: the model already has the first copy in its context.
+
+### History
+
+Finally, conversation history. Most of us have a chat open all day and wander between topics. By mid-afternoon the request for "what does this regex do?" also carries the morning's discussion about a database migration. Older turns are not *redundant* in the strict sense, so removing them is a genuine trade-off — but in practice a sensible budget for recent history loses very little and saves a lot.
+
+| Source of waste | Typical size | Safe to remove? |
+| --- | --- | --- |
+| Trailing spaces and blank-line runs | A few per cent of pasted code | Yes, if indentation and single blank lines are preserved |
+| Exact duplicate context blocks | Can be 30–50% of a code-heavy chat | Yes, keeping the first occurrence |
+| Old conversation turns | Grows without bound | Trade-off — budget it, always keep instructions and the latest turn |
+| Repeated identical deterministic requests | 100% of the repeat | Yes, if the response is deterministic and cached briefly |
+| Repeated system prompt across requests | Fixed per request | Leave it — use provider prompt caching instead |
+
+---
+
+## How the proxy works
+
+The design goal was simple: **change nothing about how I use my tools**. Any client that speaks the OpenAI REST dialect — the official SDKs, editor extensions, CLIs, LangChain, plain `curl` — lets you override its base URL. Point that base URL at the proxy, and it behaves exactly like the upstream API, except that chat completion requests come out the other side smaller.
+
+![Request flow through ai-token-minimiser](/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/inline-1.png)
+
+The proxy is a small **Express 5** application written in TypeScript and running on **Node.js 26**, using **undici** for upstream requests and **gpt-tokenizer** for token estimates. The routing is intentionally narrow:
+
+| Method | Path | Behaviour |
+| --- | --- | --- |
+| `GET` | `/healthz` | Liveness probe, always unauthenticated |
+| `GET` | `/metrics` | Cumulative, content-free savings metrics |
+| `POST` | `/v1/chat/completions` | Minimised, optionally cached, then forwarded |
+| `ANY` | `/v1/*` | Transparent pass-through (embeddings, models, etc.) |
+
+Only `/v1/chat/completions` is touched. Everything else under `/v1` is forwarded unchanged, which means clients that list models or create embeddings through the same base URL keep working without special handling.
+
+### Upstream providers
+
+The upstream is selected by the `UPSTREAM` environment variable, which seeds a default base URL. Here is the relevant part of `src/config.ts`:
+
+```typescript
+const KNOWN_BASE_URLS: Record<string, string> = {
+  openai: 'https://api.openai.com/v1',
+  'github-models': 'https://models.github.ai/inference',
+};
+
+// ...
+const upstream = env.UPSTREAM || 'openai';
+const upstreamBaseUrl =
+  env.UPSTREAM_BASE_URL || KNOWN_BASE_URLS[upstream] || KNOWN_BASE_URLS.openai;
+```
+
+Setting `UPSTREAM=github-models` routes requests to **GitHub Models** using a GitHub token with the `models` scope — a great way to experiment with a range of models using the GitHub account you already have. `UPSTREAM=custom` plus `UPSTREAM_BASE_URL` covers Azure OpenAI, self-hosted OpenAI-compatible servers and gateways.
+
+The forwarder in `src/providers/upstream.ts` is thin by design. It builds the target URL, strips hop-by-hop headers, and — only if an upstream key is configured — replaces the `Authorization` header:
+
+```typescript
+const url = `${config.upstreamBaseUrl}${path}`;
+
+const outHeaders: Record<string, string> = { ...headers };
+// Never forward hop-by-hop / host headers.
+delete outHeaders.host;
+delete outHeaders['content-length'];
+delete outHeaders.connection;
+
+if (config.upstreamApiKey) {
+  outHeaders.authorization = `Bearer ${config.upstreamApiKey}`;
+}
+```
+
+If `UPSTREAM_API_KEY` is empty, the caller's own `Authorization` header passes straight through. That "pass-through mode" is handy when each client already has its own key and you only want the minimisation.
+
+### The minimisation pipeline
+
+At the heart of the proxy is `minimiseRequest` in `src/minimisers/index.ts`. It applies up to three strategies in a fixed order, measuring tokens before and after and recording which strategies actually changed something:
+
+```typescript
+export function minimiseRequest(
+  request: ChatCompletionRequest,
+  config: Config,
+): MinimiseResult {
+  const applied: string[] = [];
+  let messages = request.messages ?? [];
+  const tokensBefore = countMessagesTokens(messages);
+
+  if (config.stripWhitespace) {
+    const next = stripWhitespace(messages);
+    if (countMessagesTokens(next) < countMessagesTokens(messages)) applied.push('strip-whitespace');
+    messages = next;
+  }
+
+  if (config.dedupeMessages) {
+    const next = dedupeMessages(messages);
+    if (next.length < messages.length) applied.push('dedupe-messages');
+    messages = next;
+  }
+
+  if (config.historyTokenBudget > 0) {
+    const next = trimHistory(messages, config.historyTokenBudget);
+    if (next.length < messages.length) applied.push('trim-history');
+    messages = next;
+  }
+
+  const tokensAfter = countMessagesTokens(messages);
+
+  return {
+    request: { ...request, messages },
+    tokensBefore,
+    tokensAfter,
+    appliedStrategies: applied,
+  };
+}
+```
+
+The order is deliberate. Whitespace stripping runs first so that two blocks that differ only by trailing spaces become identical and can be de-duplicated. De-duplication runs before history trimming so that the token budget is spent on unique content rather than on copies. Note also that only `messages` is rewritten; every other field of the request — `model`, `tools`, `response_format`, `max_tokens` and so on — is spread through untouched.
+
+### Strategy 1: strip whitespace
+
+The whitespace minimiser is four regular expressions, and the conservatism is the point:
+
+```typescript
+export function stripWhitespaceText(text: string): string {
+  return text
+    .replace(/[ \t]+(\r?\n)/g, '$1')       // trailing spaces/tabs on each line
+    .replace(/(\r?\n){3,}/g, '\n\n')       // 3+ newlines → one blank line
+    .replace(/^(?:[ \t]*\r?\n)+/, '')      // leading blank lines
+    .replace(/\s+$/, '');                  // trailing whitespace at the end
+}
+```
+
+It never touches leading indentation, so Python, YAML and Makefiles survive intact, and it keeps single blank lines, which are significant in Markdown (paragraph breaks) and help readability in code. It applies to plain string content and to the `text` field of each part in multi-part content, leaving image and other non-text parts alone. The test suite pins this behaviour down explicitly:
+
+```typescript
+it('preserves single blank lines and indentation', () => {
+  const input = 'def f():\n    return 1\n\n    # note';
+  expect(stripWhitespaceText(input)).toBe('def f():\n    return 1\n\n    # note');
+});
+```
+
+### Strategy 2: de-duplicate messages
+
+`dedupeMessages` drops exact-duplicate, non-system messages, keeping the first occurrence in place:
+
+```typescript
+const MIN_LENGTH = 40;
+
+export function dedupeMessages(messages: ChatMessage[]): ChatMessage[] {
+  const seen = new Set<string>();
+  const result: ChatMessage[] = [];
+
+  for (const message of messages) {
+    if (message.role === 'system' || message.role === 'developer') {
+      result.push(message);
+      continue;
+    }
+    const text = messageText(message);
+    const key = `${message.role}:${text}`;
+    if (text.length >= MIN_LENGTH && seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(message);
+  }
+
+  return result;
+}
+```
+
+Three design choices are worth calling out:
+
+*   **System and developer messages are never removed.** Even if a client sends the same instruction twice, the repetition and position may be intentional ("remember: answer in JSON" at the end of a long prompt is a common technique).
+*   **The key includes the role.** A user pasting a block and an assistant echoing it back are different events in the conversation.
+*   **Short messages are ignored.** Under 40 characters, repeated turns like "continue", "yes" or "try again" are normal conversation, not waste. Collapsing them would change the meaning of the dialogue.
+
+### Strategy 3: trim history to a token budget
+
+History trimming is the strategy with the biggest savings and the most judgement involved, so its rules are explicit. All system and developer messages are kept and their tokens are subtracted from the budget first. Then the function walks backwards from the newest message, keeping turns until the next one would exceed the remaining budget. The last message is always kept, because it is almost always the active request:
+
+```typescript
+let remaining = tokenBudget - systemTokens;
+const keep = new Set<number>(systemIdx);
+
+for (let i = messages.length - 1; i >= 0; i--) {
+  if (keep.has(i)) continue;
+  const cost = countMessageTokens(messages[i]);
+  const isLast = i === messages.length - 1;
+  if (remaining - cost < 0 && !isLast) break;
+  remaining -= cost;
+  keep.add(i);
+}
+
+const trimmed = messages.filter((_, i) => keep.has(i));
+
+// Drop leading tool messages that lost their triggering assistant turn.
+while (trimmed.length && trimmed[0].role === 'tool') {
+  trimmed.shift();
+}
+```
+
+Notice the `break`: as soon as one older message does not fit, trimming stops. The result is always a **contiguous** window of recent turns, never a patchwork of "whatever happened to fit". A conversation with a hole in the middle is more confusing to a model than one that simply starts later.
+
+![History trimming keeps instructions and a contiguous recent window](/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/inline-2.png)
+
+### Strategy 4: cache deterministic responses
+
+The biggest possible saving is not sending the request at all. When a request is deterministic — `temperature` exactly `0` and not streaming — the proxy keys it with a SHA-256 hash of its canonical form and keeps the response body in an in-memory **TTL + LRU** cache:
+
+```typescript
+static isCacheable(request: ChatCompletionRequest): boolean {
+  if (request.stream) return false;
+  const temp = request.temperature ?? 1;
+  return temp === 0;
+}
+
+static keyFor(request: ChatCompletionRequest): string {
+  const canonical = JSON.stringify({
+    model: request.model,
+    messages: request.messages,
+    temperature: request.temperature ?? 1,
+    top_p: request.top_p ?? 1,
+    seed: request.seed ?? null,
+  });
+  return createHash('sha256').update(canonical).digest('hex');
+}
+```
+
+Two subtleties. First, an omitted temperature is treated as `1` (the API default), so only callers that explicitly ask for determinism are cached. Second, the key is computed over the **minimised** request, so two requests that differ only by whitespace or a duplicated block share a cache entry. Only successful (`200`) upstream responses are stored. The cache uses the insertion order of a JavaScript `Map` for LRU: a `get` deletes and re-inserts the entry to mark it as recently used, and a `set` at capacity evicts the first (oldest) key. Entries expire after `RESPONSE_CACHE_TTL_SECONDS` (default one hour), and nothing is ever written to disk.
+
+This shines for evaluation harnesses and CI checks that ask the same question repeatedly.
+
+---
+
+## Meaning preservation
+
+The rule I set for myself was that every transformation must be **lossless to meaning**: remove redundancy or older context, never paraphrase, summarise or compress the substance of a message. That rules out some tempting techniques — LLM-based summarisation of history, stop-word removal, abbreviation dictionaries — that can save more tokens but quietly change what the model sees.
+
+Here is how each strategy holds that line:
+
+| Strategy | What it removes | What it guarantees |
+| --- | --- | --- |
+| `strip-whitespace` | Trailing spaces, 3+ blank lines, leading/trailing blank lines | Indentation and single blank lines preserved; never adds characters |
+| `dedupe-messages` | Second and later identical non-system messages of 40+ characters | First copy kept in place; system/developer messages never touched |
+| `trim-history` | Oldest non-system turns beyond the budget | System messages and the latest message always kept; window is contiguous |
+| Response cache | The upstream call itself | Only for `temperature: 0`, non-streaming, successful responses |
+
+History trimming is the one strategy that genuinely removes information, which is why it is disabled entirely in the `safe` preset. Usefully, it nudges me to put durable instructions in the system prompt, where they belong, rather than burying them in turn three of a long conversation.
+
+---
+
+## Streaming
+
+Streaming responses (`"stream": true`) are fully supported, and the important point is that **minimisation still applies** — the request is shrunk before it is sent, regardless of how the response comes back. The difference is on the response side. The proxy sets its savings headers, copies the upstream status and headers (minus `content-length`, `transfer-encoding` and `connection`, which Node manages itself), and then simply pipes the upstream server-sent events stream to the client:
+
+```typescript
+copyResponseHeaders(res, upstream.headers);
+res.status(upstream.status);
+
+if (minimised.stream) {
+  upstream.body.pipe(res);
+  return;
+}
+```
+
+There is no buffering, so time-to-first-token is unaffected by the proxy beyond a local network hop. Streaming requests are never cached — `isCacheable` rejects them up front — because buffering a stream to cache it would defeat the purpose of streaming.
+
+---
+
+## Configuration and presets
+
+All configuration comes from environment variables, loaded from a git-ignored `.env`. Rather than making you tune every toggle, a `MINIMISE_PRESET` seeds sensible defaults, and any explicit variable overrides the preset:
+
+| Preset | Strip whitespace | Dedupe | History budget | Cache |
+| --- | --- | --- | --- | --- |
+| `off` | – | – | disabled | – |
+| `safe` | ✓ | ✓ | disabled | – |
+| `balanced` (default) | ✓ | ✓ | 6,000 tokens | ✓ |
+| `aggressive` | ✓ | ✓ | 3,000 tokens | ✓ |
+
+A typical `.env` for GitHub Models looks like this (placeholders only — never commit the real file):
+
+```bash
+PORT=8787
+HOST=127.0.0.1
+
+UPSTREAM=github-models
+UPSTREAM_API_KEY=<a GitHub token with the models scope>
+PROXY_API_KEY=<a long random string>
+
+MINIMISE_PRESET=balanced
+HISTORY_TOKEN_BUDGET=8000       # overrides the preset's 6000
+RESPONSE_CACHE_TTL_SECONDS=1800
+RESPONSE_CACHE_MAX_ENTRIES=500
+LOG_LEVEL=info
+```
+
+A few security defaults are worth highlighting because a proxy that holds an API key is an attractive target:
+
+*   **Loopback by default.** `HOST` defaults to `127.0.0.1`, so the proxy is not reachable from your network unless you deliberately change it.
+*   **Optional shared secret.** If `PROXY_API_KEY` is set, every route except `/healthz` requires `Authorization: Bearer <that key>`, otherwise you get a `401` with an OpenAI-style error envelope. Because the same header is what gets forwarded upstream, set `UPSTREAM_API_KEY` as well whenever you use `PROXY_API_KEY` — the configured upstream key then replaces the proxy key on the outbound request.
+*   **No content persistence.** Prompts and responses are never logged at `info` level and never written to disk. Debug logging records token counts and strategy names, not content.
+*   **Errors are honest.** A missing `messages` array returns `400`; an unreachable upstream returns `502` with type `upstream_error`; upstream errors such as a `429` rate limit are passed through with their original status and body, so client retry logic keeps working.
+
+---
+
+## Measuring savings
+
+A cost optimisation you cannot measure is just a feeling. The proxy reports savings in two places.
+
+**Per request**, chat completion responses carry headers:
+
+```text
+x-token-minimiser-tokens-before: 23649
+x-token-minimiser-tokens-after: 5551
+x-token-minimiser-strategies: strip-whitespace,dedupe-messages,trim-history
+```
+
+When a response is served from the cache, you get `x-token-minimiser-cache: HIT` instead, and no upstream call is made at all.
+
+**Cumulatively**, `GET /metrics` returns an aggregate snapshot for the life of the process — counts and totals only, never content:
+
+```json
+{
+  "requests": 42,
+  "cacheHits": 6,
+  "tokensBefore": 318204,
+  "tokensAfter": 121877,
+  "tokensSaved": 196327,
+  "savingsPercent": 61.7,
+  "cacheSize": 6
+}
+```
+
+A cache hit is counted as a full saving: its "before" tokens are added to the total, and nothing is added to "after", because nothing was sent upstream.
+
+### How tokens are counted
+
+Token counts come from `gpt-tokenizer` using the `cl100k_base` encoding, plus a fixed overhead of four tokens per message for role markers and delimiters, falling back to a characters-divided-by-four heuristic if encoding fails. That is a good proxy across modern OpenAI-family models, but it is an **estimate for budgeting and reporting, not your bill**. Newer models use different encodings, and providers add their own per-request overheads. For billing truth, compare your provider's usage dashboard (or the `usage` object in responses) before and after enabling the proxy; use the headers and `/metrics` to understand *where* the savings come from.
+
+### Real numbers
+
+To give a feel for the scale, I ran the proxy's own `minimiseRequest` against a synthetic but realistic coding conversation: a long system prompt, a TypeScript file pasted with editor-style trailing whitespace and blank-line runs, and twelve rounds of "here is the file again, what should I change?" with the file also attached as context each round, followed by verbose assistant answers and a final short question. That is 38 messages and 23,649 estimated tokens.
+
+| Configuration | Tokens after | Saving | Messages sent | Strategies applied |
+| --- | --- | --- | --- | --- |
+| Whitespace only | 22,198 | 6.1% | 38 / 38 | strip-whitespace |
+| `safe` | 13,321 | 43.7% | 27 / 38 | strip-whitespace, dedupe-messages |
+| `balanced` | 5,551 | 76.5% | 13 / 38 | + trim-history (6,000) |
+| `aggressive` | 2,479 | 89.5% | 7 / 38 | + trim-history (3,000) |
+
+![Measured savings by preset on a code-heavy conversation](/blog/cutting-llm-token-costs-with-an-openai-compatible-proxy/inline-3.png)
+
+That shape matches my day-to-day experience: whitespace is a small free win, de-duplication is where code-heavy chats lose most of their fat, and history trimming is the big lever where you choose your risk appetite. For contrast, a short, clean two-message prompt went from 25 tokens to 25 — the proxy does nothing when there is nothing to do.
+
+---
+
+## Limitations and trade-offs
+
+I would rather you hear the sharp edges from me than discover them in production.
+
+**History trimming can defeat provider prompt caching.** Providers that discount a repeated prompt *prefix* reward you for keeping the start of the prompt identical between calls. A sliding history window changes the content immediately after the system prompt every time the window moves, so the cacheable prefix may shrink to just the system prompt. For long, stable conversations on a provider with generous prefix caching, a larger budget (or `safe`) may cost less overall than aggressive trimming. Measure both.
+
+**Trimming removes information.** It is the one non-lossless strategy. If the model needs a decision from an hour ago, either put it in the system prompt or raise the budget. The latest message is always kept even if it alone exceeds the budget, so the budget is a target rather than a hard cap.
+
+**Tool-calling conversations need care.** Two things here. The dangling-tool guard only drops `tool` messages that end up at the very *front* of the trimmed list; when a system message is present it is first, so an orphaned tool result straight after it can survive. And de-duplication keys on role and text, not `tool_call_id`, so two identical tool outputs of 40+ characters will lose the second one, which some providers reject because every tool call expects a response. For agent workloads that call the same tool repeatedly, set `DEDUPE_MESSAGES=false` until I tighten both rules — they are on my list.
+
+**The cache key is narrow.** It covers `model`, `messages`, `temperature`, `top_p` and `seed`. Requests that differ only in `tools`, `response_format` or `max_tokens` but are otherwise identical will share an entry. That is fine for the evaluation-style workloads the cache is designed for, but if you vary those fields with `temperature: 0`, turn `RESPONSE_CACHE` off. The cache is also per process and in memory: it does not survive restarts and is not shared between instances, which is a privacy feature as much as a limitation.
+
+**Only chat completions are minimised.** Every other `/v1/*` route — including newer APIs such as the Responses API — is passed through untouched.
+
+**Estimates are estimates.** Savings are reported using `cl100k_base`, not the target model's own tokeniser.
+
+**It is another hop.** On loopback the latency is negligible, but if you share it across a team, put it behind proper authentication and TLS rather than simply binding to `0.0.0.0`.
+
+| Concern | Recommendation |
+| --- | --- |
+| Long, stable chats on a provider with prefix caching | Try `safe` or a large budget and compare bills |
+| Heavy tool-calling agents | `DEDUPE_MESSAGES=false`, generous history budget |
+| Evaluation runs with `temperature: 0` | `balanced` — the cache does the heavy lifting |
+| Everyday editor and chat use | `balanced` |
+| Cost-sensitive batch summarisation of independent prompts | `aggressive` is fine; history rarely matters |
+
+---
+
+## How to run it
+
+The repository requires **Node.js 26** (there is an `.nvmrc`) and npm 11.
+
+```bash
+git clone https://github.com/Rob-Leggett/ai-token-minimiser.git
+cd ai-token-minimiser
+npm install
+
+cp .env.example .env
+# edit .env: set UPSTREAM_API_KEY (and UPSTREAM / UPSTREAM_BASE_URL if not OpenAI)
+
+npm run build && npm start
+# or, with live reload during development
+npm run dev
+```
+
+You should see something like:
+
+```text
+ai-token-minimiser listening on http://127.0.0.1:8787 → upstream openai (https://api.openai.com/v1) [preset: balanced]
+```
+
+Check it is alive and send a request with `-i` so you can see the savings headers:
+
+```bash
+curl http://127.0.0.1:8787/healthz
+# {"status":"ok","upstream":"openai"}
+
+curl -i http://127.0.0.1:8787/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Hello!"}]}'
+```
+
+Then point your tools at it. With the official SDKs that is a single environment variable or constructor argument:
+
+```bash
+export OPENAI_BASE_URL="http://127.0.0.1:8787/v1"
+```
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:8787/v1")
+client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hi"}],
+)
+```
+
+Any editor extension, CLI or framework that lets you override the OpenAI base URL can route through the proxy in the same way. The repository also ships an **OpenAPI 3.1** specification and a **Postman collection** with example success and error responses, which make it easy to explore the API without writing any code.
+
+### Testing it
+
+The test suite uses **Vitest** and **supertest**, with undici's `MockAgent` standing in for the upstream so no real network calls are made. The cache test is my favourite: it registers exactly *one* upstream interceptor and sends the same deterministic request twice, so if the second call went upstream the test would fail.
+
+```bash
+npm test           # vitest
+npm run typecheck  # tsc --noEmit
+npm run lint       # eslint
+```
+
+---
+
+## Where I'd take it next
+
+The proxy is intentionally small, and I want to keep it that way, but the next improvements are clear: tool-call-aware trimming and de-duplication that treat an assistant tool call and its responses as one unit, model-aware token counting, a broader cache key, prefix-cache-friendly trimming that moves the window in larger steps, and support for the Responses API.
+
+If you are building something more ambitious — retrieval over your own documents, or agents that need curated context rather than raw history — my posts on [retrieval-augmented generation](/blog/retrieval-augmented-generation-rag-grounding-ai-in-enterprise-data) and [prompt engineering](/blog/prompt-engineering-art-and-science-of-communicating-with-ai) go deeper on putting the *right* tokens in the prompt, which is the other half of putting fewer of them there.
+
+---
+
+## Conclusion
+
+*   **Prompt tokens drive both cost and latency**, and because chat models are stateless, history is re-sent and re-billed on every turn
+*   **Waste comes from predictable places**: trailing whitespace, duplicated context blocks, ever-growing history and repeated identical requests
+*   [ai-token-minimiser](https://github.com/Rob-Leggett/ai-token-minimiser) is an **OpenAI-compatible proxy** — point any client's base URL at it and it works with OpenAI, GitHub Models or any compatible gateway
+*   It applies **lossless-to-meaning strategies** in a deliberate order — strip whitespace, de-duplicate, trim history to a budget — and caches deterministic (`temperature: 0`) responses in memory
+*   **System and developer messages are never removed**, the latest message is always kept, and history is trimmed as a contiguous window
+*   **Streaming is supported** with no buffering; minimisation still applies to the request
+*   **Savings are visible** per request via `x-token-minimiser-*` headers and cumulatively via `/metrics`; on a code-heavy conversation the presets saved between 44% and 90%
+*   **Know the trade-offs**: trimming can reduce provider prefix-cache hits, tool-heavy agents need care, and token counts are estimates, not your bill
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)
