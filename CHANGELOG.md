@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.2.0...v1.2.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **blog:** render Actions minutes checklist as a list instead of a wide table ([479e32e](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/479e32e5fa8bd4aa9b20c7d25fa46b21cafff048))
+
 # [1.2.0](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.1.0...v1.2.0) (2026-10-24)
 
 
