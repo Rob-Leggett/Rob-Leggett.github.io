@@ -1,3 +1,10 @@
+## [1.0.22](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.21...v1.0.22) (2026-10-24)
+
+
+### Bug Fixes
+
+* **content:** correct broken owner links and harden CI; patch audit findings ([4b3c90d](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/4b3c90dc437d0366dbeb8a2c52ea04674f6d3e54))
+
 ## [1.0.21](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.20...v1.0.21) (2026-10-24)
 
 
