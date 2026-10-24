@@ -63,6 +63,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <script
         dangerouslySetInnerHTML={{
           __html: `
+            (function () {
+              try {
+                var q = new URLSearchParams(location.search).get('analytics');
+                if (q === 'off') localStorage.setItem('analytics-opt-out', '1');
+                if (q === 'on') localStorage.removeItem('analytics-opt-out');
+                var automated = navigator.webdriver ||
+                  /HeadlessChrome|bot|crawl|spider|slurp|lighthouse|pagespeed|puppeteer|playwright|phantomjs|selenium|python|curl|wget|httpclient|preview/i.test(navigator.userAgent);
+                if (automated || localStorage.getItem('analytics-opt-out') === '1') window['ga-disable-${GA_ID}'] = true;
+              } catch (e) {}
+            })();
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());

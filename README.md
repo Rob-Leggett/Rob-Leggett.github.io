@@ -218,4 +218,6 @@ Custom events (all sent through `lib/analytics.ts`):
 
 `link_location` comes from the nearest `data-analytics-region` attribute (or header/footer/article). Generic outbound clicks, scrolls and file downloads are left to GA4 enhanced measurement.
 
+Analytics is switched off for automated browsers (`navigator.webdriver`) and bot/crawler user agents, which removes most data-centre traffic. To exclude your own visits on any network, open the site once with `?analytics=off` in each browser you use; `?analytics=on` re-enables it.
+
 To report on custom parameters, register them in GA4 (Admin → Custom definitions) and mark `post_read_complete`, `share`, `contact_click` and `resume_download` as key events.
