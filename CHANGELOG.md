@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.22...v1.1.0) (2026-10-24)
+
+
+### Features
+
+* **blog:** add 11 posts (Aug–Oct 2026) on AI-assisted delivery, integration, data, observability, testing, rules engines and modular UI ([c8bdb69](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/c8bdb693b1ac1d8b60b3dd85e4dd71e955abfd29))
+
 ## [1.0.22](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.21...v1.0.22) (2026-10-24)
 
 
