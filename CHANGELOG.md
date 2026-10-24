@@ -1,3 +1,10 @@
+## [1.0.21](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.20...v1.0.21) (2026-10-24)
+
+
+### Bug Fixes
+
+* **deps:** upgrade all dependencies to latest ([cc61e06](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/cc61e06f7676b1fa365a577d8eda97cbab62d308))
+
 ## [1.0.20](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.0.19...v1.0.20) (2026-03-17)
 
 
