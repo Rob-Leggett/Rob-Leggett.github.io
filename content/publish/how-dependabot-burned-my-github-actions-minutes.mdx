@@ -467,23 +467,21 @@ If you work in a team rather than alone, the calculus is different: someone is u
 
 Here's the checklist I now apply to every repository. Copy it into your own repo template.
 
-| ✓ | Guard rail | Why |
-| --- | --- | --- |
-| ☐ | Check usage per repo with `gh api /users/<user>/settings/billing/usage?year=..&month=..` | Find the real offender before fixing anything |
-| ☐ | Remove `dependabot.yml` **or** make it weekly, grouped, limited, no rebase | Stop robot-driven runs, or make them cheap |
-| ☐ | Remove Dependabot auto-merge workflows | They trigger deploy pipelines on main |
-| ☐ | Disable automated security fixes if you don't want PRs (keep alerts on) | They open PRs independently of `dependabot.yml` |
-| ☐ | Close stale bot PRs and delete their branches | Each rebase is another full run |
-| ☐ | `push` limited to `branches: [main]` | Bare `push:` builds every branch |
-| ☐ | Avoid large matrices; loop inside one job when scripts are recursive | Per-job rounding and repeated setup |
-| ☐ | `paths` / `paths-ignore` for docs (exceptions listed last) | Docs changes shouldn't build services |
-| ☐ | `concurrency` with `cancel-in-progress` on PRs | Superseded runs are wasted minutes |
-| ☐ | `timeout-minutes` on every job | Default is six hours |
-| ☐ | Schedules at most weekly; E2E and scans weekly or manual | Schedules run even when nothing changed |
-| ☐ | Deploys `workflow_dispatch` only; boolean input gates release jobs | Releasing becomes deliberate |
-| ☐ | `[skip ci]` on docs-only commits | Free and instant |
-| ☐ | Spending limit set deliberately | Fail safe instead of a surprise bill |
-| ☐ | Make repos public where nothing sensitive exists | Standard runners are free for public repos |
+1. **Check usage per repo with `gh api /users/<user>/settings/billing/usage?year=..&month=..`** — Find the real offender before fixing anything
+2. **Remove `dependabot.yml`, or make it weekly, grouped, limited, no rebase** — Stop robot-driven runs, or make them cheap
+3. **Remove Dependabot auto-merge workflows** — They trigger deploy pipelines on main
+4. **Disable automated security fixes if you don't want PRs (keep alerts on)** — They open PRs independently of `dependabot.yml`
+5. **Close stale bot PRs and delete their branches** — Each rebase is another full run
+6. **`push` limited to `branches: [main]`** — Bare `push:` builds every branch
+7. **Avoid large matrices; loop inside one job when scripts are recursive** — Per-job rounding and repeated setup
+8. **`paths` / `paths-ignore` for docs (exceptions listed last)** — Docs changes shouldn't build services
+9. **`concurrency` with `cancel-in-progress` on PRs** — Superseded runs are wasted minutes
+10. **`timeout-minutes` on every job** — Default is six hours
+11. **Schedules at most weekly; E2E and scans weekly or manual** — Schedules run even when nothing changed
+12. **Deploys `workflow_dispatch` only; boolean input gates release jobs** — Releasing becomes deliberate
+13. **`[skip ci]` on docs-only commits** — Free and instant
+14. **Spending limit set deliberately** — Fail safe instead of a surprise bill
+15. **Make repos public where nothing sensitive exists** — Standard runners are free for public repos
 
 ---
 
