@@ -35,7 +35,7 @@ export default function BlogFeed() {
   }, []);
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 auto-rows-fr">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 auto-rows-fr" data-analytics-region="blog_feed">
       {posts.map((p) => (
         <Card
           key={p.slug}

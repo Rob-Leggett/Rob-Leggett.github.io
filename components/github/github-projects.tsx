@@ -90,7 +90,7 @@ export default function GitHubProjects({
     );
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-analytics-region="github_projects">
         {repos.map((r) => (
           <Card
             key={r.id}
@@ -145,7 +145,7 @@ export default function GitHubProjects({
 
 function SkeletonGrid() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-analytics-region="github_projects">
       {Array.from({ length: 8 }).map((_, i) => (
         <div
           key={i}

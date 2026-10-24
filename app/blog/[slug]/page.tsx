@@ -34,7 +34,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const twitter = data.twitter ?? {};
 
   return {
-    title: meta.title || data.title,
+    // meta.title already ends with "| Robert Leggett", so bypass the layout title template.
+    title: meta.title ? { absolute: meta.title } : data.title,
     description: meta.description,
     keywords: meta.keywords as string[] | undefined,
     authors: meta.author ? [{ name: meta.author }] : undefined,
@@ -95,7 +96,7 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
           { name: data.title, url: `https://robertleggett.com.au/blog/${slug}/` },
         ])}
       />
-      <BlogLayout title={data.title} date={data.date} slug={slug} feature_image={data.feature_image}>
+      <BlogLayout title={data.title} date={data.date} slug={slug} feature_image={data.feature_image} tags={Array.isArray(data.tags) ? data.tags : []}>
       <article
         className="
           prose prose-neutral dark:prose-invert max-w-none

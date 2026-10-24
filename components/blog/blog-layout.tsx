@@ -1,12 +1,14 @@
 import Image from "next/image";
 import React from "react";
 import ShareBar from "@/components/blog/share-bar";
+import PostReadTracker from "@/components/blog/post-read-tracker";
 
 type BlogLayoutProps = {
   title: string;
   date: string;
   slug: string;
   feature_image?: string;
+  tags?: string[];
   children: React.ReactNode;
 };
 
@@ -15,6 +17,7 @@ export default function BlogLayout({
    date,
    slug,
    feature_image,
+   tags,
    children,
  }: BlogLayoutProps) {
   return (
@@ -46,11 +49,15 @@ export default function BlogLayout({
             day: "numeric",
           })}
         </p>
-        <ShareBar title={title} slug={slug} />
+        <div data-analytics-region="share_top">
+          <ShareBar title={title} slug={slug} />
+        </div>
       </div>
 
       {/* Body */}
       <div
+        id="post-body"
+        data-analytics-region="post_body"
         className="prose dark:prose-invert prose-lg prose-pre:bg-card prose-pre:text-card-foreground
                    prose-code:text-primary
                    prose-headings:font-semibold prose-img:rounded-lg
@@ -66,9 +73,10 @@ export default function BlogLayout({
       >
         {children}
       </div>
+      <PostReadTracker slug={slug} title={title} date={date} tags={tags} targetId="post-body" />
 
       {/* Bottom share bar */}
-      <div className="mt-12 pt-6 border-t border-border">
+      <div className="mt-12 pt-6 border-t border-border" data-analytics-region="share_bottom">
         <p className="text-sm text-muted-foreground mb-3">
           Enjoyed this post? Share it with others.
         </p>

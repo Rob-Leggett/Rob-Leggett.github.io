@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Check } from 'lucide-react';
+import { track } from '@/lib/analytics';
 
 type Props = {
   language?: string;
@@ -31,6 +32,11 @@ export default function CodeBlock({ language = 'text', value, filename }: Props)
         document.body.removeChild(ta);
       }
       setCopied(true);
+      track('copy_code', {
+        language,
+        post_slug: window.location.pathname.replace(/^\/blog\/|\/$/g, ''),
+        line_count: value.split('\n').length,
+      });
       setTimeout(() => setCopied(false), 1800);
     } catch (e) {
       console.error('Failed to copy code', e);

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Link2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LinkedInIcon } from "@/components/icons/linkedin-icon";
+import { track } from "@/lib/analytics";
 
 const SITE_URL = "https://robertleggett.com.au";
 
@@ -54,6 +55,7 @@ export default function ShareBar({ title, slug }: ShareBarProps) {
   ];
 
   const handleCopy = async () => {
+    track("share", { method: "copy_link", content_type: "blog_post", item_id: slug });
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);

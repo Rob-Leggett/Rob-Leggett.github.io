@@ -4,6 +4,7 @@ import * as React from "react";
 import { useTheme } from "next-themes";
 import { themes, themesByCategory, type ThemeDefinition } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+import { track } from "@/lib/analytics";
 
 const subscribeNoop = () => () => {};
 
@@ -43,6 +44,7 @@ export function ThemeSwitcher({ className }: { className?: string }) {
   const ThemeButton = ({ t }: { t: ThemeDefinition }) => (
     <button
       onClick={() => {
+        if (t.value !== theme) track("theme_change", { theme: t.value, previous_theme: theme ?? "unknown" });
         setTheme(t.value);
         setIsOpen(false);
       }}

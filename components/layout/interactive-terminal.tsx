@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { motion } from "framer-motion";
+import { track } from "@/lib/analytics";
 
 type TerminalLine = {
   type: "prompt" | "output" | "error" | "info" | "ascii";
@@ -271,6 +272,10 @@ export function InteractiveTerminal() {
 
       setCommandHistory((prev) => [...prev, trimmed]);
       setHistoryIndex(-1);
+
+      // Only the command name is recorded, never the arguments or free text.
+      const known = lowerCmd in COMMANDS || ["clear", "exit", "history"].includes(lowerCmd);
+      track("terminal_command", { command: known ? lowerCmd : "unknown" });
 
       // Prompt echo
       const newLines: TerminalLine[] = [

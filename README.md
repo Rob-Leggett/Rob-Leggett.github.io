@@ -197,3 +197,25 @@ Themes are defined in `lib/themes.ts` with corresponding CSS custom properties i
 ## 📊 Analytics
 
 Google Analytics 4 tracks page views with automatic route-change detection via a client-side `AnalyticsListener` component.
+
+Custom events (all sent through `lib/analytics.ts`):
+
+| Event | When | Key parameters |
+| --- | --- | --- |
+| `page_view` | Every route change | `content_group` (home / blog_index / blog_post) |
+| `post_view` | A blog post opens | `post_slug`, `post_title`, `post_date`, `post_tags` |
+| `read_progress` | 25 / 50 / 75 / 100% of a post read | `percent_scrolled`, post params |
+| `post_read_complete` | Post end reached after at least 30s | `read_time_seconds`, post params |
+| `share` | Share button or copy link | `method`, `item_id` |
+| `copy_code` | Code block copied | `language`, `post_slug`, `line_count` |
+| `select_content` | Blog post or GitHub repo link clicked | `content_type`, `item_id`, `link_location` |
+| `contact_click` / `social_click` / `resume_download` | Email, LinkedIn/GitHub profile, resume PDF | `link_location` |
+| `rss_click` | RSS feed link | `link_location` |
+| `theme_change` | Theme picked | `theme`, `previous_theme` |
+| `terminal_command` | Command run in the home terminal (name only) | `command` |
+| `page_not_found` | 404 page shown | `page_path`, `page_referrer` |
+| `CLS` / `LCP` / `INP` / `TTFB` / `FCP` | Core Web Vitals | `metric_value`, `metric_rating` |
+
+`link_location` comes from the nearest `data-analytics-region` attribute (or header/footer/article). Generic outbound clicks, scrolls and file downloads are left to GA4 enhanced measurement.
+
+To report on custom parameters, register them in GA4 (Admin → Custom definitions) and mark `post_read_complete`, `share`, `contact_click` and `resume_download` as key events.
