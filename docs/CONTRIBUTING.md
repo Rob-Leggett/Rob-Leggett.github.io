@@ -6,7 +6,7 @@ This guide covers how to work with the codebase — adding blog posts, modifying
 
 ## Prerequisites
 
-- **Node.js** 24 LTS (`nvm use 24`)
+- **Node.js** 26 (`nvm use`, reads `.nvmrc`)
 - **npm** 10+
 - **Git** with conventional commit knowledge
 

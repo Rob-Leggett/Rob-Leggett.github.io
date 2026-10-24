@@ -162,7 +162,7 @@ The site is statically exported (`output: "export"`) and deployed to GitHub Page
 
 - **Build output**: `out/` directory
 - **Custom domain**: `robertleggett.com.au` (configured via `CNAME`)
-- **Node version**: 24 LTS
+- **Node version**: 26 (`.nvmrc`)
 - **Triggers**: push to `main` (Markdown/`docs/**`-only changes are skipped) or manual dispatch
 
 ### GitHub Pages Configuration

@@ -3,6 +3,9 @@
   "version": "1.0.22",
   "type": "module",
   "private": true,
+  "engines": {
+    "node": ">=26"
+  },
   "scripts": {
     "script:generate-post-index": "node scripts/generate-post-index.js",
     "script:generate-rss": "node scripts/generate-rss.js",
@@ -53,7 +56,7 @@
     "@semantic-release/git": "^11.0.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/typography": "^0.5.20",
-    "@types/node": "^24.19.2",
+    "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/react-syntax-highlighter": "^15.5.13",

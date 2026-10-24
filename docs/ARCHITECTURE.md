@@ -262,7 +262,7 @@ Theme variables are defined in `lib/themes.ts` and applied via `app/globals.css`
 ```
 Trigger: push to main (ignores **/*.md, docs/**, wiki/**) | manual dispatch
 → Checkout
-→ Setup Node 24 + npm cache
+→ Setup Node 26 + npm cache
 → npm ci
 → npm run build (pre-build scripts + next build)
 → Upload /out as artifact
@@ -274,13 +274,11 @@ Trigger: push to main (ignores **/*.md, docs/**, wiki/**) | manual dispatch
 ```
 Trigger: push to main (ignores **/*.md, docs/**, wiki/**; serialised via concurrency group)
 → Checkout (fetch-depth: 0)
-→ Setup Node 24
+→ Setup Node 26
 → npm ci
 → npx semantic-release
 → Creates version tag, CHANGELOG entry, GitHub release
 ```
-
-Dependabot (`.github/dependabot.yml`) checks npm and GitHub Actions weekly (Monday 06:00 Australia/Sydney), grouping minor/patch updates into a single PR (max 3 open PRs).
 
 ### Conventional Commits
 
