@@ -1,5 +1,7 @@
 # Robert Leggett — Portfolio & Blog
 
+[![Deploy Pages](https://github.com/Rob-Leggett/Rob-Leggett.github.io/actions/workflows/pages.yml/badge.svg?branch=main)](https://github.com/Rob-Leggett/Rob-Leggett.github.io/actions/workflows/pages.yml) [![Release](https://github.com/Rob-Leggett/Rob-Leggett.github.io/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/Rob-Leggett/Rob-Leggett.github.io/actions/workflows/release.yml) [![Node.js 26](https://img.shields.io/badge/Node.js-26-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/) [![Next.js 16.4](https://img.shields.io/badge/Next.js-16.4-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/) [![React 19.3](https://img.shields.io/badge/React-19.3-61DAFB?logo=react&logoColor=white)](https://react.dev/) [![TypeScript 6.0](https://img.shields.io/badge/TypeScript-6.0-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/) [![Tailwind CSS 4.3](https://img.shields.io/badge/Tailwind%20CSS-4.3-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+
 A personal portfolio and blog at [robertleggett.com.au](https://robertleggett.com.au), showcasing writing, projects, and technical leadership across cloud, AI, and software engineering.
 
 ## Tech Stack
