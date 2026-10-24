@@ -1,0 +1,655 @@
+---
+title: "Deep Dive - Event-Driven Integration Platforms on Azure"
+date: "2026-09-03"
+slug: "deep-dive-event-driven-integration-platforms-on-azure"
+status: "publish"
+feature_image: "/blog/deep-dive-event-driven-integration-platforms-on-azure/feature-image.png"
+tags: ["Azure", "Event-Driven Architecture", "Azure Service Bus", "Azure Functions", "Cosmos DB", "Integration", "Terraform", "TypeScript", "SaaS Integration", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Event-Driven Integration Platforms on Azure | Robert Leggett"
+  description: "How to integrate SaaS line-of-business systems on Azure with Service Bus topics and sessions, Flex Consumption Functions, upstream and downstream handlers, canonical events, idempotency, the outbox pattern, dead-lettering and replay, distributed tracing, private endpoints and Terraform modules."
+  keywords: ["Azure Service Bus", "Azure Functions Flex Consumption", "event-driven integration", "canonical events", "anti-corruption layer", "idempotency", "outbox pattern", "dead-letter queue", "Cosmos DB", "Terraform", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-event-driven-integration-platforms-on-azure"
+  image: "https://robertleggett.com.au/blog/deep-dive-event-driven-integration-platforms-on-azure/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Event-Driven Integration Platforms on Azure"
+  description: "How to integrate SaaS line-of-business systems on Azure with Service Bus topics and sessions, Flex Consumption Functions, upstream and downstream handlers, canonical events, idempotency, the outbox pattern, dead-lettering and replay, distributed tracing, private endpoints and Terraform modules."
+  image: "https://robertleggett.com.au/blog/deep-dive-event-driven-integration-platforms-on-azure/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-event-driven-integration-platforms-on-azure"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Event-Driven Integration Platforms on Azure"
+  description: "How to integrate SaaS line-of-business systems on Azure with Service Bus topics and sessions, Flex Consumption Functions, upstream and downstream handlers, canonical events, idempotency, the outbox pattern, dead-lettering and replay, distributed tracing, private endpoints and Terraform modules."
+  image: "https://robertleggett.com.au/blog/deep-dive-event-driven-integration-platforms-on-azure/feature-image.png"
+---
+
+I'll be upfront: most integration problems I have seen in enterprise programmes were not caused by the wrong technology. They were caused by point-to-point connections that made perfect sense one at a time. CRM calls billing directly. Billing calls the document platform. The support desk polls CRM every five minutes. Each link is small, and each was justified by a deadline. Two years later you have a dense web where nobody can change a field without breaking three things, and every outage turns into an archaeology exercise.
+
+Modern organisations increasingly run on SaaS line-of-business platforms they do not control, and that makes the problem sharper — you cannot change the vendor's data model, retry semantics or webhook format. An event-driven integration platform puts a deliberate layer between those systems: vendor-specific adaptors at the edges, canonical events in the middle, and reliable, observable, replayable delivery throughout. In this deep dive I will walk through how I would build that on Azure using Service Bus, Azure Functions on the Flex Consumption plan, Cosmos DB and Terraform, with the patterns that make it production-grade rather than a demo.
+
+---
+
+## Before you start
+
+About this post:
+
+*   15 – 20-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A reference architecture for integrating SaaS systems with upstream and downstream handlers around Azure Service Bus
+*   A practical understanding of canonical events, anti-corruption layers and idempotency keys
+*   TypeScript Azure Functions handler patterns for sessions, outbox publishing and poison message handling
+*   Strategies for dead-lettering, replay, correlation IDs and distributed tracing
+*   Terraform module patterns for Service Bus, Flex Consumption Functions, Cosmos DB and private endpoints
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why an integration platform at all?
+
+The case for a platform rather than a tangle of direct calls comes down to four properties:
+
+*   **Decoupling** — publishers do not know or care who consumes their events. Adding a new consumer does not touch the source integration.
+*   **Resilience** — if a target SaaS is down for maintenance, messages wait in a durable queue instead of failing a user's transaction.
+*   **Consistency of behaviour** — retries, idempotency, logging, tracing and security are implemented once in shared libraries and templates, not reinvented per flow.
+*   **Replaceability** — when you swap a SaaS vendor, you rewrite one adaptor, not every integration that touched it.
+
+I have written before about the trade-offs between [choreography and orchestration](/blog/when-should-you-choose-choreography-vs-orchestration-for-your-microservices-architecture), and about [choosing event streaming or messaging](/blog/choosing-event-streaming-or-messaging-for-your-architecture). For SaaS integration, where each message represents a business change that must be delivered exactly-once-in-effect to a specific set of targets, a **message broker with topics and subscriptions** is usually the right fit. Event streaming shines when you need long retention, high-volume replay and many analytical consumers; brokered messaging shines when you need per-message settlement, dead-lettering, sessions and filtering. On Azure, that is **Service Bus**.
+
+---
+
+## The reference architecture
+
+![Upstream and downstream handlers around Service Bus](/blog/deep-dive-event-driven-integration-platforms-on-azure/inline-1.png)
+
+The shape is deliberately simple:
+
+1.  A **source SaaS** raises a change — usually a webhook, sometimes change data capture, occasionally a poll when the vendor offers nothing better.
+2.  An **upstream handler** receives it, validates and authenticates it, fetches any extra detail it needs, translates it into a **canonical event**, and publishes to a Service Bus **topic**.
+3.  Each interested consumer has its own **subscription** on that topic, with filters so it only receives the events it cares about.
+4.  A **downstream handler** per subscription translates the canonical event into the target system's API shape and calls it.
+
+Upstream handlers know about exactly one source system. Downstream handlers know about exactly one target. The topic in the middle knows about neither. That is the whole trick.
+
+### Adaptors as anti-corruption layers
+
+In Domain-Driven Design terms, each handler is an **anti-corruption layer**. Vendor concepts — their field names, their status codes, their pagination, their odd date formats — stop at the boundary. Nothing downstream should ever see `custom_field_17` or a vendor-specific enumeration. If it does, you have coupled every consumer to that vendor and lost the replaceability you built the platform for.
+
+A practical structure for each adaptor:
+
+*   **Client** — a typed wrapper over the vendor API, handling auth, rate limits and retries
+*   **Mapper** — pure functions translating vendor shapes to canonical and back, unit-tested exhaustively
+*   **Handler** — the Azure Function entry point, orchestrating client and mapper with idempotency and tracing
+
+Keep the mappers pure. They are where most bugs live and they are trivially testable when they have no I/O.
+
+### Canonical events
+
+A canonical event is the organisation's own description of a business fact, independent of any system. A good canonical event has an envelope and a payload:
+
+```typescript
+export interface EventEnvelope<TType extends string, TPayload> {
+  specVersion: "1.0";
+  eventId: string;          // unique per event
+  eventType: TType;         // e.g. "customer.updated"
+  eventVersion: number;     // schema version of the payload
+  source: string;           // logical source, e.g. "crm"
+  subject: string;          // entity identifier, used as session id
+  occurredAt: string;       // when the business change happened
+  correlationId: string;    // ties the whole flow together
+  idempotencyKey: string;   // stable across retries of the same change
+  payload: TPayload;
+}
+
+export interface CustomerUpdatedPayload {
+  customerId: string;
+  displayName: string;
+  email?: string;
+  status: "active" | "inactive";
+  changedFields: ReadonlyArray<string>;
+}
+
+export type CustomerUpdated = EventEnvelope<"customer.updated", CustomerUpdatedPayload>;
+```
+
+The envelope is loosely modelled on CloudEvents, which I recommend borrowing from even if you do not adopt it wholesale. A few principles:
+
+*   **Name events as past-tense facts** — `customer.updated`, `order.submitted` — not commands
+*   **Version the payload** and support at least one previous version during transitions
+*   **Prefer thin-plus-key payloads** for large entities: include the fields that changed and the identifier, and let consumers fetch more if needed through a read API
+*   **Publish schemas** in a shared package so producers and consumers compile against the same types
+
+---
+
+## Service Bus: topics, subscriptions and sessions
+
+### Topics and filtered subscriptions
+
+Create topics per **domain** (`customer`, `order`, `document`) rather than per event type or per consumer. Each consumer gets its own subscription, filtered using **correlation filters** on application properties like `eventType`. Correlation filters are evaluated more efficiently than SQL filters and are sufficient for most routing.
+
+### Sessions for ordering
+
+Service Bus does not guarantee global ordering, and you should not want it — it kills throughput. What you usually need is **ordering per entity**: the "customer created" event for customer 42 must be processed before "customer updated" for customer 42, but customers 42 and 43 can be processed in parallel.
+
+**Sessions** give you exactly that. Set the message `sessionId` to the entity identifier (the envelope's `subject`), enable sessions on the subscription, and Service Bus will deliver messages for a given session in order to one consumer at a time. Different sessions are processed concurrently.
+
+Two caveats. A poison message in a session blocks that session until it is dead-lettered, so keep `maxDeliveryCount` sensible. And sessions are not a substitute for **version checks** — if a source system emits events out of order in the first place, sessions faithfully preserve the wrong order. Always compare the source version against stored state before applying an update.
+
+---
+
+## Azure Functions on Flex Consumption
+
+**Flex Consumption** is the plan I now default to for integration handlers. It keeps the scale-to-zero, pay-per-execution model of the classic Consumption plan but adds the things integration workloads were missing: **VNet integration**, configurable instance memory, **always-ready instances** to soften cold starts, and much higher scale-out limits with per-function scaling. For handlers that must reach SaaS APIs over fixed egress IPs or reach Service Bus and Cosmos DB over private endpoints, that VNet integration is the deciding factor. My broader thoughts on running serverless at this scale are in [Deep Dive - Serverless at Scale](/blog/deep-dive-serverless-at-scale).
+
+### A downstream handler
+
+Here is a downstream handler using the Node.js v4 programming model. It consumes a session-enabled subscription, checks idempotency, calls the target, and records the outcome:
+
+```typescript
+import { app, InvocationContext } from "@azure/functions";
+import { CustomerUpdated } from "@example/integration-contracts";
+import { claimIdempotencyKey, markCompleted } from "../shared/idempotency";
+import { BillingClient, TransientError, PermanentError } from "../billing/client";
+import { toBillingAccount } from "../billing/mapper";
+import { parkMessage } from "../shared/parking";
+import { withTrace } from "../shared/tracing";
+
+const billing = new BillingClient();
+
+export async function customerUpdatedToBilling(
+  message: CustomerUpdated,
+  context: InvocationContext,
+): Promise<void> {
+  await withTrace(context, message, async (log) => {
+    const claim = await claimIdempotencyKey("billing", message.idempotencyKey);
+    if (claim === "already-completed") {
+      log.info("Duplicate delivery ignored");
+      return;
+    }
+
+    try {
+      await billing.upsertAccount(toBillingAccount(message.payload), {
+        idempotencyKey: message.idempotencyKey,
+      });
+      await markCompleted("billing", message.idempotencyKey);
+    } catch (error) {
+      if (error instanceof PermanentError) {
+        // Non-retryable: park it for triage instead of burning retries.
+        await parkMessage("billing", message, error);
+        return;
+      }
+      if (error instanceof TransientError) {
+        throw error; // abandon — Service Bus redelivers until maxDeliveryCount
+      }
+      throw error;
+    }
+  });
+}
+
+app.serviceBusTopic("customerUpdatedToBilling", {
+  connection: "ServiceBus",
+  topicName: "customer",
+  subscriptionName: "billing",
+  isSessionsEnabled: true,
+  handler: customerUpdatedToBilling,
+});
+```
+
+The `connection` setting points to an identity-based connection (`ServiceBus__fullyQualifiedNamespace`), so there are no connection strings or keys anywhere. The function's managed identity is granted **Azure Service Bus Data Receiver** on the subscription and nothing more.
+
+### An upstream handler
+
+The upstream side receives a webhook, verifies its signature, maps it, and publishes. I use the Service Bus SDK directly here rather than an output binding, because I want control over `sessionId`, `messageId`, `correlationId` and application properties:
+
+```typescript
+import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
+import { ServiceBusClient } from "@azure/service-bus";
+import { DefaultAzureCredential } from "@azure/identity";
+import { verifySignature } from "../crm/signature";
+import { toCustomerUpdated } from "../crm/mapper";
+import { CrmContactWebhook } from "../crm/types";
+
+const sb = new ServiceBusClient(process.env.SERVICEBUS_FQDN ?? "", new DefaultAzureCredential());
+const sender = sb.createSender("customer");
+
+export async function crmContactWebhook(
+  request: HttpRequest,
+  context: InvocationContext,
+): Promise<HttpResponseInit> {
+  const body = await request.text();
+  if (!(await verifySignature(request.headers, body))) {
+    return { status: 401 };
+  }
+
+  const webhook = JSON.parse(body) as CrmContactWebhook;
+  const correlationId = request.headers.get("traceparent") ?? context.invocationId;
+  const event = toCustomerUpdated(webhook, correlationId);
+
+  await sender.sendMessages({
+    messageId: event.idempotencyKey, // enables broker-side duplicate detection
+    sessionId: event.subject,
+    correlationId: event.correlationId,
+    contentType: "application/json",
+    subject: event.eventType,
+    applicationProperties: { eventType: event.eventType, eventVersion: event.eventVersion },
+    body: event,
+  });
+
+  return { status: 202 };
+}
+
+app.http("crmContactWebhook", {
+  methods: ["POST"],
+  authLevel: "anonymous", // signature-verified; fronted by API Management
+  handler: crmContactWebhook,
+});
+```
+
+Return `202 Accepted` quickly. Vendors often retry webhooks aggressively if you are slow, and doing real work inline turns a slow downstream into duplicated upstream events.
+
+---
+
+## Idempotency: designing for at-least-once
+
+Every part of this architecture delivers **at least once**. Webhooks get retried. Service Bus redelivers after a lock expires. Functions retry on failure. Your handlers will see duplicates, so make them **idempotent** — processing the same event twice must have the same effect as processing it once.
+
+### Idempotency keys
+
+The **idempotency key** must be stable for a given business change across every retry. Good candidates are a vendor-supplied event ID, or a hash of source system, entity ID and source version. Bad candidates are anything generated at receive time, like a fresh UUID, because a retried webhook gets a new one.
+
+Use the key in three places:
+
+1.  As the Service Bus `messageId`, with **duplicate detection** enabled on the topic, so the broker drops exact re-sends within the detection window
+2.  In a **processed-keys store** per consumer, so the handler can skip work it has already completed
+3.  In the **call to the target API**, if the vendor supports idempotency headers
+
+### Cosmos DB for state
+
+I use Cosmos DB for integration state: idempotency records, sync state per entity (last applied source version, target ID mappings), and the outbox. It is serverless-friendly, partitions naturally by entity, and its **conditional create** gives you a cheap atomic claim:
+
+```typescript
+import { CosmosClient, ErrorResponse } from "@azure/cosmos";
+import { DefaultAzureCredential } from "@azure/identity";
+
+const container = new CosmosClient({
+  endpoint: process.env.COSMOS_ENDPOINT ?? "",
+  aadCredentials: new DefaultAzureCredential(),
+})
+  .database("integration")
+  .container("idempotency");
+
+type ClaimResult = "claimed" | "already-completed" | "in-progress";
+
+interface IdempotencyRecord {
+  id: string;
+  consumer: string;
+  status: "in-progress" | "completed";
+  claimedAt: string;
+  ttl: number;
+}
+
+export async function claimIdempotencyKey(consumer: string, key: string): Promise<ClaimResult> {
+  const record: IdempotencyRecord = {
+    id: `${consumer}:${key}`,
+    consumer,
+    status: "in-progress",
+    claimedAt: new Date().toISOString(),
+    ttl: 60 * 60 * 24 * 14,
+  };
+  try {
+    await container.items.create(record);
+    return "claimed";
+  } catch (error) {
+    if ((error as ErrorResponse).code !== 409) throw error;
+    const { resource } = await container.item(record.id, consumer).read<IdempotencyRecord>();
+    return resource?.status === "completed" ? "already-completed" : "in-progress";
+  }
+}
+```
+
+An `in-progress` result means another delivery is mid-flight or a previous attempt crashed. Treat a stale in-progress claim (older than your lock duration) as reclaimable, otherwise a crash leaves the key stuck forever. The `ttl` keeps the container from growing unbounded.
+
+### Sequence and ID generation services
+
+SaaS integrations frequently need **human-readable reference numbers** that no single system owns — a customer reference that must be identical in CRM, billing and the document platform. Generating these inside one adaptor couples everyone to it. Instead, provide a small **sequence service** with a single responsibility: hand out the next number for a named sequence, exactly once.
+
+The simplest robust implementation is a counter document in Cosmos DB updated with **optimistic concurrency** using the ETag:
+
+```typescript
+interface SequenceDoc {
+  id: string;     // sequence name, e.g. "customer-ref"
+  next: number;
+  _etag?: string;
+}
+
+export async function nextValue(name: string, attempts = 5): Promise<number> {
+  for (let i = 0; i < attempts; i++) {
+    const { resource } = await sequences.item(name, name).read<SequenceDoc>();
+    if (!resource?._etag) throw new Error(`Unknown sequence ${name}`);
+    try {
+      await sequences.item(name, name).replace<SequenceDoc>(
+        { ...resource, next: resource.next + 1 },
+        { accessCondition: { type: "IfMatch", condition: resource._etag } },
+      );
+      return resource.next;
+    } catch (error) {
+      if ((error as ErrorResponse).code !== 412) throw error; // lost the race; retry
+    }
+  }
+  throw new Error(`Contention allocating ${name}`);
+}
+```
+
+For high throughput, allocate **blocks** (for example, 100 at a time) per instance and hand them out in memory — the classic hi/lo approach — accepting gaps if an instance dies. And make the allocation itself idempotent by recording which idempotency key received which number, so a retried request gets the same reference back rather than burning a new one.
+
+---
+
+## The transactional outbox
+
+A subtle bug lurks in any handler that both **updates state** and **publishes an event**. If you write to Cosmos DB and then the publish to Service Bus fails, your state says one thing and the rest of the world never heard about it. If you publish first and the write fails, the world heard about something that did not happen.
+
+![Transactional outbox with Cosmos DB](/blog/deep-dive-event-driven-integration-platforms-on-azure/inline-2.png)
+
+The **transactional outbox** pattern fixes this. Instead of publishing directly, the handler writes the state change **and** an outbox document in a single atomic operation. A separate publisher reads the outbox and sends to Service Bus. In Cosmos DB, a **transactional batch** guarantees atomicity within a single partition key, so put the state and outbox documents in the same logical partition:
+
+```typescript
+import { OperationInput } from "@azure/cosmos";
+
+export async function saveWithOutbox(
+  entityId: string,
+  state: SyncState,
+  event: CustomerUpdated,
+): Promise<void> {
+  const operations: OperationInput[] = [
+    { operationType: "Upsert", resourceBody: { ...state, id: `state:${entityId}`, pk: entityId } },
+    {
+      operationType: "Create",
+      resourceBody: { id: `outbox:${event.idempotencyKey}`, pk: entityId, type: "outbox", event },
+    },
+  ];
+  const response = await stateContainer.items.batch(operations, entityId);
+  if (response.code && response.code >= 400) {
+    throw new Error(`Outbox batch failed with ${response.code}`);
+  }
+}
+```
+
+The publisher is a function triggered by the Cosmos DB **change feed**, which delivers every created or updated document in order per partition:
+
+```typescript
+app.cosmosDB("outboxPublisher", {
+  connection: "Cosmos",
+  databaseName: "integration",
+  containerName: "state",
+  leaseContainerName: "leases",
+  handler: async (documents: ReadonlyArray<OutboxDoc | SyncStateDoc>, context) => {
+    const outbox = documents.filter((d): d is OutboxDoc => d.type === "outbox");
+    for (const doc of outbox) {
+      await sender.sendMessages(toServiceBusMessage(doc.event));
+    }
+    context.log(`Published ${outbox.length} outbox events`);
+  },
+});
+```
+
+If the publish fails, the function throws and the change feed batch is retried. That can publish an event twice — which is fine, because the `messageId` is the idempotency key and both broker duplicate detection and consumer idempotency handle it. That is the general rule of this whole architecture: **accept at-least-once at every hop, and make every consumer idempotent**.
+
+---
+
+## Dead-lettering, poison messages and replay
+
+Failures fall into two categories, and treating them the same is the most common mistake I see.
+
+*   **Transient failures** — target API timeouts, 429 throttling, 503s during vendor maintenance. These should be retried with backoff.
+*   **Permanent failures** — validation errors, a referenced entity that does not exist, a mapping that cannot be resolved. Retrying these ten times just delays the inevitable and, with sessions, blocks every later message for that entity.
+
+![Retries, dead-lettering and replay](/blog/deep-dive-event-driven-integration-platforms-on-azure/inline-3.png)
+
+### Retries
+
+Service Bus redelivers an abandoned message until it reaches the subscription's `maxDeliveryCount`, then moves it to the **dead-letter sub-queue**. On top of that, the Functions host can apply a retry policy. For throttling, honour the vendor's `Retry-After` header in the client; for longer outages, consider **scheduled redelivery** — complete the message and re-send a copy with a `scheduledEnqueueTimeUtc` a few minutes out — so you are not hammering a system that is down.
+
+### Poison messages
+
+A **poison message** is one that will never succeed no matter how often you retry. The handler should detect it — the client classifies the error as permanent — and move it out of the way immediately. Depending on your language worker's support for explicit settlement, either dead-letter it directly with a reason, or, as in the handler above, write it to a **parking** store with full context and complete the original. Either way, record the reason, the exception, the correlation ID and the handler version.
+
+### Replay
+
+A dead-letter queue nobody looks at is just a slower way to lose data. Build three things from day one:
+
+1.  **Alerting** on dead-letter count per subscription, with the subscription name in the alert so the right team is paged
+2.  **A triage view** — a simple internal page or workbook listing dead-lettered and parked messages with their reasons, filterable by flow and time
+3.  **A replay function** that takes a message (or a filtered set), optionally applies a fix, and resubmits it to the **topic or a specific subscription** with the **same idempotency key**
+
+Resubmitting with the same key is important: if the original actually partially succeeded, idempotency protects you from double-applying it. Record every replay with who triggered it and why. You will want that history the first time someone asks why a customer received two welcome emails.
+
+---
+
+## Correlation IDs and distributed tracing
+
+When a change in CRM eventually updates billing, support and the lakehouse via four functions and a broker, you need to answer "what happened to this change?" in seconds, not hours.
+
+*   Generate (or accept from the inbound `traceparent` header) a **correlation ID** at the very first upstream handler
+*   Carry it in the event envelope **and** as the Service Bus `correlationId` property
+*   Include it in every log line, every outbound API call header, and every parked or dead-lettered message
+*   Use **W3C Trace Context** (`traceparent`) so Application Insights, via OpenTelemetry, stitches spans across functions and the broker into one end-to-end transaction
+
+A small wrapper keeps this consistent across every handler:
+
+```typescript
+import { InvocationContext } from "@azure/functions";
+import { trace, SpanStatusCode } from "@opentelemetry/api";
+
+interface TracedLogger {
+  info: (message: string) => void;
+  error: (message: string) => void;
+}
+
+export async function withTrace<T extends { correlationId: string; eventType: string; subject: string }>(
+  context: InvocationContext,
+  event: T,
+  work: (log: TracedLogger) => Promise<void>,
+): Promise<void> {
+  const tracer = trace.getTracer("integration");
+  await tracer.startActiveSpan(`${context.functionName} ${event.eventType}`, async (span) => {
+    span.setAttributes({
+      "app.correlation_id": event.correlationId,
+      "app.entity_id": event.subject,
+      "messaging.system": "servicebus",
+    });
+    const prefix = `[${event.correlationId}] [${event.subject}]`;
+    const log: TracedLogger = {
+      info: (m) => context.log(`${prefix} ${m}`),
+      error: (m) => context.error(`${prefix} ${m}`),
+    };
+    try {
+      await work(log);
+      span.setStatus({ code: SpanStatusCode.OK });
+    } catch (error) {
+      span.recordException(error as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+```
+
+Then build a workbook or dashboard keyed on correlation ID showing every hop, its duration and its outcome. That one view will save more support hours than anything else in this post.
+
+---
+
+## Security and networking
+
+Integration platforms hold credentials to every important system you own, so security has to be the default, not an afterthought.
+
+*   **Managed identities everywhere.** Functions authenticate to Service Bus, Cosmos DB and Key Vault with managed identities and least-privilege data-plane roles. Disable local (key-based) auth on Service Bus and Cosmos DB entirely.
+*   **Vendor secrets in Key Vault**, referenced from app settings, with rotation.
+*   **Private endpoints** for Service Bus (Premium tier), Cosmos DB, Key Vault and the functions' storage account, with **public network access disabled**. Functions reach them via VNet integration and private DNS zones.
+*   **Controlled egress** through a NAT gateway or firewall, giving SaaS vendors a stable set of IPs to allow-list.
+*   **Inbound webhooks** fronted by API Management or Front Door with WAF, with signature verification in the handler itself.
+
+---
+
+## Terraform modules
+
+Everything above should be code. I structure the Terraform as small, opinionated modules that bake in the secure defaults, so a team adding a new flow writes a few lines rather than re-deriving private endpoint wiring. My wider thinking on module design is in [Infrastructure as Code at Scale](/blog/deep-dive-infrastructure-as-code-at-scale).
+
+### Service Bus topic with subscriptions
+
+```hcl
+resource "azurerm_servicebus_topic" "this" {
+  name                                    = var.topic_name
+  namespace_id                            = var.namespace_id
+  requires_duplicate_detection            = true
+  duplicate_detection_history_time_window = "PT30M"
+  default_message_ttl                     = "P14D"
+}
+
+resource "azurerm_servicebus_subscription" "this" {
+  for_each = var.subscriptions
+
+  name                                 = each.key
+  topic_id                             = azurerm_servicebus_topic.this.id
+  max_delivery_count                   = each.value.max_delivery_count
+  lock_duration                        = "PT1M"
+  requires_session                     = each.value.requires_session
+  dead_lettering_on_message_expiration = true
+}
+
+resource "azurerm_servicebus_subscription_rule" "by_event_type" {
+  for_each = var.subscriptions
+
+  name            = "by-event-type"
+  subscription_id = azurerm_servicebus_subscription.this[each.key].id
+  filter_type     = "CorrelationFilter"
+
+  correlation_filter {
+    properties = {
+      eventType = each.value.event_type
+    }
+  }
+}
+```
+
+Note that a new subscription comes with a default "match everything" rule. Remove it as part of your module (or deployment pipeline), otherwise your filter is effectively ignored.
+
+### Flex Consumption function app
+
+```hcl
+resource "azurerm_service_plan" "this" {
+  name                = "asp-${var.name}"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  os_type             = "Linux"
+  sku_name            = "FC1"
+}
+
+resource "azurerm_function_app_flex_consumption" "this" {
+  name                = "func-${var.name}"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  service_plan_id     = azurerm_service_plan.this.id
+
+  storage_container_type      = "blobContainer"
+  storage_container_endpoint  = "${var.storage_blob_endpoint}${var.deployment_container}"
+  storage_authentication_type = "SystemAssignedIdentity"
+
+  runtime_name           = "node"
+  runtime_version        = "20"
+  maximum_instance_count = var.maximum_instance_count
+  instance_memory_in_mb  = 2048
+
+  virtual_network_subnet_id     = var.integration_subnet_id
+  public_network_access_enabled = false
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  app_settings = {
+    ServiceBus__fullyQualifiedNamespace = var.servicebus_fqdn
+    Cosmos__accountEndpoint             = var.cosmos_endpoint
+  }
+
+  site_config {}
+}
+```
+
+### Private endpoint wrapper
+
+```hcl
+resource "azurerm_private_endpoint" "this" {
+  name                = "pe-${var.name}"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  subnet_id           = var.private_endpoint_subnet_id
+
+  private_service_connection {
+    name                           = "psc-${var.name}"
+    private_connection_resource_id = var.target_resource_id
+    subresource_names              = [var.subresource] # "namespace" for Service Bus, "Sql" for Cosmos DB
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "default"
+    private_dns_zone_ids = [var.private_dns_zone_id]
+  }
+}
+```
+
+Compose these into a **flow module** that takes a source, a topic, a list of subscribing handlers and their role assignments. Pin provider and module versions, run `terraform plan` in CI on every pull request, and gate applies behind environment approvals.
+
+---
+
+## Lessons learned and pitfalls
+
+*   **Do not leak vendor models.** The first time a downstream handler reads a vendor-specific field from an event, replaceability is gone.
+*   **Idempotency is not optional.** Every hop is at-least-once. Design for duplicates on day one; retrofitting it is painful.
+*   **Classify errors.** Transient errors get retried; permanent errors get parked immediately with context.
+*   **Sessions need versions.** Ordered delivery of out-of-order source events is still out of order.
+*   **Echo loops are real.** When syncing bi-directionally, tag writes made by the integration identity and ignore them on the way back in.
+*   **Own the dead-letter queue.** Alerts, triage and replay are part of the feature, not a follow-up ticket.
+*   **Correlation from the very first hop.** If the upstream handler does not set it, nothing downstream can recover it.
+*   **Start with a few flows.** Prove the templates, libraries and modules on two or three integrations before scaling to dozens.
+
+If your integration platform is also feeding a master data hub, the same handlers and canonical events form the backbone of synchronisation — I describe that in [Deep Dive - Master Data Management](/blog/deep-dive-master-data-management). And if the platform is being built alongside a legacy decommission, [Migrating off Legacy Systems with a Medallion Architecture](/blog/migrating-off-legacy-systems-with-a-medallion-architecture) covers the bulk data side of the same journey.
+
+---
+
+## Conclusion
+
+*   An **event-driven integration platform** replaces point-to-point SaaS connections with adaptors at the edges and canonical events in the middle
+*   **Upstream and downstream handlers** act as anti-corruption layers, each knowing about exactly one external system
+*   **Service Bus topics with filtered subscriptions** route events; **sessions** give per-entity ordering without sacrificing parallelism
+*   **Azure Functions on Flex Consumption** combine scale-to-zero economics with VNet integration and always-ready instances
+*   **Idempotency keys**, duplicate detection and Cosmos DB conditional writes make at-least-once delivery safe; a **sequence service** centralises shared reference numbers
+*   The **transactional outbox** with Cosmos DB batches and the change feed keeps state and events consistent
+*   Separate **transient** from **permanent** failures, and build **dead-letter alerting, triage and replay** from day one
+*   **Correlation IDs** and W3C trace context give you end-to-end visibility across every hop
+*   **Managed identities, private endpoints and Terraform modules** make the secure configuration the default one
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

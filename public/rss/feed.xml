@@ -5,8 +5,96 @@
     <link>https://robertleggett.com.au/blog</link>
     <description><![CDATA[Technology strategy, engineering, and AI platform insights.]]></description>
     <language>en</language>
-    <lastBuildDate>Sat, 24 Oct 2026 08:15:21 GMT</lastBuildDate>
+    <lastBuildDate>Sat, 24 Oct 2026 11:16:56 GMT</lastBuildDate>
     
+    <item>
+      <title><![CDATA[Implementation Probes - Using AI-Generated PRs to Find Requirement Gaps]]></title>
+      <link>https://robertleggett.com.au/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps/</link>
+      <guid>https://robertleggett.com.au/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps/</guid>
+      <pubDate>Thu, 22 Oct 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[Last week I wrote about why the way I work with GitHub Copilot [isn't vibe coding](/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery), and the response surprised me. Very few people pushed back on the overall operating model. Almost everyone, though, asked the same follow-up question: ]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[It's Not Vibe Coding - AI-Assisted, Architecture-Led Delivery]]></title>
+      <link>https://robertleggett.com.au/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/</link>
+      <guid>https://robertleggett.com.au/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/</guid>
+      <pubDate>Thu, 15 Oct 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[I'll be upfront about something that has been quietly bothering me. Over the last year, more than a few people have described me as a "vibe coder". Sometimes it is said with a grin, sometimes as a compliment about how quickly things are moving, and occasionally as a gentle dig. Each time I heard it,]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[One Thin Shell, Many Products - Modular Web Apps for Multiple Personas]]></title>
+      <link>https://robertleggett.com.au/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/</link>
+      <guid>https://robertleggett.com.au/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/</guid>
+      <pubDate>Thu, 08 Oct 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[I'll be honest with you — I have lost count of the number of times I have watched an organisation build the same web application three times. One portal for customers, another for internal staff, a third for partners or administrators. Each one has its own login flow, its own button component that i]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Authenticating AI Agents - Identity, On-Behalf-Of and Least Privilege]]></title>
+      <link>https://robertleggett.com.au/blog/authenticating-ai-agents-identity-on-behalf-of-and-least-privilege/</link>
+      <guid>https://robertleggett.com.au/blog/authenticating-ai-agents-identity-on-behalf-of-and-least-privilege/</guid>
+      <pubDate>Thu, 01 Oct 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[Here's a question I now ask in every AI agent design review, and it is remarkable how often the room goes quiet: "When the agent calls that API, whose permissions is it using?" Too often the honest answer is "a service account with access to everything, because that was the quickest way to get the d]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/authenticating-ai-agents-identity-on-behalf-of-and-least-privilege/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Building Domain-Specific AI Assistants Responsibly]]></title>
+      <link>https://robertleggett.com.au/blog/building-domain-specific-ai-assistants-responsibly/</link>
+      <guid>https://robertleggett.com.au/blog/building-domain-specific-ai-assistants-responsibly/</guid>
+      <pubDate>Thu, 24 Sep 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[It's surprisingly easy to build a chatbot that answers questions about a specialist subject. Point a large language model at a pile of documents, wire up a chat window, and within a day you have something that sounds remarkably knowledgeable. That is exactly what makes it dangerous. In regulated pro]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/building-domain-specific-ai-assistants-responsibly/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Rules as Data - Building Configurable Business Rules Engines]]></title>
+      <link>https://robertleggett.com.au/blog/rules-as-data-building-configurable-business-rules-engines/</link>
+      <guid>https://robertleggett.com.au/blog/rules-as-data-building-configurable-business-rules-engines/</guid>
+      <pubDate>Thu, 17 Sep 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[Here's something I've seen play out more times than I'd like to admit. A business rule starts life as a simple if statement — "orders over $100 get free delivery". A month later there's an exception for a particular region. Then a promotion that runs for two weeks. Then a different rule for members.]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/rules-as-data-building-configurable-business-rules-engines/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Migrating off Legacy Systems with a Medallion Architecture]]></title>
+      <link>https://robertleggett.com.au/blog/migrating-off-legacy-systems-with-a-medallion-architecture/</link>
+      <guid>https://robertleggett.com.au/blog/migrating-off-legacy-systems-with-a-medallion-architecture/</guid>
+      <pubDate>Thu, 10 Sep 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[If I'm being completely honest, data migration is the part of a modernisation programme that everyone underestimates and nobody wants to own. The new SaaS platform gets the demos, the steering committee attention and the training plans. The migration gets a line on the plan that says "migrate data" ]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/migrating-off-legacy-systems-with-a-medallion-architecture/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Event-Driven Integration Platforms on Azure]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-event-driven-integration-platforms-on-azure/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-event-driven-integration-platforms-on-azure/</guid>
+      <pubDate>Thu, 03 Sep 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[I'll be upfront: most integration problems I have seen in enterprise programmes were not caused by the wrong technology. They were caused by point-to-point connections that made perfect sense one at a time. CRM calls billing directly. Billing calls the document platform. The support desk polls CRM e]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-event-driven-integration-platforms-on-azure/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Master Data Management: One Trusted View of Your Core Entities]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-master-data-management/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-master-data-management/</guid>
+      <pubDate>Thu, 27 Aug 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[Let me start with a confession: for a long time I thought master data management was a problem you solved by buying a product. Pick a vendor, install the hub, point your systems at it, done. Then I spent time on enterprise programmes where an organisation had five or six SaaS platforms — a CRM, a bi]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-master-data-management/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[End-to-End Testing Distributed Integrations with Emulators]]></title>
+      <link>https://robertleggett.com.au/blog/end-to-end-testing-distributed-integrations-with-emulators/</link>
+      <guid>https://robertleggett.com.au/blog/end-to-end-testing-distributed-integrations-with-emulators/</guid>
+      <pubDate>Thu, 20 Aug 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[Truth be told, end-to-end testing is the part of distributed systems that most teams quietly give up on. Unit tests are easy, and everyone agrees they are important. But the bugs that actually hurt in event-driven integrations rarely live inside a single function — they live in the gaps: a message p]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/end-to-end-testing-distributed-integrations-with-emulators/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Observability as Code - Alerts, Dashboards and Workbooks in Terraform]]></title>
+      <link>https://robertleggett.com.au/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/</link>
+      <guid>https://robertleggett.com.au/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/</guid>
+      <pubDate>Thu, 13 Aug 2026 00:00:00 GMT</pubDate>
+      <description><![CDATA[I'll be upfront about this one: for a long time I treated monitoring as something you bolted on after the "real" infrastructure was done. The compute, networking and data stores lived in Terraform, went through pull requests and were promoted carefully between environments — and then someone would c]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/feature-image.png" type="image/png" />
+    </item>
     <item>
       <title><![CDATA[Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI]]></title>
       <link>https://robertleggett.com.au/blog/demystifying-large-language-models/</link>

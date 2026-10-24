@@ -1,0 +1,524 @@
+---
+title: "Deep Dive - Master Data Management: One Trusted View of Your Core Entities"
+date: "2026-08-27"
+slug: "deep-dive-master-data-management"
+status: "publish"
+feature_image: "/blog/deep-dive-master-data-management/feature-image.png"
+tags: ["Master Data Management", "MDM", "Data Architecture", "Data Quality", "Entity Resolution", "Data Governance", "Event-Driven Architecture", "SaaS Integration", "Robert Leggett"]
+
+meta:
+  title: "Deep Dive - Master Data Management: One Trusted View of Your Core Entities | Robert Leggett"
+  description: "A practical deep dive into master data management — implementation styles, system of record ownership, entity matching, survivorship, stewardship, SaaS synchronisation patterns, lookup APIs, data quality metrics and initial loads."
+  keywords: ["master data management", "MDM", "entity resolution", "record matching", "survivorship rules", "data stewardship", "system of record", "data quality", "SaaS integration", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/deep-dive-master-data-management"
+  image: "https://robertleggett.com.au/blog/deep-dive-master-data-management/feature-image.png"
+
+og:
+  type: "article"
+  title: "Deep Dive - Master Data Management: One Trusted View of Your Core Entities"
+  description: "A practical deep dive into master data management — implementation styles, system of record ownership, entity matching, survivorship, stewardship, SaaS synchronisation patterns, lookup APIs, data quality metrics and initial loads."
+  image: "https://robertleggett.com.au/blog/deep-dive-master-data-management/feature-image.png"
+  url: "https://robertleggett.com.au/blog/deep-dive-master-data-management"
+
+twitter:
+  card: "summary_large_image"
+  title: "Deep Dive - Master Data Management: One Trusted View of Your Core Entities"
+  description: "A practical deep dive into master data management — implementation styles, system of record ownership, entity matching, survivorship, stewardship, SaaS synchronisation patterns, lookup APIs, data quality metrics and initial loads."
+  image: "https://robertleggett.com.au/blog/deep-dive-master-data-management/feature-image.png"
+---
+
+Let me start with a confession: for a long time I thought master data management was a problem you solved by buying a product. Pick a vendor, install the hub, point your systems at it, done. Then I spent time on enterprise programmes where an organisation had five or six SaaS platforms — a CRM, a billing system, a support desk, a marketing tool, a document platform — each holding its own copy of "the customer", each slightly different, and each convinced it was right. No product on its own fixed that. What fixed it was a clear set of decisions about **who owns which data**, **how we decide two records are the same thing**, and **how changes flow** between systems.
+
+Master data management (MDM) is the discipline of creating and maintaining one trusted view of the core entities your organisation runs on — customers, contacts, suppliers, products, locations. It sounds dull, but it sits underneath almost every painful symptom you have seen: duplicate mailouts, invoices sent to an old address, reports that do not agree, and AI assistants confidently answering with stale data. In this deep dive I will walk through the architecture choices, the matching mechanics, the operating model and the integration patterns I have found actually work, using a generic customer and contact domain throughout.
+
+---
+
+## Before you start
+
+About this post:
+
+*   14 – 18-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A clear understanding of why MDM matters and the four common implementation styles
+*   A practical model for system of record versus system of reference ownership
+*   Hands-on patterns for entity matching — normalisation, blocking, deterministic and probabilistic scoring
+*   Insight into survivorship rules, stewardship queues and safe match, merge and unmerge
+*   Integration patterns for keeping multiple SaaS systems in sync, plus read-only lookup APIs
+*   Guidance on data quality metrics and running the initial load
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why master data management?
+
+Every organisation has two broad kinds of data. **Transactional data** records things that happen — an order, a payment, a support ticket. **Master data** describes the relatively stable things those transactions are about — the customer who placed the order, the product they bought, the address it was shipped to. Transactions are high volume and short lived in relevance; master data is lower volume but referenced everywhere, for years.
+
+The problem is that once you adopt more than one line-of-business system, each one wants its own copy of master data. Your CRM has a contact. Your billing system has an account holder. Your support desk has a requester. They were created at different times, by different people, through different forms with different validation. Over time they drift:
+
+*   **Duplicates** — the same person exists three times in the CRM because they used a work email, a personal email and called the contact centre once
+*   **Conflicts** — billing has the new address, CRM has the old one, and nobody knows which is correct
+*   **Orphans** — records in one system that reference an entity that no longer exists in another
+*   **Inconsistent identifiers** — every system has its own ID, and there is no reliable way to join them
+
+The costs are real. Customers get duplicate communications, or worse, communications meant for someone else. Analytics teams spend most of their time reconciling instead of analysing. Integration code accumulates bespoke "find the matching record" logic in every flow, each version slightly different. And if you are building retrieval-augmented AI over enterprise data — something I covered in [Retrieval-Augmented Generation](/blog/retrieval-augmented-generation-rag-grounding-ai-in-enterprise-data) — you are grounding answers in whichever copy happened to be indexed.
+
+MDM addresses this with three things: a **master record** per real-world entity (often called the golden record), a **cross-reference** from every source system ID to that master, and a **set of rules and people** that keep it accurate over time.
+
+---
+
+## The four implementation styles
+
+There is no single way to implement MDM. The industry broadly recognises four styles, and the right one depends on how much control you need and how much change your organisation can absorb.
+
+![MDM implementation styles](/blog/deep-dive-master-data-management/inline-1.png)
+
+### Registry
+
+The hub stores only identifiers and the minimum attributes needed for matching. It maintains the cross-reference — "CRM contact 123, billing account 987 and support requester 55 are the same person" — but the data itself stays in the source systems. Consumers ask the registry for the links and then fetch attributes from the sources at read time.
+
+This is the least intrusive style. Nothing changes in the source systems. The downside is that you never actually have a clean, consolidated record; you have a map to several messy ones.
+
+### Consolidation
+
+The hub pulls copies of master data from every source, matches and merges them into a master record, and publishes that record for downstream use — usually reporting and analytics. Sources are not updated. This is a common first step because it delivers a trustworthy view for analysis without touching operational systems.
+
+### Coexistence
+
+The hub holds the master record **and** synchronises the agreed values back to the source systems. Data can still be authored in multiple places, but changes flow through the hub, get matched and survived, and the result is pushed out. This is where most SaaS-heavy organisations end up, and it is where the integration patterns later in this post matter most.
+
+### Centralised (transactional)
+
+The hub becomes the single authoring point. New customers are created in the hub, and sources subscribe to changes. This gives you the strongest governance but the highest organisational and technical change — every create and update journey has to be rerouted.
+
+| Style | Data held in hub | Writes back to sources | Intrusion | Typical use |
+|---|---|---|---|---|
+| Registry | IDs and match keys | No | Low | Quick cross-referencing, federated landscapes |
+| Consolidation | Full copy | No | Low–medium | Analytics, reporting, a first MDM step |
+| Coexistence | Full master | Yes | Medium–high | Multiple operational SaaS systems that must agree |
+| Centralised | Full master, authored | Sources subscribe | High | Strong regulatory or governance needs |
+
+My advice: start with consolidation to prove your matching and build trust in the data, then move specific attributes to coexistence once you know which system should own what. Trying to go centralised on day one usually stalls in stakeholder negotiations.
+
+---
+
+## System of record versus system of reference
+
+Before you write a single match rule, you need to answer an ownership question for **every attribute**, not every entity: who is allowed to change this value, and who merely holds a copy?
+
+*   A **system of record** (SoR) is the authoritative source for an attribute. It is where the value is created and legitimately changed.
+*   A **system of reference** holds a copy for its own purposes. It may display or use the value, but changes should be made in the SoR and flow back.
+
+The trap is assuming one system owns the whole entity. In practice ownership is split. A generic example for a customer:
+
+| Attribute | System of record | Systems of reference | Rationale |
+|---|---|---|---|
+| Legal name | CRM | Billing, Support | Captured and verified during onboarding |
+| Billing address | Billing | CRM | Billing owns invoicing and payment correspondence |
+| Marketing consent | Marketing platform | CRM | Consent captured via preference centre |
+| Preferred contact channel | CRM | Support, Marketing | Owned by relationship management |
+| Customer status | MDM hub (derived) | All | Calculated from multiple sources |
+
+Write this down as an **ownership matrix** and get business sign-off. It drives your survivorship rules, determines which direction sync flows for each field, and settles arguments before they reach production. It also enforces an important principle: **domain logic should live in one place**. If billing owns the billing address, then address validation rules for invoicing live in billing — not duplicated in CRM, the hub and three integration flows.
+
+> A useful test: if two systems can both legitimately change a field and you have no rule for which wins, you do not have a data problem — you have an ownership problem.
+
+---
+
+## Entity matching
+
+Matching — also called entity resolution or record linkage — is the heart of MDM. Given records from multiple sources, decide which ones refer to the same real-world entity. It looks simple until you meet real data.
+
+![Match and merge pipeline](/blog/deep-dive-master-data-management/inline-2.png)
+
+### Step 1: Normalisation
+
+Raw values are not comparable. "Jon Smith", "SMITH, JOHN" and "john  smith " should compare as close; "12 High St" and "12 High Street" should be equal. Normalisation makes values comparable without destroying the originals:
+
+*   Trim, collapse whitespace, normalise case and Unicode (strip diacritics for comparison)
+*   Parse names into components; handle "Surname, Given" ordering
+*   Standardise addresses — abbreviations, unit and street number formats — ideally using an address validation service
+*   Normalise phone numbers to E.164 and lowercase emails (and decide whether to treat dots or plus-addressing as significant)
+*   Map nicknames to canonical forms with a lookup table (Bill to William, Kate to Katherine)
+
+```typescript
+export interface ContactCandidate {
+  sourceSystem: string;
+  sourceId: string;
+  givenName: string;
+  familyName: string;
+  email?: string;
+  phone?: string;
+  postcode?: string;
+  addressLine1?: string;
+  dateOfBirth?: string;
+}
+
+const STREET_ABBREVIATIONS: Readonly<Record<string, string>> = {
+  street: "st",
+  road: "rd",
+  avenue: "ave",
+  drive: "dr",
+};
+
+export function normaliseText(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function normaliseAddress(value: string): string {
+  return normaliseText(value)
+    .split(" ")
+    .map((token) => STREET_ABBREVIATIONS[token] ?? token)
+    .join(" ");
+}
+
+export function normaliseEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+```
+
+Always keep the original value alongside the normalised one. Stewards need to see what was actually entered, and survivorship should usually publish a well-formed original, not a lowercase comparison key.
+
+### Step 2: Blocking
+
+Comparing every record against every other record is quadratic. A million contacts is roughly half a trillion pairs. **Blocking** reduces that by only comparing records that share a cheap key:
+
+*   Same postcode
+*   Same first three letters of family name plus birth year
+*   Same normalised email domain plus first initial
+*   A phonetic code (Soundex, Metaphone) of the family name
+
+Use **several blocking keys** and take the union of candidate pairs. A single key will miss matches when that field is wrong or empty — someone who moved has a different postcode but the same email. Monitor block sizes too; a key like "postcode is empty" can produce one enormous block that blows up your run time.
+
+### Step 3: Deterministic versus probabilistic matching
+
+**Deterministic** (rule-based) matching says two records match if specific fields agree exactly: same verified email, or same government identifier, or same name plus date of birth plus postcode. It is transparent, fast and easy to explain to auditors. It is also brittle — one typo and the rule fails.
+
+**Probabilistic** (fuzzy) matching compares fields with similarity functions and combines them into a score:
+
+*   **Jaro-Winkler** for short strings like names, which rewards matching prefixes
+*   **Levenshtein** or token-set similarity for addresses
+*   **Exact** comparison for emails and phone numbers once normalised
+*   **Date tolerance** for birth dates (transposed day and month is a classic)
+
+In the classic Fellegi-Sunter model, each field contributes a weight based on how much agreement increases the likelihood of a true match (an "m" probability) versus agreeing by chance (a "u" probability). Agreement on a rare surname is worth more than agreement on "Smith". In practice, many teams start with hand-tuned weights and then calibrate against a labelled sample.
+
+Here is an illustrative scorer. **The weights and thresholds below are invented for this example** — yours must come from profiling and testing on your own data:
+
+```typescript
+import { jaroWinkler } from "./similarity";
+
+interface FieldWeight {
+  readonly field: keyof ContactCandidate;
+  readonly weight: number;
+  readonly compare: (a: string, b: string) => number;
+}
+
+const exact = (a: string, b: string): number => (a === b ? 1 : 0);
+
+// Illustrative only — calibrate weights against labelled pairs from your data.
+const WEIGHTS: readonly FieldWeight[] = [
+  { field: "email", weight: 0.35, compare: exact },
+  { field: "familyName", weight: 0.2, compare: jaroWinkler },
+  { field: "givenName", weight: 0.15, compare: jaroWinkler },
+  { field: "dateOfBirth", weight: 0.15, compare: exact },
+  { field: "addressLine1", weight: 0.1, compare: jaroWinkler },
+  { field: "postcode", weight: 0.05, compare: exact },
+];
+
+export interface MatchResult {
+  score: number;
+  evidence: Record<string, number>;
+}
+
+export function scorePair(a: ContactCandidate, b: ContactCandidate): MatchResult {
+  let total = 0;
+  let available = 0;
+  const evidence: Record<string, number> = {};
+
+  for (const { field, weight, compare } of WEIGHTS) {
+    const left = a[field];
+    const right = b[field];
+    if (!left || !right) continue; // missing is not disagreement
+    const similarity = compare(String(left), String(right));
+    evidence[field] = similarity;
+    total += similarity * weight;
+    available += weight;
+  }
+
+  return { score: available === 0 ? 0 : total / available, evidence };
+}
+
+export type MatchDecision = "auto-merge" | "review" | "no-match";
+
+export function decide(score: number, upper = 0.9, lower = 0.75): MatchDecision {
+  if (score >= upper) return "auto-merge";
+  if (score >= lower) return "review";
+  return "no-match";
+}
+```
+
+Notice three design choices. Missing values are **excluded**, not treated as disagreement, otherwise sparse records never match. The scorer returns **evidence** per field, which is what a steward needs to make a decision. And there are **two thresholds**, creating a grey zone that goes to humans rather than forcing the algorithm to guess.
+
+Most mature implementations combine both approaches: deterministic rules for high-confidence identifiers first, probabilistic scoring for everything else, and a handful of **negative rules** that veto a match regardless of score — for example, different dates of birth that are both verified, or a parent and child at the same address sharing a name.
+
+### Measuring match quality
+
+You cannot tune what you do not measure. Build a labelled set of a few hundred to a few thousand pairs, reviewed by people who know the data, and track:
+
+*   **Precision** — of the pairs we merged, how many were truly the same entity? False merges are the expensive failure; they leak one person's data into another's record.
+*   **Recall** — of the true duplicates, how many did we find?
+*   **Review rate** — what proportion lands in the grey zone? Too high and stewards drown.
+
+As a rule of thumb, bias towards precision. A missed duplicate is an inconvenience; a false merge can be a privacy incident.
+
+---
+
+## Survivorship rules
+
+Once records are matched, you need to decide what the master record looks like. **Survivorship** rules choose the winning value for each attribute from the contributing source records. Common strategies:
+
+| Strategy | How it works | Good for |
+|---|---|---|
+| Source priority | Prefer the system of record for that attribute | Most attributes, driven by the ownership matrix |
+| Most recent | Latest update timestamp wins | Volatile attributes like phone numbers |
+| Most complete | Value with the most populated components | Addresses |
+| Most frequent | Value agreed by the most sources | Names with typos in one source |
+| Verified first | Values with a verification flag win | Emails, phones, identity data |
+| Aggregate | Keep all values as a list | Multiple emails or phone numbers |
+
+Survivorship is configured **per attribute**, and usually as an ordered fallback chain: "prefer verified; otherwise prefer the system of record; otherwise most recent". Express it as data, not code, so stewards and data owners can read and change it:
+
+```yaml
+entity: contact
+attributes:
+  legalName:
+    rules: [verified, sourcePriority, mostFrequent]
+    sourcePriority: [crm, billing, support]
+  billingAddress:
+    rules: [sourcePriority, mostComplete]
+    sourcePriority: [billing, crm]
+  email:
+    rules: [verified, mostRecent]
+  phoneNumbers:
+    rules: [aggregate]
+    maxValues: 3
+  marketingConsent:
+    rules: [sourcePriority]
+    sourcePriority: [marketing]
+```
+
+Two practical tips. First, record **lineage** for every surviving value: which source, which record, which rule won. When someone asks "why does the hub say this?", you can answer in seconds. Second, never let survivorship override a value that a steward has manually set without the steward's decision being recorded as its own, highest-priority source.
+
+---
+
+## Stewardship queues
+
+Algorithms get you most of the way; people handle the rest. **Data stewards** are business users responsible for the quality of a data domain. They work from **stewardship queues** — prioritised lists of tasks the system could not resolve on its own:
+
+*   **Potential matches** in the grey zone between thresholds
+*   **Survivorship conflicts** where two systems of record disagree on a value they both claim
+*   **Data quality exceptions** — invalid formats, missing mandatory attributes, failed address validation
+*   **Unmerge requests** raised by users who spotted a false merge
+
+A good stewardship UI shows the candidate records side by side, highlights the field-level evidence from the matcher, and offers clear actions: merge, not a match, or defer. Every decision should be **captured as training data** — it is the cheapest way to grow your labelled set and recalibrate weights over time.
+
+Operationally, give queues **service levels** and **owners**. An unworked queue is worse than no queue, because the system appears to be handling the problem while records silently stay unresolved. Track queue age and throughput as first-class metrics.
+
+---
+
+## Match, merge and unmerge
+
+Merging is easy. **Unmerging** is where many MDM implementations fall over. If you physically combine records and throw away the originals, you cannot cleanly reverse a bad merge.
+
+The safer model is to keep source records immutable and treat the master as a **derived view**:
+
+*   Every source record is stored as received, with its source system and ID
+*   A **link table** associates source records with a master ID
+*   The master record is recomputed by applying survivorship to its currently linked source records
+*   Merge means re-pointing links from one master to another; unmerge means splitting links and recomputing both
+
+```typescript
+export interface MasterLink {
+  masterId: string;
+  sourceSystem: string;
+  sourceId: string;
+  linkedAt: string;
+  linkedBy: "matcher" | "steward";
+  matchScore?: number;
+  ruleVersion: string;
+}
+
+export interface MergeEvent {
+  type: "contact.merged";
+  survivingMasterId: string;
+  retiredMasterId: string;
+  correlationId: string;
+  occurredAt: string;
+}
+```
+
+When a merge happens, the retired master ID must not simply vanish — downstream systems may hold it. Publish a **merged event** naming the surviving ID, and keep the retired ID resolvable (a redirect, essentially) so lookups by old IDs still return the right entity. When an unmerge happens, publish the inverse, and expect downstream systems to need a little help untangling what was attached to which record. Audit every link change with who, when, why and which rule version — you will need it.
+
+---
+
+## Keeping SaaS systems in sync
+
+In a coexistence model, the hub is only useful if changes flow reliably in and out. This is where MDM meets integration architecture, and where event-driven patterns earn their keep.
+
+![Keeping SaaS systems in sync through the MDM hub](/blog/deep-dive-master-data-management/inline-3.png)
+
+### Inbound: upstream handlers
+
+Each source system gets an **upstream handler** — a small, dedicated component that receives that system's change notifications (webhooks, change data capture, or polling where the vendor offers nothing better), translates the vendor's shape into a **canonical event**, and publishes it to an event bus. The handler is an anti-corruption layer: vendor quirks stop at its boundary.
+
+```typescript
+export interface ContactChangedEvent {
+  eventType: "contact.changed";
+  eventId: string;           // unique per event, used for idempotency
+  sourceSystem: "crm" | "billing" | "support";
+  sourceId: string;
+  sourceVersion: string;     // vendor's modified timestamp or version
+  occurredAt: string;
+  correlationId: string;
+  payload: {
+    givenName?: string;
+    familyName?: string;
+    email?: string;
+    phone?: string;
+    address?: { line1: string; locality: string; postcode: string; country: string };
+  };
+}
+```
+
+### The hub
+
+The hub consumes canonical events, stores the source record, runs matching against existing masters, applies survivorship, and emits a **master changed** event when the master record actually changes. Important: only emit when the surviving values change, not every time a source record is touched. Otherwise you create noise and, worse, echo loops.
+
+### Outbound: sync workers
+
+**Sync workers** subscribe to master changed events and write the agreed values back to each system of reference via its public API. Each worker only writes the attributes that system is a reference for, per the ownership matrix — it never overwrites a value the target system owns.
+
+The classic failure mode here is the **echo loop**: the worker updates CRM, CRM fires a webhook, the upstream handler publishes a change, the hub processes it, and around you go. Break it with a combination of:
+
+*   **Value comparison** — the hub ignores inbound changes where the surviving values do not change
+*   **Origin tagging** — writes made by the integration user are recognisable and can be filtered by the upstream handler
+*   **Version checks** — ignore inbound events whose source version is older than the one already stored
+
+Messaging choice matters too. If you are weighing a log-based stream against a broker, my earlier post on [choosing event streaming or messaging](/blog/choosing-event-streaming-or-messaging-for-your-architecture) covers the trade-offs, and [choreography versus orchestration](/blog/when-should-you-choose-choreography-vs-orchestration-for-your-microservices-architecture) is relevant when deciding whether the hub coordinates the sync or simply announces changes. I go much deeper on the Azure implementation of this pattern in [Event-Driven Integration Platforms on Azure](/blog/deep-dive-event-driven-integration-platforms-on-azure).
+
+---
+
+## Read-only lookup libraries and APIs
+
+Not every consumer needs events. Many just need to ask "who is this?" or "what is the master ID for CRM contact 123?". Provide a **read-only lookup API** over the hub:
+
+*   `GET /contacts/{masterId}` — the current master record
+*   `GET /contacts/by-source/{system}/{sourceId}` — resolve a source ID to its master, following merge redirects
+*   `POST /contacts/search` — search by normalised attributes, returning candidates with scores
+
+Keep it **read-only**. The moment you allow writes through the lookup API, you have created another authoring channel that bypasses ownership rules. Writes go to the system of record and flow through the hub.
+
+For internal consumers, a thin **typed client library** around the API pays for itself quickly: it handles authentication, retries, caching of stable lookups, and merge redirects consistently, so every team does not reinvent them.
+
+```typescript
+export interface MasterContact {
+  masterId: string;
+  legalName: { given: string; family: string };
+  email?: string;
+  sourceLinks: ReadonlyArray<{ system: string; sourceId: string }>;
+  updatedAt: string;
+}
+
+export class ContactLookupClient {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly getToken: () => Promise<string>,
+  ) {}
+
+  async bySource(system: string, sourceId: string): Promise<MasterContact | null> {
+    const response = await fetch(
+      `${this.baseUrl}/contacts/by-source/${encodeURIComponent(system)}/${encodeURIComponent(sourceId)}`,
+      { headers: { Authorization: `Bearer ${await this.getToken()}` } },
+    );
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`Lookup failed: ${response.status}`);
+    return (await response.json()) as MasterContact;
+  }
+}
+```
+
+Secure it like any other API — authenticated, scoped by role, and with sensitive attributes masked unless the caller has a legitimate need. Master data is a very attractive target precisely because it is clean and joined up.
+
+---
+
+## Data quality metrics
+
+MDM is never finished, so treat data quality as a set of measurable service levels. The metrics I find most useful:
+
+| Dimension | Example metric |
+|---|---|
+| Completeness | Percentage of master contacts with a verified email |
+| Validity | Percentage of addresses passing validation |
+| Uniqueness | Estimated duplicate rate within each source system |
+| Consistency | Percentage of reference copies matching the master value |
+| Timeliness | Median and 95th percentile time from source change to sync complete |
+| Stewardship | Queue size, queue age, decisions per day, overturned auto-merges |
+
+Publish these on a dashboard that business owners actually look at, and trend them. The consistency metric is particularly powerful: it tells you whether sync is working without anyone having to raise a ticket. A falling consistency score on one system usually means a sync worker is silently failing or a new field has started being edited locally.
+
+---
+
+## The initial load
+
+Getting existing data into the hub is a project in itself, and the approach matters.
+
+1.  **Profile first.** Before writing match rules, profile every source: null rates, value distributions, format variation, obvious junk ("test test", "N/A", placeholder emails). Profiling tells you which fields are trustworthy enough to match on.
+2.  **Cleanse at source where you can.** If one system is full of placeholder emails, fix that before loading or exclude the field from matching for that source.
+3.  **Load the most trusted source first.** Seed masters from the system with the best quality data, then match the others against it. This produces more stable master IDs than loading everything at once.
+4.  **Run in dry-run mode.** Execute the full match without committing, and have stewards review a stratified sample — some auto-merges, some reviews, some no-matches. Tune, repeat.
+5.  **Expect a large first queue.** Plan steward capacity for the initial backlog, and consider raising the lower threshold temporarily so only the most likely matches go to review.
+6.  **Freeze rule versions.** Record which rule version produced every link, so you can re-run or explain later.
+7.  **Switch on sync last.** Only once the consolidated view is trusted should you enable writes back to sources. Turning on coexistence with a poor master spreads bad data everywhere at machine speed.
+
+If the initial load is part of a broader platform migration, the same discipline of rehearsals, reconciliation and quality gates applies — I cover that in [Migrating off Legacy Systems with a Medallion Architecture](/blog/migrating-off-legacy-systems-with-a-medallion-architecture). And if your organisation is moving towards domain-owned data products, MDM complements rather than competes with [data mesh](/blog/deep-dive-data-mesh): the master customer view becomes a well-governed data product that other domains consume.
+
+---
+
+## Conclusion
+
+*   **Master data management** creates one trusted view of core entities by combining a master record, a cross-reference to every source ID, and the rules and people that keep it accurate
+*   Choose an **implementation style** — registry, consolidation, coexistence or centralised — based on the control you need and the change you can absorb; consolidation is often the best first step
+*   Define **system of record ownership per attribute**, not per entity, and get it signed off before writing match rules
+*   **Matching** combines normalisation, multi-key blocking, deterministic rules and probabilistic scoring with two thresholds; measure precision and recall, and bias towards precision
+*   **Survivorship** rules should be per attribute, expressed as data, and recorded with lineage
+*   **Stewardship queues** handle the grey zone, and every decision becomes training data
+*   Model merges as **link changes** over immutable source records so **unmerge** is safe and auditable
+*   Keep SaaS systems in sync with **upstream handlers, canonical events and sync workers**, and break echo loops deliberately
+*   Expose a **read-only lookup API** and typed client library for consumers that just need answers
+*   Track **data quality metrics** continuously, and treat the **initial load** as a rehearsed, profiled, staged exercise
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

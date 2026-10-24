@@ -1,5 +1,82 @@
 [
   {
+    "slug": "implementation-probes-using-ai-generated-prs-to-find-requirement-gaps",
+    "title": "Implementation Probes - Using AI-Generated PRs to Find Requirement Gaps",
+    "date": "2026-10-22",
+    "excerpt": "Last week I wrote about why the way I work with GitHub Copilot [isn't vibe coding](/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery), and the response surprised me. Very few people pushed back on the overall operating model. Almost everyone, though, asked the same…",
+    "feature_image": "/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps/feature-image.png"
+  },
+  {
+    "slug": "its-not-vibe-coding-ai-assisted-architecture-led-delivery",
+    "title": "It's Not Vibe Coding - AI-Assisted, Architecture-Led Delivery",
+    "date": "2026-10-15",
+    "excerpt": "I'll be upfront about something that has been quietly bothering me. Over the last year, more than a few people have described me as a \"vibe coder\". Sometimes it is said with a grin, sometimes as a compliment about how quickly things are moving, and occasionally as a gentle dig. E…",
+    "feature_image": "/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/feature-image.png"
+  },
+  {
+    "slug": "one-thin-shell-many-products-modular-web-apps-with-shared-libraries",
+    "title": "One Thin Shell, Many Products - Modular Web Apps for Multiple Personas",
+    "date": "2026-10-08",
+    "excerpt": "I'll be honest with you — I have lost count of the number of times I have watched an organisation build the same web application three times. One portal for customers, another for internal staff, a third for partners or administrators. Each one has its own login flow, its own but…",
+    "feature_image": "/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/feature-image.png"
+  },
+  {
+    "slug": "authenticating-ai-agents-identity-on-behalf-of-and-least-privilege",
+    "title": "Authenticating AI Agents - Identity, On-Behalf-Of and Least Privilege",
+    "date": "2026-10-01",
+    "excerpt": "Here's a question I now ask in every AI agent design review, and it is remarkable how often the room goes quiet: **\"When the agent calls that API, whose permissions is it using?\"** Too often the honest answer is \"a service account with access to everything, because that was the q…",
+    "feature_image": "/blog/authenticating-ai-agents-identity-on-behalf-of-and-least-privilege/feature-image.png"
+  },
+  {
+    "slug": "building-domain-specific-ai-assistants-responsibly",
+    "title": "Building Domain-Specific AI Assistants Responsibly",
+    "date": "2026-09-24",
+    "excerpt": "It's surprisingly easy to build a chatbot that answers questions about a specialist subject. Point a large language model at a pile of documents, wire up a chat window, and within a day you have something that sounds remarkably knowledgeable. That is exactly what makes it dangero…",
+    "feature_image": "/blog/building-domain-specific-ai-assistants-responsibly/feature-image.png"
+  },
+  {
+    "slug": "rules-as-data-building-configurable-business-rules-engines",
+    "title": "Rules as Data - Building Configurable Business Rules Engines",
+    "date": "2026-09-17",
+    "excerpt": "Here's something I've seen play out more times than I'd like to admit. A business rule starts life as a simple `if` statement — \"orders over $100 get free delivery\". A month later there's an exception for a particular region. Then a promotion that runs for two weeks. Then a diffe…",
+    "feature_image": "/blog/rules-as-data-building-configurable-business-rules-engines/feature-image.png"
+  },
+  {
+    "slug": "migrating-off-legacy-systems-with-a-medallion-architecture",
+    "title": "Migrating off Legacy Systems with a Medallion Architecture",
+    "date": "2026-09-10",
+    "excerpt": "If I'm being completely honest, data migration is the part of a modernisation programme that everyone underestimates and nobody wants to own. The new SaaS platform gets the demos, the steering committee attention and the training plans. The migration gets a line on the plan that…",
+    "feature_image": "/blog/migrating-off-legacy-systems-with-a-medallion-architecture/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-event-driven-integration-platforms-on-azure",
+    "title": "Deep Dive - Event-Driven Integration Platforms on Azure",
+    "date": "2026-09-03",
+    "excerpt": "I'll be upfront: most integration problems I have seen in enterprise programmes were not caused by the wrong technology. They were caused by point-to-point connections that made perfect sense one at a time. CRM calls billing directly. Billing calls the document platform. The supp…",
+    "feature_image": "/blog/deep-dive-event-driven-integration-platforms-on-azure/feature-image.png"
+  },
+  {
+    "slug": "deep-dive-master-data-management",
+    "title": "Deep Dive - Master Data Management: One Trusted View of Your Core Entities",
+    "date": "2026-08-27",
+    "excerpt": "Let me start with a confession: for a long time I thought master data management was a problem you solved by buying a product. Pick a vendor, install the hub, point your systems at it, done. Then I spent time on enterprise programmes where an organisation had five or six SaaS pla…",
+    "feature_image": "/blog/deep-dive-master-data-management/feature-image.png"
+  },
+  {
+    "slug": "end-to-end-testing-distributed-integrations-with-emulators",
+    "title": "End-to-End Testing Distributed Integrations with Emulators",
+    "date": "2026-08-20",
+    "excerpt": "Truth be told, end-to-end testing is the part of distributed systems that most teams quietly give up on. Unit tests are easy, and everyone agrees they are important. But the bugs that actually hurt in event-driven integrations rarely live inside a single function — they live in t…",
+    "feature_image": "/blog/end-to-end-testing-distributed-integrations-with-emulators/feature-image.png"
+  },
+  {
+    "slug": "observability-as-code-alerts-dashboards-and-workbooks-in-terraform",
+    "title": "Observability as Code - Alerts, Dashboards and Workbooks in Terraform",
+    "date": "2026-08-13",
+    "excerpt": "I'll be upfront about this one: for a long time I treated monitoring as something you bolted on after the \"real\" infrastructure was done. The compute, networking and data stores lived in Terraform, went through pull requests and were promoted carefully between environments — and…",
+    "feature_image": "/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/feature-image.png"
+  },
+  {
     "slug": "demystifying-large-language-models",
     "title": "Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI",
     "date": "2026-03-15",

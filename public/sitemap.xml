@@ -12,6 +12,72 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://robertleggett.com.au/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps/</loc>
+    <lastmod>2026-10-22T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/</loc>
+    <lastmod>2026-10-15T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/</loc>
+    <lastmod>2026-10-08T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/authenticating-ai-agents-identity-on-behalf-of-and-least-privilege/</loc>
+    <lastmod>2026-10-01T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/building-domain-specific-ai-assistants-responsibly/</loc>
+    <lastmod>2026-09-24T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/rules-as-data-building-configurable-business-rules-engines/</loc>
+    <lastmod>2026-09-17T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/migrating-off-legacy-systems-with-a-medallion-architecture/</loc>
+    <lastmod>2026-09-10T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/deep-dive-event-driven-integration-platforms-on-azure/</loc>
+    <lastmod>2026-09-03T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/deep-dive-master-data-management/</loc>
+    <lastmod>2026-08-27T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/end-to-end-testing-distributed-integrations-with-emulators/</loc>
+    <lastmod>2026-08-20T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://robertleggett.com.au/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/</loc>
+    <lastmod>2026-08-13T00:00:00.000Z</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://robertleggett.com.au/blog/demystifying-large-language-models/</loc>
     <lastmod>2026-03-15T00:00:00.000Z</lastmod>
     <changefreq>weekly</changefreq>

@@ -1,0 +1,467 @@
+---
+title: "Migrating off Legacy Systems with a Medallion Architecture"
+date: "2026-09-10"
+slug: "migrating-off-legacy-systems-with-a-medallion-architecture"
+status: "publish"
+feature_image: "/blog/migrating-off-legacy-systems-with-a-medallion-architecture/feature-image.png"
+tags: ["Data Migration", "Medallion Architecture", "Lakehouse", "Data Engineering", "Data Quality", "Reconciliation", "Cut-over", "Legacy Modernisation", "Robert Leggett"]
+
+meta:
+  title: "Migrating off Legacy Systems with a Medallion Architecture | Robert Leggett"
+  description: "A practical guide to migrating from a legacy ERP or practice-management system to a new SaaS platform using bronze, silver and gold lakehouse layers — extraction, mapping specs, reference data, reconciliation, quality gates, rehearsals, cut-over runbooks and rollback."
+  keywords: ["data migration", "medallion architecture", "bronze silver gold", "lakehouse", "legacy migration", "data reconciliation", "cut-over runbook", "dress rehearsal", "data quality gates", "idempotent loads", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/migrating-off-legacy-systems-with-a-medallion-architecture"
+  image: "https://robertleggett.com.au/blog/migrating-off-legacy-systems-with-a-medallion-architecture/feature-image.png"
+
+og:
+  type: "article"
+  title: "Migrating off Legacy Systems with a Medallion Architecture"
+  description: "A practical guide to migrating from a legacy ERP or practice-management system to a new SaaS platform using bronze, silver and gold lakehouse layers — extraction, mapping specs, reference data, reconciliation, quality gates, rehearsals, cut-over runbooks and rollback."
+  image: "https://robertleggett.com.au/blog/migrating-off-legacy-systems-with-a-medallion-architecture/feature-image.png"
+  url: "https://robertleggett.com.au/blog/migrating-off-legacy-systems-with-a-medallion-architecture"
+
+twitter:
+  card: "summary_large_image"
+  title: "Migrating off Legacy Systems with a Medallion Architecture"
+  description: "A practical guide to migrating from a legacy ERP or practice-management system to a new SaaS platform using bronze, silver and gold lakehouse layers — extraction, mapping specs, reference data, reconciliation, quality gates, rehearsals, cut-over runbooks and rollback."
+  image: "https://robertleggett.com.au/blog/migrating-off-legacy-systems-with-a-medallion-architecture/feature-image.png"
+---
+
+If I'm being completely honest, data migration is the part of a modernisation programme that everyone underestimates and nobody wants to own. The new SaaS platform gets the demos, the steering committee attention and the training plans. The migration gets a line on the plan that says "migrate data" with a suspiciously short duration next to it. Then, a few months out from go-live, someone discovers that the legacy system has twenty years of free-text fields, four different ways of recording an address, and a status code that means different things depending on which office entered it.
+
+Over a number of enterprise programmes I have come to treat migration as a product in its own right, with its own architecture, its own tests and its own release process. The architecture that has served me best is the **medallion** pattern borrowed from lakehouse engineering: land the legacy data untouched in **bronze**, cleanse and conform it in **silver**, shape it for the target in **gold**, and reconcile at every hop. In this post I will walk through how to apply it to moving off a legacy practice-management or ERP system onto a new SaaS platform — including the bits that are not about data at all, like rehearsals, runbooks and rollback.
+
+---
+
+## Before you start
+
+About this post:
+
+*   14 – 18-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A clear model for using bronze, silver and gold layers to structure a legacy-to-SaaS migration
+*   Practical patterns for extraction, mapping and transformation specifications, and reference data
+*   A reconciliation approach using counts, checksums and control totals at every layer
+*   Guidance on data quality gates, idempotent loads and auditing
+*   A rehearsal, cut-over and rollback playbook you can adapt to your own programme
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why migrations go wrong
+
+Before the architecture, it is worth naming the failure modes, because the architecture exists to prevent them:
+
+*   **Transform-in-flight scripts.** Someone writes a script that reads from the legacy database and writes straight into the new platform's API. It works on a sample. It cannot be reconciled, re-run, or explained when it partially fails at 2am on cut-over night.
+*   **Mapping in people's heads.** Business rules for translating legacy codes live in a spreadsheet one analyst understands. When they go on leave, so does the migration.
+*   **No proof of completeness.** Nobody can say with evidence that every record and every dollar made it across.
+*   **Late discovery of data quality issues.** The first full-volume run happens a few weeks before go-live and surfaces thousands of exceptions with no time to fix them.
+*   **One-shot cut-over.** The first time the end-to-end process runs at full volume is the real thing.
+
+The medallion approach addresses these by making every step **repeatable**, **inspectable** and **reconcilable**.
+
+---
+
+## The medallion pattern, applied to migration
+
+In a lakehouse, the medallion architecture organises data into progressively refined layers. For analytics it is a general-purpose pattern; for migration I give each layer a very specific job.
+
+![Medallion pipeline for a legacy-to-SaaS migration](/blog/migrating-off-legacy-systems-with-a-medallion-architecture/inline-1.png)
+
+| Layer | Purpose in a migration | Shape | Rules |
+|---|---|---|---|
+| **Bronze** | Faithful, immutable copy of what the legacy system held at extract time | Source schema, as landed | No transformation; add load metadata only |
+| **Silver** | Cleansed, de-duplicated, conformed data in a neutral model | Canonical entities | Standardise, validate, resolve reference data, capture rejects |
+| **Gold** | Exactly what the target platform will receive | Target platform's import or API shape | Apply target-specific mappings, defaults and IDs |
+
+Any lakehouse platform will do — Microsoft Fabric, Databricks, Synapse, or open-source Spark with Delta Lake or Apache Iceberg. What matters is that you have **versioned tables**, **time travel** so you can compare runs, notebooks or jobs under source control, and enough compute to run full volume repeatedly.
+
+The key discipline is that **each layer is only ever built from the layer before it**. Gold never reads bronze. Loads never read silver. That gives you clean boundaries to reconcile against and a clear place to look when something is wrong.
+
+---
+
+## Extraction: getting data out of the legacy system
+
+### Full extracts and deltas
+
+You will need two kinds of extract:
+
+*   **Full extract** — every in-scope record, used for rehearsals and the initial bulk load
+*   **Delta extract** — only records created or changed since a watermark, used to catch up between the bulk load and final cut-over
+
+Deltas are where legacy systems bite. Many do not reliably maintain a "last modified" timestamp, or only update it for some kinds of change. Options, in order of preference:
+
+1.  **Change data capture** from the database log, if the legacy database supports it
+2.  **Reliable modified timestamps**, verified by testing — change a record through every screen and check the timestamp moves
+3.  **Hash comparison** — extract everything, hash each row, and compare against the previous extract's hashes to find what changed
+
+Hash comparison is slower but brutally reliable, and for many legacy systems it is the only honest option.
+
+### Land it untouched
+
+Extract to files (Parquet where possible, CSV if you must) with a **manifest** alongside each extract: table name, row count, extract timestamp, source query, and a checksum per file. The manifest is your first reconciliation control — the source's own statement of what it sent.
+
+```python
+from pyspark.sql import functions as F
+
+def land_bronze(table: str, extract_id: str, path: str, manifest: dict) -> None:
+    raw = spark.read.parquet(path)
+    row_hash = F.sha2(F.concat_ws("||", *[F.col(c).cast("string") for c in raw.columns]), 256)
+    df = (
+        raw.withColumn("_extract_id", F.lit(extract_id))
+        .withColumn("_extracted_at", F.lit(manifest["extracted_at"]).cast("timestamp"))
+        .withColumn("_source_file", F.input_file_name())
+        .withColumn("_row_hash", row_hash)
+    )
+
+    landed = df.count()
+    expected = manifest["tables"][table]["row_count"]
+    if landed != expected:
+        raise ValueError(f"{table}: landed {landed} rows, manifest says {expected}")
+
+    df.write.format("delta").mode("append").saveAsTable(f"bronze.{table}")
+```
+
+Bronze is **append-only**. Every extract is kept, tagged with its extract ID. That lets you compare any two runs, reproduce a rehearsal exactly, and prove after go-live what the legacy system held at the moment of cut-over.
+
+---
+
+## Mapping and transformation specifications
+
+The mapping specification is the single most important artefact in a migration. It defines, for every target field, where the value comes from and how it is derived. In too many programmes it is a spreadsheet that drifts away from the code.
+
+I treat it as **data under version control**, reviewed like code, and used to generate or drive the transformations. Each entry captures:
+
+*   Target entity and field
+*   Source table(s) and column(s)
+*   Transformation rule (direct, lookup, derived, default, concatenation)
+*   Reference data table, if a lookup
+*   Null and default handling
+*   Business owner who signed it off
+*   Test cases — example inputs and expected outputs
+
+```yaml
+entity: customer
+target: saas.Customer
+version: 14
+fields:
+  - target: externalReference
+    source: legacy.CLIENT.CLIENT_CODE
+    rule: direct
+    required: true
+
+  - target: displayName
+    source: [legacy.CLIENT.SURNAME, legacy.CLIENT.GIVEN_NAMES, legacy.CLIENT.ORG_NAME]
+    rule: derived
+    expression: "coalesce(org_name, concat_ws(' ', given_names, surname))"
+    owner: customer-data-owner
+
+  - target: status
+    source: legacy.CLIENT.STATUS_CD
+    rule: lookup
+    reference: ref_customer_status
+    onUnmapped: reject
+
+  - target: preferredChannel
+    source: legacy.CLIENT.CONTACT_PREF
+    rule: lookup
+    reference: ref_contact_channel
+    onUnmapped: default
+    default: email
+    tests:
+      - input: "E"
+        expected: email
+      - input: "P"
+        expected: phone
+```
+
+Note the `onUnmapped` behaviour. Every lookup must say explicitly what happens when a legacy code has no mapping: **reject** the record, apply a **default**, or **pass through** to a catch-all. Silent nulls are how data quietly disappears.
+
+Version the spec and stamp the version onto every gold row. When a stakeholder asks why a field looks the way it does, you can point to the exact rule that produced it.
+
+---
+
+## Reference data
+
+Legacy systems are full of codes: statuses, categories, types, regions, office identifiers, user IDs. The new platform has its own, usually fewer and differently shaped. **Reference data mapping** is the translation table between them, and it deserves its own workstream.
+
+*   Extract every distinct value actually **in use** in the legacy data, with counts — not just the values in the legacy configuration tables, which often include long-dead codes and miss ones that were typed in directly
+*   Have business owners map each in-use value to a target value, or explicitly decide to retire it
+*   Store mappings as versioned tables in the lakehouse, with effective dates if meanings changed over time
+*   Run a **coverage check** before every rehearsal: any in-use value without a mapping is a defect
+
+Users and owners are a special case. Records often reference people who left years ago. Decide early whether those map to a generic "migrated user", to a successor, or stay as a text attribute — and agree it with the business, because it affects reporting and access control in the new platform.
+
+---
+
+## Silver: cleanse and conform
+
+Silver is where the real engineering happens. Its job is to turn legacy-shaped data into a **neutral, conformed model** of your business entities — independent of both the source and the target. That neutrality pays off when you migrate the same data into more than one target, and it gives you a sensible place to apply quality rules.
+
+Typical silver transformations:
+
+*   **Type and format standardisation** — dates, numbers, phone numbers, postcodes, character encodings
+*   **De-duplication** — the legacy system almost certainly contains duplicate customers. If you are introducing master data management alongside the migration, silver is where matching happens; I cover the techniques in [Deep Dive - Master Data Management](/blog/deep-dive-master-data-management)
+*   **Reference data resolution** — applying the mapping tables and flagging unmapped values
+*   **Structural reshaping** — splitting overloaded legacy tables, joining fragmented ones
+*   **Validation** — mandatory fields, referential integrity, business rules
+
+Records that fail validation are not dropped. They go to a **rejects table** with the reason, the rule that failed and the extract ID, so the count of accepted plus rejected always equals the count in:
+
+```python
+from pyspark.sql import DataFrame, functions as F
+
+def apply_rules(df: DataFrame, rules: dict[str, F.Column]) -> tuple[DataFrame, DataFrame]:
+    failed = F.array(*[F.when(~cond, F.lit(name)) for name, cond in rules.items()])
+    checked = df.withColumn("_failed_rules", F.array_compact(failed))
+
+    accepted = checked.filter(F.size("_failed_rules") == 0).drop("_failed_rules")
+    rejected = checked.filter(F.size("_failed_rules") > 0)
+    return accepted, rejected
+
+customer_rules = {
+    "has_reference": F.col("external_reference").isNotNull(),
+    "has_name": F.length(F.trim(F.col("display_name"))) > 0,
+    "status_mapped": F.col("status").isNotNull(),
+    "valid_email": F.col("email").isNull() | F.col("email").rlike(r"^[^@\s]+@[^@\s]+\.[^@\s]+$"),
+}
+
+accepted, rejected = apply_rules(spark.table("silver.customer_staged"), customer_rules)
+assert accepted.count() + rejected.count() == spark.table("silver.customer_staged").count()
+```
+
+Rejects are not just an engineering artefact — they are a **work queue for the business**. Publish them in a form data owners can action: fix in the legacy system before the next extract, supply a mapping, or formally accept that the record will not migrate.
+
+---
+
+## Gold: shape for the target
+
+Gold contains exactly what will be sent to the new platform, in the platform's shape. If the platform has a bulk import format, gold matches it column for column. If you load through APIs, gold holds one row per API payload.
+
+Gold is also where you:
+
+*   Apply **target-specific defaults** the platform requires but the business does not care about
+*   Assign **external IDs** — the legacy identifier stored in a target field, so every target record can be traced back
+*   Resolve **load order dependencies** — customers before contacts, contacts before cases or orders, parents before children
+*   Partition loads into **waves** if the volume or the platform's rate limits demand it
+
+Keeping gold as a materialised table, rather than generating payloads on the fly during the load, means you can inspect, count and checksum exactly what you are about to send before you send it.
+
+---
+
+## Idempotent loads
+
+The load step will fail partway through at least once. The API will throttle, a batch will time out, a network blip will drop a connection. The question is whether you can safely run it again.
+
+Make loads **idempotent** by design:
+
+*   **Upsert on external ID.** Most SaaS platforms let you mark a field as an external identifier and upsert against it. Loading the same gold row twice updates rather than duplicates.
+*   **Track load state per row.** Record, for each gold row, its load status, the target ID returned, the attempt count and any error. Re-runs only pick up rows not yet loaded successfully.
+*   **Store the ID cross-reference.** The mapping from legacy ID to target ID becomes a critical asset — for child loads, for reconciliation, for post-migration integration and for support.
+*   **Respect rate limits** with batching, backoff and concurrency controls rather than hoping.
+
+```python
+def load_wave(entity: str, wave: int, client: TargetClient) -> None:
+    pending = (
+        spark.table(f"gold.{entity}")
+        .join(spark.table("ops.load_state").filter(F.col("entity") == entity), "external_reference", "left_anti")
+        .filter(F.col("_wave") == wave)
+    )
+
+    for batch in iterate_batches(pending, size=200):
+        results = client.upsert_by_external_id(entity, batch)
+        record_load_state(entity, results)  # status, target_id, error, attempt, timestamp
+```
+
+If the migration needs to coexist with live integrations after go-live — for example, the new platform starts publishing events the moment records exist — make sure those integrations can tell a migration load from a business change. Otherwise the bulk load triggers a flood of downstream events. I discuss that kind of origin tagging in [Event-Driven Integration Platforms on Azure](/blog/deep-dive-event-driven-integration-platforms-on-azure).
+
+---
+
+## Reconciliation
+
+Reconciliation is how you **prove** the migration is complete and correct. Without it, go/no-go is a feeling. With it, it is evidence.
+
+![Reconciliation checkpoints across the layers](/blog/migrating-off-legacy-systems-with-a-medallion-architecture/inline-2.png)
+
+Reconcile at every boundary, using three kinds of control:
+
+### Counts
+
+The simplest and most important. Rows in the extract equal rows in the manifest equal rows in bronze. Accepted plus rejected in silver equals rows in. Rows in gold equal accepted silver rows (allowing for documented splits and merges). Rows loaded plus load failures equal rows in gold. Rows read back from the target equal rows loaded.
+
+Counts should be broken down — by entity, by status, by office or region, by year — not just totals. A total that matches can hide a hundred missing records in one category offset by a hundred duplicates in another.
+
+### Checksums and hashes
+
+Counts tell you the number of rows is right; hashes tell you the content is right. Hash each row's significant fields at bronze and carry the hash forward, or compute per-column aggregate hashes at each layer for fields that should not change. For the target, read back a sample (or everything, if the platform allows) and compare field by field against gold.
+
+### Control totals
+
+For any data with money or quantities — invoices, balances, unbilled time, stock — reconcile **sums**, not just counts. The total outstanding balance per customer, per ledger and overall should be identical in the legacy system, in every layer, and in the target. These financial control totals are typically the numbers your finance team will insist on signing off before go-live, and rightly so.
+
+```python
+def reconcile(entity: str, layers: dict[str, DataFrame], amount_col: str | None = None) -> DataFrame:
+    rows = []
+    for layer, df in layers.items():
+        agg = [F.count("*").alias("row_count")]
+        if amount_col:
+            agg.append(F.sum(amount_col).cast("decimal(38,2)").alias("control_total"))
+        rows.append(df.agg(*agg).withColumn("layer", F.lit(layer)).withColumn("entity", F.lit(entity)))
+    result = rows[0]
+    for r in rows[1:]:
+        result = result.unionByName(r)
+    return result
+```
+
+Publish reconciliation results as a report generated automatically on every run — not assembled by hand in a spreadsheet the night before. Anything that does not reconcile must have an **explained variance** with a named owner, or it is a defect.
+
+---
+
+## Data quality gates
+
+Gates are automated checks that stop the pipeline from progressing when quality falls below an agreed bar. They turn "we should check that" into "the pipeline will not continue until it is true".
+
+Examples of gates between layers:
+
+| Gate | Example check | Action on fail |
+|---|---|---|
+| Bronze in | Row count equals manifest; file checksums match | Stop; re-extract |
+| Schema drift | Columns and types match the expected contract | Stop; review mapping impact |
+| Silver out | Reject rate per entity below an agreed threshold | Stop; triage rejects |
+| Reference coverage | No unmapped in-use codes | Stop; complete mappings |
+| Gold out | Referential integrity — every child has a parent in gold | Stop; fix ordering or data |
+| Pre-load | Control totals in gold equal source | Stop; investigate variance |
+| Post-load | Read-back counts and totals match gold | Go/no-go input |
+
+Define thresholds with the business up front. "Zero rejects" is rarely realistic for twenty-year-old data; "fewer than an agreed percentage, each with an accepted disposition" usually is. Tools like dbt tests, Great Expectations or Soda can express these as code, or you can write them directly in your notebooks — the important thing is that they are **automated, versioned and blocking**. I covered quality-as-code tooling in more depth in [Deep Dive - Data Mesh](/blog/deep-dive-data-mesh), and many of the same ideas apply.
+
+---
+
+## Initial load versus delta
+
+For anything beyond a small dataset, you will not migrate everything during the cut-over window. The common pattern:
+
+1.  **Initial (bulk) load** — some days or weeks before go-live, load a full extract into the target while the legacy system stays live. This takes the bulk of the volume, and the time pressure, out of the cut-over weekend.
+2.  **Delta loads** — periodically extract changes since the last watermark and apply them, keeping the target close behind the legacy system.
+3.  **Final delta** — during cut-over, after the legacy system is frozen, extract and load the last set of changes.
+
+This only works if your pipeline handles updates and deletes, not just inserts — another reason for idempotent upserts on external IDs. Deletes need particular thought: legacy systems often hard-delete, so a missing row in a delta extract may be the only signal. Hash or key comparison against the previous full extract catches these.
+
+The trade-off is complexity: a bulk-plus-delta approach means the new platform holds near-live data before go-live, which raises questions about access, user activity and integrations in the target before it is officially live. Lock the target down to the migration identity until cut-over.
+
+---
+
+## Rehearsals and dress rehearsals
+
+The single biggest predictor of a smooth cut-over I have seen is the number of full rehearsals run before it.
+
+![Rehearsals to cut-over](/blog/migrating-off-legacy-systems-with-a-medallion-architecture/inline-3.png)
+
+*   **Mock loads** start early with partial data to prove the mappings, then grow to full volume. Each run produces a defect log, rejects for the business to work, and timings.
+*   **Full-volume rehearsals** run the complete pipeline into a non-production instance of the target, with reconciliation, to prove completeness and measure duration.
+*   **Dress rehearsal** — the final rehearsal runs the **actual cut-over runbook**, step by step, with the actual people, at the actual times of day, into an environment as close to production as you can get. Every step is timed against the plan.
+
+Treat each rehearsal as a release with entry and exit criteria. Do not move on until reconciliation is clean or every variance is explained, and timings fit comfortably inside the cut-over window with contingency. If the dress rehearsal takes nineteen hours and your window is twenty, you do not have a plan; you have a hope.
+
+---
+
+## The cut-over runbook
+
+The runbook is a minute-by-minute plan for cut-over, and it should be boring to execute because it has been executed several times already. Each step has:
+
+*   A number, an owner and a backup owner
+*   A planned start time and duration, based on rehearsal timings
+*   Exact instructions — commands, jobs to trigger, screens to check
+*   A verification step and the evidence to capture
+*   Dependencies on earlier steps
+*   A **go/no-go checkpoint** where relevant
+
+A typical high-level sequence:
+
+1.  Communications sent; legacy system set to read-only or users locked out
+2.  Integrations into the legacy system paused; in-flight messages drained
+3.  Final delta extract; manifest captured
+4.  Pipeline run through bronze, silver and gold with gates
+5.  Final delta loaded; load state confirmed complete
+6.  Full reconciliation report generated and reviewed
+7.  **Go/no-go decision** by the named decision makers against pre-agreed criteria
+8.  Integrations repointed to the new platform; smoke tests by business users
+9.  New platform opened to users; hypercare begins
+
+Agree the go/no-go criteria **before** cut-over weekend, in writing. At 3am, under pressure, people are inclined to accept things they would not accept on a Tuesday afternoon.
+
+---
+
+## Rollback
+
+Every cut-over plan needs a rollback plan, and the rollback plan needs a **point of no return** clearly marked on it.
+
+Before the point of no return, rollback is usually straightforward: the legacy system was frozen, not changed, so you re-enable it, re-point integrations back, and communicate. The target platform's partially loaded data can be cleared or left dormant for the next attempt. Rehearse this too — at least once, unpause the legacy integrations and prove they still work.
+
+After the point of no return — typically once users have started creating new data in the target — rollback means migrating that new data **back**, which is rarely practical. That is why the go/no-go checkpoint sits before users are let in, and why hypercare focuses on fixing forward.
+
+Keep the legacy system available in **read-only** mode for a defined period after go-live. It is invaluable for answering "what did it say before?" questions, and it is often required for record-keeping obligations anyway.
+
+---
+
+## Auditing
+
+Migrations attract scrutiny — from finance, from risk, from regulators, and from customers who notice something changed. Build the audit trail into the pipeline rather than reconstructing it afterwards:
+
+*   Immutable bronze snapshots of every extract, retained per your records policy
+*   Mapping spec and reference data **versions** stamped on every gold row
+*   Load state per row: when it was loaded, by which run, with what result and target ID
+*   The legacy-to-target **ID cross-reference**, retained permanently
+*   Reconciliation reports and go/no-go sign-offs, stored with the run they relate to
+*   Every manual intervention — a hand-fixed record, a forced re-run — logged with who and why
+
+The ID cross-reference in particular outlives the migration. Support teams, integrations and any future master data hub will need it.
+
+---
+
+## Common pitfalls
+
+*   **Skipping bronze to save time.** Without an immutable landing layer you cannot reproduce or prove anything.
+*   **Mapping specs that drift from code.** Drive transformations from the spec or test them against it.
+*   **Totals-only reconciliation.** Break down counts and control totals by meaningful dimensions.
+*   **Treating rejects as an engineering problem.** They need business owners and dispositions.
+*   **Non-idempotent loads.** The load will fail partway at least once; make re-running safe.
+*   **Too few rehearsals.** The dress rehearsal should be dull. If it is exciting, you are not ready.
+*   **Undefined go/no-go criteria.** Decide them in daylight, not during cut-over.
+*   **Forgetting integrations.** Pausing, draining and re-pointing integrations is part of the runbook, and bulk loads can trigger downstream events.
+
+---
+
+## Conclusion
+
+*   Treat **data migration as a product** with its own architecture, tests and releases — not a line on the plan
+*   Use the **medallion pattern**: immutable **bronze** extracts, cleansed and conformed **silver**, and target-shaped **gold**, each built only from the layer before
+*   Manage **mapping and transformation specifications as versioned data**, with explicit handling for unmapped values, and treat **reference data** as its own workstream
+*   Capture **rejects** rather than dropping them, and give them business owners
+*   Make loads **idempotent** with upserts on external IDs and per-row load state
+*   **Reconcile** at every layer with counts, checksums and control totals, broken down by meaningful dimensions
+*   Enforce automated, blocking **data quality gates** between layers
+*   Combine an **initial bulk load** with **deltas** to shrink the cut-over window
+*   **Rehearse** repeatedly, finishing with a timed **dress rehearsal** of the real runbook
+*   Define **go/no-go criteria**, a **point of no return** and a tested **rollback** before cut-over weekend
+*   Build **auditing** in from the start, and keep the legacy-to-target ID cross-reference permanently
+
+---
+
+## Finally, we made it, did this help?
+
+If you found this to be helpful, have any questions or want to provide feedback, please let me know.
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

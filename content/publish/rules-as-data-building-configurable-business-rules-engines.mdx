@@ -1,0 +1,658 @@
+---
+title: "Rules as Data - Building Configurable Business Rules Engines"
+date: "2026-09-17"
+slug: "rules-as-data-building-configurable-business-rules-engines"
+status: "publish"
+feature_image: "/blog/rules-as-data-building-configurable-business-rules-engines/feature-image.png"
+tags: ["Architecture", "Business Rules", "Rules Engine", "Decision Tables", "DMN", "TypeScript", "Testing", "Governance", "Robert Leggett"]
+
+meta:
+  title: "Rules as Data - Building Configurable Business Rules Engines | Robert Leggett"
+  description: "How to externalise business rules as data — decision tables, JSON rules and DMN concepts — and build a TypeScript rules engine with versioning, effective dating, validation, table-driven and golden-file tests, explainable audit trails, authoring UX, governance and caching."
+  keywords: ["rules engine", "business rules", "rules as data", "decision tables", "DMN", "json-rules-engine", "TypeScript", "effective dating", "rule versioning", "golden file testing", "explainability", "audit trail", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/rules-as-data-building-configurable-business-rules-engines"
+  image: "https://robertleggett.com.au/blog/rules-as-data-building-configurable-business-rules-engines/feature-image.png"
+
+og:
+  type: "article"
+  title: "Rules as Data - Building Configurable Business Rules Engines"
+  description: "How to externalise business rules as data — decision tables, JSON rules and DMN concepts — and build a TypeScript rules engine with versioning, effective dating, validation, table-driven and golden-file tests, explainable audit trails, authoring UX, governance and caching."
+  image: "https://robertleggett.com.au/blog/rules-as-data-building-configurable-business-rules-engines/feature-image.png"
+  url: "https://robertleggett.com.au/blog/rules-as-data-building-configurable-business-rules-engines"
+
+twitter:
+  card: "summary_large_image"
+  title: "Rules as Data - Building Configurable Business Rules Engines"
+  description: "How to externalise business rules as data — decision tables, JSON rules and DMN concepts — and build a TypeScript rules engine with versioning, effective dating, validation, table-driven and golden-file tests, explainable audit trails, authoring UX, governance and caching."
+  image: "https://robertleggett.com.au/blog/rules-as-data-building-configurable-business-rules-engines/feature-image.png"
+---
+
+Here's something I've seen play out more times than I'd like to admit. A business rule starts life as a simple `if` statement — "orders over $100 get free delivery". A month later there's an exception for a particular region. Then a promotion that runs for two weeks. Then a different rule for members. Before long, a small change to a delivery fee needs a developer, a pull request, a code review, a regression test cycle and a production deployment — and the people who actually own the rule have no way of seeing what the system does today, let alone what it did last March when a customer disputes a charge.
+
+The way out is to treat **rules as data**: express business decisions in a structured, versioned format — decision tables, JSON rules, or a standard like DMN — and evaluate them with a small, well-tested engine. In this article I'll walk through how I approach this: when externalising rules is worth it, how to model them, building an evaluation engine in TypeScript, versioning and effective dating, validation, table-driven and golden-file testing, explainability and audit, authoring UX for business users, governance and approvals, and performance. All the examples use a deliberately invented domain — **delivery fees for a fictional online store** — so the patterns are what matters, not the numbers.
+
+---
+
+## Before you start
+
+About this post:
+
+*   12 – 16-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A clear view of when to externalise rules and when to leave them in code
+*   Practical models for rules as data — decision tables, condition trees and DMN concepts
+*   A typed TypeScript rules engine with hit policies, effective dating and explanation traces
+*   Testing strategies for rules, including table-driven tests, golden files and gap detection
+*   Patterns for authoring UX, governance, audit and performance in production
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## When should rules be data?
+
+Not every `if` statement deserves a rules engine. Externalising rules adds an abstraction, a new failure mode and a governance process. It is worth it when several of these are true:
+
+| Signal | Why it matters |
+|---|---|
+| **Rules change more often than the code around them** | Deploying code for a value change is slow and risky |
+| **Non-developers own the rules** | Product, operations or finance need to see and change them |
+| **Rules are time-bound** | Promotions, seasonal changes, scheduled policy changes |
+| **Decisions must be explainable** | Customers, auditors or support staff ask "why this result?" |
+| **Historical decisions must be reproducible** | Disputes need the rule as it was, not as it is |
+| **The same decision is made in several places** | One definition avoids duplicated, drifting logic |
+
+Conversely, keep logic in code when it is algorithmic rather than tabular, changes rarely, has no external owner, or when the "rules" are really just configuration values — a single threshold in a config file does not need an engine.
+
+A useful mental test: **if you can draw it as a table, it can probably be data.** If you need loops, recursion or calls to five services to express it, it probably belongs in code — with the engine calling into it, not the other way around.
+
+---
+
+## Modelling rules as data
+
+There are three common shapes, and most real systems use a mix.
+
+### Decision tables
+
+A decision table is a grid: input columns, output columns, one rule per row. Business people understand them immediately — they are spreadsheets. Here is our invented delivery fee table:
+
+| # | Region | Member | Cart total | Parcel weight (kg) | Fee | Reason |
+|---|---|---|---|---|---|---|
+| 1 | any | yes | any | ≤ 20 | 0.00 | Members ship free |
+| 2 | Metro | no | ≥ 100 | ≤ 20 | 0.00 | Free over $100 |
+| 3 | Metro | no | &lt; 100 | ≤ 20 | 9.95 | Standard metro |
+| 4 | Regional | no | any | ≤ 20 | 14.95 | Standard regional |
+| 5 | any | any | any | &gt; 20 | 29.95 | Bulky item |
+
+### Condition trees
+
+For rules that do not fit neatly into columns, a JSON condition tree with `all`/`any` groups is more flexible. This is the model used by libraries such as **json-rules-engine**:
+
+```typescript
+import { Engine } from 'json-rules-engine';
+
+const engine = new Engine();
+
+engine.addRule({
+  name: 'free-delivery-over-100',
+  conditions: {
+    all: [
+      { fact: 'region', operator: 'equal', value: 'Metro' },
+      { fact: 'cartTotal', operator: 'greaterThanInclusive', value: 100 },
+    ],
+  },
+  event: { type: 'delivery-fee', params: { fee: 0, reason: 'Free over $100' } },
+  priority: 10,
+});
+
+const { events } = await engine.run({ region: 'Metro', cartTotal: 120 });
+```
+
+### DMN
+
+**DMN (Decision Model and Notation)** is an OMG standard that formalises both. It defines decision tables with explicit **hit policies**, a small expression language (FEEL), and decision requirement diagrams that show how decisions depend on each other. Even if you never adopt a DMN engine, borrowing its concepts — especially hit policies — makes your own engine far more predictable.
+
+| Hit policy | Meaning | Good for |
+|---|---|---|
+| **Unique** | Exactly one row may match; overlap is an error | Fees, classifications — anything that must be unambiguous |
+| **First** | Rows evaluated in order; first match wins | Priority-ordered rules with a catch-all at the bottom |
+| **Priority** | Highest-priority output wins | Choosing between competing outcomes |
+| **Collect** | All matches returned, optionally summed or counted | Surcharges, discounts, flags that accumulate |
+
+For our delivery table I would use **First**: members first, then free-over-$100, then standard fees, with the bulky rule placed according to the business's intent. Making the hit policy explicit forces exactly the conversation you want — "what should happen when a member orders a 25kg parcel?" — before it becomes a production defect.
+
+---
+
+## Building the engine in TypeScript
+
+You can absolutely use an off-the-shelf engine. But a decision-table engine is small enough that building one gives you full control over typing, tracing and versioning. Here is a compact, strongly typed version.
+
+### The types
+
+```typescript
+// rules/types.ts
+export type Primitive = string | number | boolean;
+
+export type Condition =
+  | { op: 'any' }
+  | { op: 'eq'; value: Primitive }
+  | { op: 'in'; values: readonly Primitive[] }
+  | { op: 'lt' | 'lte' | 'gt' | 'gte'; value: number }
+  | { op: 'between'; min: number; max: number };
+
+export type HitPolicy = 'UNIQUE' | 'FIRST' | 'COLLECT_SUM';
+
+export interface DecisionRow<TOut> {
+  id: string;
+  when: Record<string, Condition>;
+  then: TOut;
+  note?: string;
+}
+
+export interface DecisionTable<TIn extends Record<string, Primitive>, TOut> {
+  name: string;
+  hitPolicy: HitPolicy;
+  inputs: readonly (keyof TIn & string)[];
+  rows: readonly DecisionRow<TOut>[];
+}
+
+export interface RuleSetVersion<TIn extends Record<string, Primitive>, TOut> {
+  ruleSetId: string;
+  version: number;
+  effectiveFrom: string; // ISO date, inclusive
+  effectiveTo?: string; // ISO date, exclusive
+  approvedBy: string[];
+  table: DecisionTable<TIn, TOut>;
+}
+```
+
+Representing conditions as a discriminated union rather than free-text expressions is a deliberate choice. It is less expressive than a full expression language, but it is trivially serialisable, safe to evaluate (no `eval`, no injection), easy to validate, and easy to render in a UI. In my experience, the expressiveness you give up is rarely missed — and when it is, adding a new operator is a small, reviewed code change.
+
+### Evaluating conditions with a trace
+
+```typescript
+// rules/evaluate.ts
+import type { Condition, DecisionTable, Primitive } from './types';
+
+export interface ConditionTrace {
+  input: string;
+  actual: Primitive | undefined;
+  condition: Condition;
+  matched: boolean;
+}
+
+export interface RowTrace {
+  rowId: string;
+  matched: boolean;
+  conditions: ConditionTrace[];
+}
+
+export interface Decision<TOut> {
+  outputs: TOut[];
+  matchedRowIds: string[];
+  trace: RowTrace[];
+}
+
+export function matches(condition: Condition, actual: Primitive | undefined): boolean {
+  switch (condition.op) {
+    case 'any':
+      return true;
+    case 'eq':
+      return actual === condition.value;
+    case 'in':
+      return actual !== undefined && condition.values.includes(actual);
+    case 'lt':
+      return typeof actual === 'number' && actual < condition.value;
+    case 'lte':
+      return typeof actual === 'number' && actual <= condition.value;
+    case 'gt':
+      return typeof actual === 'number' && actual > condition.value;
+    case 'gte':
+      return typeof actual === 'number' && actual >= condition.value;
+    case 'between':
+      return typeof actual === 'number' && actual >= condition.min && actual <= condition.max;
+  }
+}
+
+export class DecisionError extends Error {}
+
+export function evaluate<TIn extends Record<string, Primitive>, TOut>(
+  table: DecisionTable<TIn, TOut>,
+  facts: TIn,
+): Decision<TOut> {
+  const trace: RowTrace[] = [];
+  const hits: { rowId: string; then: TOut }[] = [];
+
+  for (const row of table.rows) {
+    const conditions: ConditionTrace[] = Object.entries(row.when).map(([input, condition]) => {
+      const actual = facts[input];
+      return { input, actual, condition, matched: matches(condition, actual) };
+    });
+    const matched = conditions.every((c) => c.matched);
+    trace.push({ rowId: row.id, matched, conditions });
+
+    if (matched) {
+      hits.push({ rowId: row.id, then: row.then });
+      if (table.hitPolicy === 'FIRST') break;
+    }
+  }
+
+  if (hits.length === 0) {
+    throw new DecisionError(`${table.name}: no rule matched`);
+  }
+  if (table.hitPolicy === 'UNIQUE' && hits.length > 1) {
+    throw new DecisionError(`${table.name}: rows ${hits.map((m) => m.rowId).join(', ')} overlap`);
+  }
+
+  return {
+    outputs: hits.map((m) => m.then),
+    matchedRowIds: hits.map((m) => m.rowId),
+    trace,
+  };
+}
+```
+
+The trace is not an afterthought; it is the most important output after the decision itself. It records **every row considered, every condition tested, the actual value, and whether it matched.** That is what turns "the system charged $14.95" into "the system charged $14.95 because rule 4 matched: region was Regional and the customer was not a member".
+
+Note also that **no match is an error, not a default**. A silently applied default is how a missing rule becomes a revenue leak. If you genuinely want a fallback, make it an explicit catch-all row in the table, where everyone can see it.
+
+### The delivery fee table as data
+
+The table itself is plain JSON — stored in a repository or a database, never compiled into the service:
+
+```json
+{
+  "ruleSetId": "delivery-fee",
+  "version": 7,
+  "effectiveFrom": "2026-07-01",
+  "approvedBy": ["ops-lead", "finance-reviewer"],
+  "table": {
+    "name": "Delivery fee",
+    "hitPolicy": "FIRST",
+    "inputs": ["region", "member", "cartTotal", "weightKg"],
+    "rows": [
+      { "id": "R1", "when": { "member": { "op": "eq", "value": true }, "weightKg": { "op": "lte", "value": 20 } }, "then": { "fee": 0, "reason": "Members ship free" } },
+      { "id": "R2", "when": { "region": { "op": "eq", "value": "Metro" }, "cartTotal": { "op": "gte", "value": 100 }, "weightKg": { "op": "lte", "value": 20 } }, "then": { "fee": 0, "reason": "Free over $100" } },
+      { "id": "R3", "when": { "region": { "op": "eq", "value": "Metro" }, "weightKg": { "op": "lte", "value": 20 } }, "then": { "fee": 9.95, "reason": "Standard metro" } },
+      { "id": "R4", "when": { "region": { "op": "eq", "value": "Regional" }, "weightKg": { "op": "lte", "value": 20 } }, "then": { "fee": 14.95, "reason": "Standard regional" } },
+      { "id": "R5", "when": { "weightKg": { "op": "gt", "value": 20 } }, "then": { "fee": 29.95, "reason": "Bulky item" } }
+    ]
+  }
+}
+```
+
+![Rule evaluation pipeline](/blog/rules-as-data-building-configurable-business-rules-engines/inline-2.png)
+
+---
+
+## Validation — catch mistakes before they publish
+
+Rules authored by humans will contain mistakes. The engine should never be the first thing to notice. I validate in two layers.
+
+### Structural validation
+
+A schema library such as **Zod** checks that the document is well-formed: known operators, correct value types, required fields, valid dates.
+
+```typescript
+// rules/schema.ts
+import { z } from 'zod';
+
+const primitive = z.union([z.string(), z.number(), z.boolean()]);
+
+const condition = z
+  .discriminatedUnion('op', [
+    z.object({ op: z.literal('any') }),
+    z.object({ op: z.literal('eq'), value: primitive }),
+    z.object({ op: z.literal('in'), values: z.array(primitive).min(1) }),
+    z.object({ op: z.enum(['lt', 'lte', 'gt', 'gte']), value: z.number() }),
+    z.object({ op: z.literal('between'), min: z.number(), max: z.number() }),
+  ])
+  .superRefine((c, ctx) => {
+    if (c.op === 'between' && c.min > c.max) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'between: min must be less than or equal to max' });
+    }
+  });
+
+const deliveryFeeOutput = z.object({
+  fee: z.number().nonnegative().multipleOf(0.01),
+  reason: z.string().min(3),
+});
+
+export const deliveryFeeRuleSet = z.object({
+  ruleSetId: z.literal('delivery-fee'),
+  version: z.number().int().positive(),
+  effectiveFrom: z.string().date(),
+  effectiveTo: z.string().date().optional(),
+  approvedBy: z.array(z.string()).min(2, 'two approvers required'),
+  table: z.object({
+    name: z.string(),
+    hitPolicy: z.enum(['UNIQUE', 'FIRST', 'COLLECT_SUM']),
+    inputs: z.array(z.enum(['region', 'member', 'cartTotal', 'weightKg'])),
+    rows: z
+      .array(z.object({ id: z.string(), when: z.record(condition), then: deliveryFeeOutput, note: z.string().optional() }))
+      .min(1),
+  }),
+});
+```
+
+### Semantic linting
+
+A schema cannot tell you that a rule is unreachable or that there is a gap. A small linter can, by evaluating the table against a set of **probe facts** that cover the boundaries of every input:
+
+*   **Unreachable rows** — under a FIRST policy, a row that is never the first match for any probe is probably shadowed by an earlier, broader row.
+*   **Gaps** — a probe that matches no row means some real-world combination will throw.
+*   **Overlaps** — under UNIQUE, any probe matching two rows is a defect.
+*   **Unknown inputs** — a condition referencing an input not declared in `inputs`.
+
+```typescript
+// rules/lint.ts
+import { evaluate, DecisionError } from './evaluate';
+import type { DecisionTable, Primitive } from './types';
+
+export interface LintFinding {
+  severity: 'error' | 'warning';
+  message: string;
+}
+
+export function lint<TIn extends Record<string, Primitive>, TOut>(
+  table: DecisionTable<TIn, TOut>,
+  probes: readonly TIn[],
+): LintFinding[] {
+  const findings: LintFinding[] = [];
+  const firstMatches = new Set<string>();
+
+  for (const probe of probes) {
+    try {
+      const decision = evaluate(table, probe);
+      const first = decision.matchedRowIds[0];
+      if (first) firstMatches.add(first);
+    } catch (error: unknown) {
+      if (error instanceof DecisionError) {
+        findings.push({ severity: 'error', message: `${error.message} for ${JSON.stringify(probe)}` });
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  for (const row of table.rows) {
+    if (!firstMatches.has(row.id)) {
+      findings.push({ severity: 'warning', message: `Row ${row.id} never wins for any probe — shadowed or untested?` });
+    }
+  }
+  return findings;
+}
+```
+
+Probes are generated from the boundaries in the table itself — for every numeric condition, test just below, at, and just above the threshold; for every enumerated input, test every known value. The cartesian product is usually small enough to evaluate in milliseconds, which means the linter can run on every keystroke in an authoring UI, not just in CI.
+
+---
+
+## Versioning and effective dating
+
+Rules change, and the old ones matter. When a customer queries a charge from three months ago, "what does the system do now?" is the wrong question. You need "what did the system do **then**?"
+
+That requires two things:
+
+1.  **Immutable versions.** A published rule set version is never edited. Changes create a new version.
+2.  **Effective dates.** Each version declares when it applies, and the engine resolves the version by the **decision date** — usually the order date — not the current time.
+
+![Effective-dated ruleset versions](/blog/rules-as-data-building-configurable-business-rules-engines/inline-3.png)
+
+```typescript
+// rules/resolve.ts
+import type { Primitive, RuleSetVersion } from './types';
+
+export function resolveVersion<TIn extends Record<string, Primitive>, TOut>(
+  versions: readonly RuleSetVersion<TIn, TOut>[],
+  decisionDate: string,
+): RuleSetVersion<TIn, TOut> {
+  const candidates = versions.filter(
+    (v) => v.effectiveFrom <= decisionDate && (v.effectiveTo === undefined || decisionDate < v.effectiveTo),
+  );
+
+  if (candidates.length === 0) {
+    throw new Error(`No ruleset version effective on ${decisionDate}`);
+  }
+  if (candidates.length > 1) {
+    throw new Error(`Overlapping ruleset versions on ${decisionDate}: ${candidates.map((c) => c.version).join(', ')}`);
+  }
+  return candidates[0] as RuleSetVersion<TIn, TOut>;
+}
+```
+
+ISO dates compare correctly as strings, which keeps this simple. Be explicit about time zones, though: decide whether "1 July" means midnight in the business's local time zone or UTC, and convert the decision timestamp accordingly before resolving. An off-by-one-day error on a scheduled rule change is a classic, embarrassing defect.
+
+Effective dating also gives you **scheduled changes** for free. The business can approve version 8 today with an effective date of 1 November, and it will switch on at exactly the right moment without a deployment — and without anyone needing to be awake at midnight to flip a switch.
+
+---
+
+## Testing rules
+
+Rules are code in disguise, and they deserve the same rigour. Three techniques cover almost everything.
+
+### Table-driven tests
+
+Business people can read and even write these. Each row is an example: given these facts, expect this outcome. Vitest's `it.each` makes them concise:
+
+```typescript
+// rules/delivery-fee.test.ts
+import { describe, expect, it } from 'vitest';
+import { evaluate } from './evaluate';
+import { loadDeliveryFee } from './load';
+
+const table = loadDeliveryFee('2026-08-15').table;
+
+describe('delivery fee — examples agreed with operations', () => {
+  it.each`
+    region        | member   | cartTotal | weightKg | fee      | rule
+    ${'Metro'}    | ${true}  | ${20}     | ${2}     | ${0}     | ${'R1'}
+    ${'Metro'}    | ${false} | ${100}    | ${2}     | ${0}     | ${'R2'}
+    ${'Metro'}    | ${false} | ${99.99}  | ${2}     | ${9.95}  | ${'R3'}
+    ${'Regional'} | ${false} | ${250}    | ${20}    | ${14.95} | ${'R4'}
+    ${'Regional'} | ${true}  | ${50}     | ${20.5}  | ${29.95} | ${'R5'}
+  `('$region, member=$member, cart $cartTotal, $weightKg kg → fee $fee via $rule', ({ region, member, cartTotal, weightKg, fee, rule }) => {
+    const decision = evaluate(table, { region, member, cartTotal, weightKg });
+    expect(decision.outputs[0]?.fee).toBe(fee);
+    expect(decision.matchedRowIds[0]).toBe(rule);
+  });
+});
+```
+
+Notice the boundaries: exactly 100, just under 100, exactly 20kg, just over. Boundary examples are where rule defects hide, and asserting the **rule ID** as well as the output catches the case where the right answer comes from the wrong rule — a sign that the table no longer means what people think it means.
+
+### Golden files
+
+Table-driven tests check the examples you thought of. **Golden files** check everything else. Keep a large, representative set of input facts — anonymised or synthetic samples of real traffic — and the outputs the current approved version produces. When a rule change is proposed, run every input through both the current and the proposed version and diff the results:
+
+```typescript
+// rules/golden.ts
+import { evaluate } from './evaluate';
+import type { DecisionTable, Primitive } from './types';
+
+export interface GoldenDiff<TIn, TOut> {
+  facts: TIn;
+  before: TOut | undefined;
+  after: TOut | undefined;
+}
+
+export function diffVersions<TIn extends Record<string, Primitive>, TOut>(
+  current: DecisionTable<TIn, TOut>,
+  proposed: DecisionTable<TIn, TOut>,
+  samples: readonly TIn[],
+): GoldenDiff<TIn, TOut>[] {
+  const changed: GoldenDiff<TIn, TOut>[] = [];
+  for (const facts of samples) {
+    const before = evaluate(current, facts).outputs[0];
+    const after = evaluate(proposed, facts).outputs[0];
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      changed.push({ facts, before, after });
+    }
+  }
+  return changed;
+}
+```
+
+The output is not pass or fail — it is an **impact report**: "this change alters the outcome for 3.2% of sampled orders; here are 20 examples, grouped by the rule that now matches". That report is what reviewers should approve. It turns "I changed a number in a table" into "I understand who this affects", which is exactly the conversation governance is supposed to provoke.
+
+### Engine tests
+
+Finally, the engine itself gets conventional unit tests: every operator, every hit policy, no-match and overlap errors, effective-date boundaries. These change rarely and protect every rule set at once.
+
+---
+
+## Explainability and audit
+
+Every decision the engine makes should be recorded with enough information to reproduce and explain it later:
+
+```typescript
+// rules/audit.ts
+export interface DecisionRecord<TIn, TOut> {
+  decisionId: string;
+  correlationId: string;
+  ruleSetId: string;
+  version: number;
+  decisionDate: string;
+  evaluatedAt: string;
+  facts: TIn;
+  outputs: TOut[];
+  matchedRowIds: string[];
+  explanation: string;
+}
+
+export function explain(matchedRowId: string, conditions: { input: string; actual: unknown; matched: boolean }[]): string {
+  const reasons = conditions
+    .filter((c) => c.matched)
+    .map((c) => `${c.input} = ${JSON.stringify(c.actual)}`)
+    .join(', ');
+  return `Rule ${matchedRowId} applied because ${reasons}`;
+}
+```
+
+With the rule set ID, version, facts and decision date stored, any decision can be **replayed** exactly — load that version, evaluate those facts, and you must get the same answer. I usually add a scheduled job that replays a random sample of recent decisions and alerts on any mismatch. It is a cheap, powerful check that versions really are immutable and the engine really is deterministic.
+
+The human-readable explanation goes to support staff and, where appropriate, customers. "Free delivery applied because your cart total was $120 and you are in a metro area" builds far more trust than a number with no context.
+
+A word of caution: facts can contain personal information. Store only what you need to explain and replay, apply the same retention and access controls as the rest of your customer data, and consider storing a hash or reference instead of raw values where full replay is not required.
+
+---
+
+## Authoring UX for business users
+
+A rules engine that only developers can change has missed the point. But handing business users a raw JSON editor is not the answer either. What works well:
+
+*   **A grid editor** that looks like a spreadsheet, with typed cells — dropdowns for enumerations, number inputs with units for thresholds, and a clear "any" option.
+*   **Live validation and linting** as they type, using the same schema and linter as CI. Show gaps and shadowed rows inline, next to the offending row.
+*   **A "try it" panel** where authors enter sample facts and see the decision and the full trace immediately.
+*   **The impact report** from golden files, shown before submission — "this change affects 412 of 12,800 sample orders".
+*   **CSV import and export**, because many business users will want to work in a spreadsheet anyway. Treat the CSV as an input format that goes through exactly the same validation, never as a back door.
+*   **Plain-language row notes**, so the intent behind each row survives long after the author has moved on.
+
+Resist the urge to build a general-purpose visual programming language. The constraint of a decision table is a feature: it keeps rules reviewable by the people accountable for them.
+
+---
+
+## Governance and approval workflows
+
+Once business users can change behaviour without a deployment, you need controls that are at least as strong as the ones on code. The lifecycle I use mirrors a pull request:
+
+![Rule lifecycle from authoring to audit](/blog/rules-as-data-building-configurable-business-rules-engines/inline-1.png)
+
+1.  **Draft** — an author edits a new version. Drafts are never evaluated by production.
+2.  **Validate** — schema and lint must pass with no errors.
+3.  **Test** — table-driven examples pass; the golden-file impact report is generated.
+4.  **Approve** — at least two people, and the author cannot approve their own change (**four-eyes**). High-impact changes may need a specific role, such as a finance reviewer.
+5.  **Publish** — the version becomes immutable with an effective date. Overlapping effective ranges are rejected.
+6.  **Evaluate and audit** — production uses it from the effective date; every decision is logged with its version.
+
+The simplest robust implementation stores rule sets **in Git** and uses pull requests as the approval workflow, with the authoring UI creating branches and PRs behind the scenes. You get history, diffs, required reviewers, branch protection and CI checks for free. A database-backed store with its own workflow is more work, but it can make sense when authors need to see their changes immediately without a CI round trip — in which case, make the database record the same immutable, versioned, approved artefact.
+
+Either way, think about **rollback** up front. Because versions are immutable and effective-dated, rolling back means publishing a new version that restores the previous behaviour — preserving the history of what happened rather than rewriting it.
+
+---
+
+## Performance and caching
+
+Decision-table evaluation is cheap — a few microseconds for tables with dozens of rows. The costs are elsewhere: loading rule sets, parsing and validating them, and resolving versions. A few patterns keep this fast:
+
+*   **Compile once, evaluate many.** Validate and transform each published version into an in-memory structure on load, not per request.
+*   **Cache by immutable key.** Because a `(ruleSetId, version)` pair never changes, it can be cached forever. Only the "which version is current" lookup needs a short TTL or an invalidation event.
+*   **Push, do not poll, for changes.** Publish a `RuleSetPublished` event and let services refresh their cache, rather than every instance polling the store.
+*   **Index large tables.** For tables with thousands of rows, pre-group rows by a high-cardinality equality input (such as region) so you only scan relevant rows.
+*   **Keep the engine pure.** No I/O during evaluation. Gather the facts first, then evaluate. This makes evaluation fast, deterministic and trivially testable.
+
+```typescript
+// rules/cache.ts
+import type { Primitive, RuleSetVersion } from './types';
+
+type Loader<TIn extends Record<string, Primitive>, TOut> = (ruleSetId: string) => Promise<RuleSetVersion<TIn, TOut>[]>;
+
+export class RuleSetCache<TIn extends Record<string, Primitive>, TOut> {
+  private readonly versions = new Map<string, { loadedAt: number; value: RuleSetVersion<TIn, TOut>[] }>();
+
+  constructor(
+    private readonly load: Loader<TIn, TOut>,
+    private readonly ttlMs = 60_000,
+  ) {}
+
+  async get(ruleSetId: string): Promise<RuleSetVersion<TIn, TOut>[]> {
+    const cached = this.versions.get(ruleSetId);
+    if (cached && Date.now() - cached.loadedAt < this.ttlMs) return cached.value;
+
+    const value = await this.load(ruleSetId);
+    this.versions.set(ruleSetId, { loadedAt: Date.now(), value });
+    return value;
+  }
+
+  invalidate(ruleSetId: string): void {
+    this.versions.delete(ruleSetId);
+  }
+}
+```
+
+The TTL is a safety net; the `invalidate` method is what the `RuleSetPublished` event handler calls. With effective dating, a slightly stale cache is rarely a problem anyway — a version scheduled for 1 November was published days earlier and is already in every cache when midnight arrives.
+
+---
+
+## Pitfalls I have learned to avoid
+
+*   **Turning the rules engine into a programming language.** Once rules can call APIs, loop and mutate state, you have rebuilt a worse version of your application code, with none of its tooling.
+*   **Silent defaults.** A no-match should fail loudly or hit an explicit catch-all row.
+*   **Evaluating by "now".** Always resolve versions by the business decision date, or replays and disputes become guesswork.
+*   **Mutable published versions.** Editing a published version in place destroys your audit trail.
+*   **Facts gathered inside rules.** Keep data access out of the engine; pass in a complete, typed fact object.
+*   **One giant table.** Split decisions into smaller tables that feed each other — a DMN decision requirements diagram is a good way to sketch this.
+*   **Skipping the impact report.** Most bad rule changes are not syntax errors; they are correct-looking changes with unexpected reach.
+*   **Duplicating the rules in multiple services.** Rules as data should mean one source of truth, exposed as a decision service or a shared, versioned package — not the same table copied into three codebases.
+
+---
+
+## Conclusion
+
+*   **Externalise rules** when they change often, are owned by non-developers, are time-bound, or must be explained and reproduced — keep algorithmic logic in code
+*   **Decision tables** with explicit **hit policies** (borrowed from DMN) are the most readable, reviewable format for most business rules
+*   A small, **strongly typed TypeScript engine** with a discriminated union of operators is safe, serialisable and easy to validate — no `eval`, no surprises
+*   **Every decision returns a trace**, making outcomes explainable to support staff, customers and auditors
+*   **Immutable, effective-dated versions** make historical decisions reproducible and scheduled changes deployment-free
+*   **Validation and linting** catch gaps, overlaps and shadowed rows before publishing; **table-driven tests** and **golden-file impact reports** prove behaviour and its reach
+*   **Authoring UX and governance** — grid editors, live linting, try-it panels, four-eyes approval and Git-backed history — let business users own rules safely
+*   **Compile once and cache by immutable version**, with event-driven invalidation, and evaluation becomes effectively free
+
+If you are building the event-driven plumbing that calls a decision service like this, my posts on [end-to-end testing with emulators](/blog/end-to-end-testing-distributed-integrations-with-emulators) and [choreography versus orchestration](/blog/when-should-you-choose-choreography-vs-orchestration-for-your-microservices-architecture) cover how to test and compose it.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

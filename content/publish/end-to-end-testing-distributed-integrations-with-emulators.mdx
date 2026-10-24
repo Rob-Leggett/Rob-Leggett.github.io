@@ -1,0 +1,719 @@
+---
+title: "End-to-End Testing Distributed Integrations with Emulators"
+date: "2026-08-20"
+slug: "end-to-end-testing-distributed-integrations-with-emulators"
+status: "publish"
+feature_image: "/blog/end-to-end-testing-distributed-integrations-with-emulators/feature-image.png"
+tags: ["Testing", "End-to-End Testing", "Azure Functions", "Service Bus", "Cosmos DB", "Docker Compose", "Playwright", "GitHub Actions", "Event-Driven Architecture", "Robert Leggett"]
+
+meta:
+  title: "End-to-End Testing Distributed Integrations with Emulators | Robert Leggett"
+  description: "How to run nightly, fully emulated end-to-end tests for event-driven integrations using Azurite, the Service Bus emulator, the Cosmos DB emulator, Azure Functions Core Tools, WireMock and Prism, Docker Compose, Playwright and cost-aware GitHub Actions."
+  keywords: ["end-to-end testing", "emulators", "Azurite", "Service Bus emulator", "Cosmos DB emulator", "Azure Functions Core Tools", "WireMock", "Prism", "OpenAPI mock", "Docker Compose", "Playwright", "GitHub Actions", "correlation ID", "flaky tests", "contract testing", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/end-to-end-testing-distributed-integrations-with-emulators"
+  image: "https://robertleggett.com.au/blog/end-to-end-testing-distributed-integrations-with-emulators/feature-image.png"
+
+og:
+  type: "article"
+  title: "End-to-End Testing Distributed Integrations with Emulators"
+  description: "How to run nightly, fully emulated end-to-end tests for event-driven integrations using Azurite, the Service Bus emulator, the Cosmos DB emulator, Azure Functions Core Tools, WireMock and Prism, Docker Compose, Playwright and cost-aware GitHub Actions."
+  image: "https://robertleggett.com.au/blog/end-to-end-testing-distributed-integrations-with-emulators/feature-image.png"
+  url: "https://robertleggett.com.au/blog/end-to-end-testing-distributed-integrations-with-emulators"
+
+twitter:
+  card: "summary_large_image"
+  title: "End-to-End Testing Distributed Integrations with Emulators"
+  description: "How to run nightly, fully emulated end-to-end tests for event-driven integrations using Azurite, the Service Bus emulator, the Cosmos DB emulator, Azure Functions Core Tools, WireMock and Prism, Docker Compose, Playwright and cost-aware GitHub Actions."
+  image: "https://robertleggett.com.au/blog/end-to-end-testing-distributed-integrations-with-emulators/feature-image.png"
+---
+
+Truth be told, end-to-end testing is the part of distributed systems that most teams quietly give up on. Unit tests are easy, and everyone agrees they are important. But the bugs that actually hurt in event-driven integrations rarely live inside a single function — they live in the gaps: a message published with a property the consumer does not expect, a retry that writes a duplicate record, a SaaS API that returns a field as a string in one response and a number in another. Those bugs only show up when the whole chain runs together, and running the whole chain together usually means a shared cloud test environment that is slow, expensive, flaky and constantly broken by someone else's deployment.
+
+Over the last few years I've settled on a different approach for integration-heavy programmes: a **fully emulated end-to-end environment** that spins up in Docker on a single machine, runs the real application code against local emulators for Azure services and contract-driven mocks for third-party APIs, and executes nightly in GitHub Actions. In this article I'll walk through how to build one — the emulators, Docker Compose, test data builders, correlation-ID-based assertions with polling, controlling flakiness, and keeping the GitHub Actions bill sensible — and where this kind of testing sits relative to contract tests and the rest of the test pyramid.
+
+---
+
+## Before you start
+
+About this post:
+
+*   12 – 16-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A Docker Compose setup that emulates Azure Storage, Service Bus, Cosmos DB and Azure Functions locally
+*   Patterns for mocking SaaS APIs from OpenAPI specifications with Prism and WireMock
+*   A TypeScript approach to test data builders, correlation IDs and polling-based assertions
+*   Practical techniques for controlling flakiness in asynchronous tests
+*   A cost-aware GitHub Actions workflow for nightly end-to-end runs
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why emulated end-to-end tests?
+
+Event-driven integrations — the kind I described in [choosing event streaming or messaging for your architecture](/blog/choosing-event-streaming-or-messaging-for-your-architecture) — are notoriously hard to test. A single business flow might look like this:
+
+1.  A user submits an order through a web UI.
+2.  An HTTP-triggered Azure Function validates it, stores it in Cosmos DB and publishes an `OrderPlaced` message to a Service Bus topic.
+3.  A subscriber Function enriches the order by calling a third-party CRM API.
+4.  Another subscriber requests payment from a payments provider.
+5.  A final Function writes a receipt document to Blob Storage and updates the order status.
+
+Each step can be unit tested in isolation. But whether the whole flow produces a paid order with a receipt depends on message shapes, subscription filters, retry behaviour, idempotency and the behaviour of two external APIs. That is precisely what end-to-end tests are for.
+
+The traditional answer is a shared cloud environment. Here is how it compares to an emulated one:
+
+| Concern | Shared cloud test environment | Emulated environment |
+|---|---|---|
+| **Cost** | Always-on resources, every service | Free while not running; pay only for CI minutes |
+| **Isolation** | Shared with other teams and deployments | Fresh per run, nothing shared |
+| **Determinism** | Third-party sandboxes vary, data accumulates | Mocks return exactly what you specify |
+| **Speed to start** | Already running (when it works) | One to three minutes to boot |
+| **Fidelity** | Real Azure behaviour | High, but emulators have gaps |
+| **Failure injection** | Hard — you cannot easily make the CRM return a 503 | Trivial — configure the mock |
+| **Local debugging** | Remote logs, limited access | Everything on your laptop |
+
+The fidelity row matters, and I'll come back to it. Emulated tests do not replace a smoke test against real Azure — but they catch the vast majority of integration bugs earlier, cheaper and more reliably.
+
+---
+
+## The emulator toolkit
+
+Microsoft now ships local emulators for most of the services an integration platform depends on, and the open-source world fills the gaps for everything else.
+
+| Component | Emulates | Notes |
+|---|---|---|
+| **Azurite** | Blob, Queue and Table storage | Mature, fast, also required by the Functions runtime |
+| **Service Bus emulator** | Queues, topics and subscriptions | Configured from a JSON file; needs a SQL container alongside it |
+| **Cosmos DB emulator** | Cosmos DB NoSQL API | Linux container; the newer preview build is lighter and starts faster |
+| **Azure Functions Core Tools** | The Functions host | Runs your real Functions code with real triggers and bindings |
+| **Prism** | Any HTTP API described by OpenAPI | Generates responses from the spec and validates requests against it |
+| **WireMock** | Any HTTP API | Explicit stubs, stateful scenarios, fault injection, request journal |
+| **Playwright** | A real browser | Drives the UI and also makes API calls with the same tooling |
+
+I use **Prism** and **WireMock** for different jobs. Prism is perfect when a provider publishes a good OpenAPI spec — you get a mock that rejects requests that do not conform to the contract, essentially for free. WireMock is better when you need precise control: specific responses for specific inputs, stateful sequences ("fail twice, then succeed"), deliberate latency, and a request journal you can query in assertions.
+
+![Emulated integration topology](/blog/end-to-end-testing-distributed-integrations-with-emulators/inline-1.png)
+
+---
+
+## Wiring it up with Docker Compose
+
+Everything runs on a single Docker network, with health checks so the tests never start before the dependencies are ready.
+
+```yaml
+# e2e/docker-compose.yml
+name: orders-e2e
+
+services:
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck --loose
+    ports: ["10000:10000", "10001:10001", "10002:10002"]
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "10000"]
+      interval: 5s
+      retries: 20
+
+  sql:
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SB_SQL_PASSWORD}
+
+  servicebus:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+    depends_on: [sql]
+    volumes:
+      - ./servicebus/config.json:/ServiceBus_Emulator/ConfigFiles/Config.json
+    environment:
+      ACCEPT_EULA: "Y"
+      SQL_SERVER: sql
+      MSSQL_SA_PASSWORD: ${SB_SQL_PASSWORD}
+    ports: ["5672:5672"]
+
+  cosmos:
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview
+    ports: ["8081:8081"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8081/ || exit 1"]
+      interval: 5s
+      retries: 30
+
+  crm-mock:
+    image: wiremock/wiremock:3.9.1
+    command: --global-response-templating --disable-banner
+    volumes:
+      - ./mocks/crm:/home/wiremock
+    ports: ["8080:8080"]
+
+  payments-mock:
+    image: stoplight/prism:5
+    command: mock -h 0.0.0.0 --errors /specs/payments.openapi.yaml
+    volumes:
+      - ./specs:/specs:ro
+    ports: ["4010:4010"]
+
+  functions:
+    build:
+      context: ..
+      dockerfile: e2e/functions.Dockerfile
+    env_file: .env.e2e
+    depends_on:
+      azurite: { condition: service_healthy }
+      cosmos: { condition: service_healthy }
+      servicebus: { condition: service_started }
+      crm-mock: { condition: service_started }
+      payments-mock: { condition: service_started }
+    ports: ["7071:80"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost/api/health || exit 1"]
+      interval: 5s
+      retries: 40
+```
+
+A few notes on the choices here:
+
+*   **Pin image versions** for anything that has bitten you. `latest` is convenient while you are getting started; once the suite is stable, pin and upgrade deliberately so an emulator release never breaks your nightly run.
+*   The **Service Bus emulator** reads its entities from a config file, so your queues, topics, subscriptions and filters are version-controlled alongside the tests.
+*   The **Functions container** is built from the official base image with your compiled app copied in, so it is the same code you ship. Connection strings in `.env.e2e` point at the Compose service names (`azurite`, `servicebus`, `cosmos`) and the mocks' base URLs.
+*   Prism's **`--errors`** flag makes it return an error when a request violates the OpenAPI contract, rather than happily answering anything. That single flag turns a mock into a contract check.
+
+The Service Bus config mirrors the real topology. A trimmed example:
+
+```json
+{
+  "UserConfig": {
+    "Namespaces": [
+      {
+        "Name": "sbemulatorns",
+        "Topics": [
+          {
+            "Name": "orders",
+            "Properties": { "DefaultMessageTimeToLive": "PT1H", "RequiresDuplicateDetection": false },
+            "Subscriptions": [
+              { "Name": "enrich-customer", "Properties": { "MaxDeliveryCount": 3, "LockDuration": "PT1M" } },
+              { "Name": "request-payment", "Properties": { "MaxDeliveryCount": 3, "LockDuration": "PT1M" } }
+            ]
+          }
+        ]
+      }
+    ],
+    "Logging": { "Type": "File" }
+  }
+}
+```
+
+Keep this file in sync with your Terraform or Bicep for the real namespace. I generate it from the same source of truth where possible — a small script that reads the entity definitions and writes the emulator config means the two can never drift.
+
+### Mocking the SaaS APIs
+
+For the CRM, WireMock stubs live as JSON mappings. Response templating lets the mock echo back values from the request, which keeps stubs generic:
+
+```json
+{
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/v2/customers/([a-z0-9-]+)"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "id": "{{request.pathSegments.[2]}}",
+      "tier": "gold",
+      "marketingOptIn": true
+    },
+    "transformers": ["response-template"]
+  }
+}
+```
+
+And for failure scenarios, a stub that matches a specific customer ID and returns a 503 lets you test retries and dead-lettering deterministically:
+
+```json
+{
+  "request": { "method": "GET", "urlPath": "/v2/customers/cust-unavailable" },
+  "response": { "status": 503, "fixedDelayMilliseconds": 500 }
+}
+```
+
+The ability to make a dependency fail on demand is, in my experience, the single most valuable thing an emulated environment gives you. You cannot ask a vendor's sandbox to fail politely at 2am.
+
+---
+
+## Writing the tests
+
+I use **Vitest** for API-level and message-flow tests and **Playwright** for UI journeys. Both are TypeScript, which keeps test utilities shared.
+
+### Test data builders
+
+Hand-crafted JSON payloads scattered across tests are a maintenance trap. When the order schema gains a field, you fix forty tests. A **builder** with sensible defaults means each test only states what it cares about:
+
+```typescript
+// e2e/builders/order-builder.ts
+import { randomUUID } from 'node:crypto';
+
+export interface OrderLine {
+  sku: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface OrderRequest {
+  orderId: string;
+  customerId: string;
+  currency: 'AUD' | 'NZD';
+  lines: OrderLine[];
+}
+
+export class OrderBuilder {
+  private order: OrderRequest = {
+    orderId: `ord-${randomUUID()}`,
+    customerId: `cust-${randomUUID()}`,
+    currency: 'AUD',
+    lines: [{ sku: 'SKU-001', quantity: 1, unitPrice: 25 }],
+  };
+
+  forCustomer(customerId: string): this {
+    this.order.customerId = customerId;
+    return this;
+  }
+
+  withLine(sku: string, quantity: number, unitPrice: number): this {
+    this.order.lines.push({ sku, quantity, unitPrice });
+    return this;
+  }
+
+  withoutLines(): this {
+    this.order.lines = [];
+    return this;
+  }
+
+  build(): OrderRequest {
+    return structuredClone(this.order);
+  }
+}
+
+export const anOrder = (): OrderBuilder => new OrderBuilder();
+```
+
+Every generated ID is unique, so tests never collide with each other or with data left over from a previous run — a prerequisite for running tests in parallel.
+
+### Correlation IDs as the backbone
+
+In an asynchronous system, "call the API, then check the result" does not work: the API returns `202 Accepted` and the interesting work happens later, across several Functions. The trick is to make every test **own a correlation ID** and propagate it through every hop — HTTP header, Service Bus message `correlationId`, Cosmos document property, outbound HTTP header to the SaaS APIs, and every log line.
+
+This is good production practice anyway (it is what makes distributed tracing work), but in tests it becomes the key that lets you find exactly the data your test created, and nothing else.
+
+![Correlation-ID driven assertions](/blog/end-to-end-testing-distributed-integrations-with-emulators/inline-2.png)
+
+### Polling instead of sleeping
+
+The single biggest cause of flaky asynchronous tests is `sleep(5000)`. Too short and the test fails on a slow runner; too long and the suite takes forever. Instead, poll for the expected condition with a timeout:
+
+```typescript
+// e2e/support/eventually.ts
+export interface EventuallyOptions {
+  timeoutMs?: number;
+  intervalMs?: number;
+  description?: string;
+}
+
+export async function eventually<T>(
+  probe: () => Promise<T | undefined>,
+  { timeoutMs = 30_000, intervalMs = 500, description = 'condition' }: EventuallyOptions = {},
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+
+  while (Date.now() < deadline) {
+    try {
+      const result = await probe();
+      if (result !== undefined) return result;
+    } catch (error: unknown) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  const reason = lastError instanceof Error ? ` Last error: ${lastError.message}` : '';
+  throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description}.${reason}`);
+}
+```
+
+The probe returns `undefined` while the condition is not yet met and a value once it is. The descriptive timeout message matters more than you might think — "Timed out waiting for order ord-123 to reach status Paid" is far more useful in a nightly failure report than a generic assertion error.
+
+### Querying the emulators
+
+Small, typed helpers wrap each emulator so the tests read like the business flow:
+
+```typescript
+// e2e/support/probes.ts
+import { CosmosClient } from '@azure/cosmos';
+
+interface OrderDocument {
+  id: string;
+  correlationId: string;
+  status: 'Received' | 'Enriched' | 'Paid' | 'Failed';
+  receiptBlob?: string;
+}
+
+interface WireMockRequest {
+  request: { url: string; method: string; headers: Record<string, string> };
+}
+
+const cosmos = new CosmosClient({
+  endpoint: process.env.COSMOS_ENDPOINT ?? 'http://localhost:8081',
+  key: process.env.COSMOS_KEY ?? '',
+});
+const orders = cosmos.database('commerce').container('orders');
+
+export async function findOrderByCorrelationId(correlationId: string): Promise<OrderDocument | undefined> {
+  const { resources } = await orders.items
+    .query<OrderDocument>({
+      query: 'SELECT * FROM c WHERE c.correlationId = @cid',
+      parameters: [{ name: '@cid', value: correlationId }],
+    })
+    .fetchAll();
+  return resources[0];
+}
+
+export async function crmCallsFor(correlationId: string): Promise<WireMockRequest[]> {
+  const response = await fetch(`${process.env.CRM_MOCK_URL ?? 'http://localhost:8080'}/__admin/requests/find`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ method: 'ANY', urlPattern: '.*', headers: { 'x-correlation-id': { equalTo: correlationId } } }),
+  });
+  const body = (await response.json()) as { requests: WireMockRequest[] };
+  return body.requests;
+}
+```
+
+### Putting it together
+
+With builders, correlation IDs, polling and probes in place, a full flow test is short and readable:
+
+```typescript
+// e2e/tests/order-flow.e2e.test.ts
+import { randomUUID } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+import { anOrder } from '../builders/order-builder';
+import { eventually } from '../support/eventually';
+import { crmCallsFor, findOrderByCorrelationId } from '../support/probes';
+
+const API = process.env.API_URL ?? 'http://localhost:7071/api';
+
+async function submit(order: object, correlationId: string): Promise<Response> {
+  return fetch(`${API}/orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-correlation-id': correlationId },
+    body: JSON.stringify(order),
+  });
+}
+
+describe('order placement flow', () => {
+  it('enriches, takes payment and writes a receipt', async () => {
+    const correlationId = randomUUID();
+    const order = anOrder().withLine('SKU-002', 2, 10).build();
+
+    const response = await submit(order, correlationId);
+    expect(response.status).toBe(202);
+
+    const paid = await eventually(
+      async () => {
+        const doc = await findOrderByCorrelationId(correlationId);
+        return doc?.status === 'Paid' ? doc : undefined;
+      },
+      { description: `order ${order.orderId} to reach Paid` },
+    );
+
+    expect(paid.receiptBlob).toMatch(/^receipts\//);
+
+    const crmCalls = await crmCallsFor(correlationId);
+    expect(crmCalls).toHaveLength(1);
+    expect(crmCalls[0]?.request.url).toContain(order.customerId);
+  });
+
+  it('dead-letters the order when the CRM is unavailable', async () => {
+    const correlationId = randomUUID();
+    const order = anOrder().forCustomer('cust-unavailable').build();
+
+    await submit(order, correlationId);
+
+    await eventually(
+      async () => {
+        const doc = await findOrderByCorrelationId(correlationId);
+        return doc?.status === 'Failed' ? doc : undefined;
+      },
+      { timeoutMs: 60_000, description: 'order to be marked Failed after retries' },
+    );
+
+    const crmCalls = await crmCallsFor(correlationId);
+    expect(crmCalls.length).toBeGreaterThanOrEqual(3);
+  });
+});
+```
+
+The second test is the one that justifies the whole approach. It proves that retries happen the configured number of times and that the failure path is handled — behaviour that is almost impossible to verify reliably against a real third-party sandbox.
+
+### UI journeys with Playwright
+
+For the handful of journeys that genuinely need a browser, Playwright tests run against the same stack. Playwright can set the correlation header on every request the page makes, so the same probes work:
+
+```typescript
+// e2e/ui/checkout.spec.ts
+import { randomUUID } from 'node:crypto';
+import { expect, test } from '@playwright/test';
+import { eventually } from '../support/eventually';
+import { findOrderByCorrelationId } from '../support/probes';
+
+test('customer can place an order and see confirmation', async ({ page }) => {
+  const correlationId = randomUUID();
+  await page.setExtraHTTPHeaders({ 'x-correlation-id': correlationId });
+
+  await page.goto('/shop');
+  await page.getByRole('button', { name: 'Add Starter Kit to cart' }).click();
+  await page.getByRole('link', { name: 'Checkout' }).click();
+  await page.getByRole('button', { name: 'Place order' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Thanks for your order' })).toBeVisible();
+
+  await eventually(
+    async () => {
+      const doc = await findOrderByCorrelationId(correlationId);
+      return doc?.status === 'Paid' ? doc : undefined;
+    },
+    { description: 'UI-submitted order to be paid' },
+  );
+});
+```
+
+Use **role-based locators** (`getByRole`) rather than CSS selectors. They are resilient to markup changes and double as a basic accessibility check — if Playwright cannot find your button by its accessible name, neither can a screen reader.
+
+---
+
+## Controlling flakiness
+
+A flaky end-to-end suite is worse than no suite — people learn to re-run until green, and real failures get waved through. These are the practices that have made the biggest difference for me:
+
+| Practice | Why it works |
+|---|---|
+| **Poll with timeouts, never sleep** | Adapts to slow runners without wasting time on fast ones |
+| **Unique IDs per test** | No collisions between parallel tests or leftover data |
+| **Health checks before tests start** | `docker compose up --wait` blocks until every container is healthy |
+| **Idempotent consumers** | Redelivered messages do not create duplicates (and your tests prove it) |
+| **Deterministic mocks** | No dependence on a vendor sandbox's mood |
+| **Pinned emulator versions** | Upstream releases cannot break the nightly run unexpectedly |
+| **Quarantine, do not ignore** | Flaky tests move to a tagged, non-blocking group with an owner and a deadline |
+| **Capture diagnostics on failure** | Container logs filtered by correlation ID, Playwright traces |
+
+On retries: Playwright and Vitest both support automatic test retries. I allow **one** retry in CI and report retried-then-passed tests as a separate metric. A test that needs a retry is telling you something; hiding it completely just postpones the conversation.
+
+When a test does fail, the correlation ID pays off a second time. A small `afterEach` hook that runs `docker compose logs` and filters for the failing test's correlation ID turns a 20-minute investigation into a two-minute one.
+
+---
+
+## Running nightly in GitHub Actions — without burning minutes
+
+A full emulated run typically takes 8 to 15 minutes including image pulls and container start-up. Running that on every push across a busy repository adds up quickly, particularly in private repositories where GitHub Actions minutes are billed. I've written before about [reducing cloud costs](/blog/proven-ways-to-reduce-your-cloud-costs); CI minutes deserve the same discipline.
+
+The pattern I use is:
+
+*   **Nightly on weekdays** on the default branch, plus a manual trigger.
+*   **Skip the nightly run** if nothing has changed since the last one.
+*   **On pull requests, only run when integration code changes**, using `paths` filters — and only when explicitly labelled for larger changes.
+*   **Hard timeouts** so a hung container cannot burn an hour of minutes.
+*   **Concurrency groups** so a new run cancels a superseded one.
+*   **Linux runners only** — they are the cheapest per minute, and the emulators are Linux containers anyway.
+*   **Upload artefacts only on failure**, with short retention.
+
+```yaml
+# .github/workflows/e2e-nightly.yml
+name: e2e-nightly
+
+on:
+  schedule:
+    - cron: "0 15 * * 0-4" # 1–2am AEST/AEDT, Monday to Friday
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+    paths:
+      - "src/functions/**"
+      - "e2e/**"
+      - "infra/servicebus/**"
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ -n "$(git log --since='24 hours ago' --format=%H | head -1)" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  e2e:
+    needs: changes
+    if: >
+      needs.changes.outputs.run == 'true' &&
+      (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SB_SQL_PASSWORD: ${{ secrets.E2E_SQL_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build functions
+        run: npm run build --workspace functions
+
+      - name: Start emulated stack
+        run: docker compose -f e2e/docker-compose.yml up -d --build --wait --wait-timeout 300
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run API and message-flow tests
+        run: npx vitest run --config e2e/vitest.config.ts
+
+      - name: Run UI journeys
+        run: npx playwright test --config e2e/playwright.config.ts
+
+      - name: Collect container logs
+        if: failure()
+        run: docker compose -f e2e/docker-compose.yml logs --no-color > e2e-logs.txt
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-diagnostics
+          path: |
+            e2e-logs.txt
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f e2e/docker-compose.yml down -v
+```
+
+Some details worth knowing:
+
+*   **Scheduled workflows run on the default branch only**, and GitHub may delay them at busy times (on-the-hour is the busiest). Pick an odd minute if timing matters.
+*   **Cron is in UTC.** `0 15 * * 0-4` is 1am AEST (2am AEDT) Monday to Friday in Sydney, since 15:00 UTC on Sunday is Monday morning here.
+*   In public repositories, **scheduled workflows are automatically disabled after 60 days without repository activity**. If your nightly suddenly stops reporting, check that first.
+*   The **`changes` job** costs a few seconds and saves a full run on quiet nights and weekends.
+*   Only Chromium is installed. Cross-browser coverage is better handled by a smaller, weekly job — most integration bugs are not browser-specific.
+
+If minutes are still tight, a **weekly** full run with a smaller nightly subset (tagged `@critical`) is a very reasonable compromise. The goal is to find integration regressions within a day or two of them being introduced, not within minutes — that is what the faster layers of the pyramid are for.
+
+---
+
+## Contract tests versus end-to-end tests
+
+A question I get asked a lot: if we have contract tests, do we still need end-to-end tests? And vice versa?
+
+They answer different questions:
+
+| | Contract tests | Emulated end-to-end tests |
+|---|---|---|
+| **Question answered** | Do these two parties agree on the shape of their interaction? | Does the whole business flow produce the right outcome? |
+| **Scope** | One consumer–provider pair | Many components and messages |
+| **Speed** | Seconds | Minutes |
+| **Runs** | Every pull request | Nightly or on demand |
+| **Catches** | Breaking schema changes, missing fields | Orchestration bugs, retries, idempotency, ordering, configuration |
+| **Misses** | Behaviour across multiple hops | Nothing it does not exercise — but it is slow and broad |
+
+Consumer-driven contract testing (Pact is the best-known tool) is excellent for message schemas and internal APIs and should run on every pull request. Prism with `--errors` gives you a lightweight form of provider contract checking for third-party APIs, from their own OpenAPI spec. End-to-end tests then verify the composition. You want both — but many more contract tests than end-to-end tests.
+
+![Test pyramid for event-driven integrations](/blog/end-to-end-testing-distributed-integrations-with-emulators/inline-3.png)
+
+The shape I aim for:
+
+*   **Unit tests** — hundreds to thousands, milliseconds each, every commit.
+*   **Component tests** — each Function tested with its real bindings against a single emulator, every pull request.
+*   **Contract tests** — every message type and every API boundary, every pull request.
+*   **Emulated end-to-end** — tens of tests covering the critical business flows and their main failure paths, nightly.
+*   **Production smoke tests** — a handful of synthetic checks against real Azure after each deployment, plus the availability tests and alerts I described in [observability as code](/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform).
+
+If your end-to-end suite has hundreds of tests, it is probably doing the job of the layers below it, slowly.
+
+---
+
+## Where emulators fall short
+
+It would be dishonest to present emulators as perfect. Know their limits so they do not surprise you:
+
+*   **Not every feature is emulated.** Each emulator documents its gaps — things like sessions, certain management operations, some query features and throughput limits may behave differently or not exist. Check the current documentation for the features you rely on.
+*   **Performance characteristics differ.** Emulators tell you nothing about throttling, latency under load or RU consumption. Use load tests in a real environment for that.
+*   **Identity is simplified.** Emulators use connection strings and well-known keys, not managed identities and RBAC. Your production auth path needs separate verification — the post-deployment smoke test is a good place for it.
+*   **Networking is flat.** Private endpoints, firewalls and DNS are not exercised.
+*   **Mocks only know what you tell them.** A WireMock stub that returns a happy response for a field the real API dropped last month will pass forever. Refresh OpenAPI specs from providers regularly and keep a small set of contract checks running against real sandboxes, weekly.
+
+None of these are reasons not to emulate. They are reasons to keep a thin layer of real-environment testing on top — which, conveniently, is exactly what the pyramid says.
+
+---
+
+## Practical tips from the trenches
+
+A handful of smaller lessons that made a noticeable difference:
+
+*   **Make the stack runnable locally with one command.** `npm run e2e:up` and `npm run e2e:test` — if developers cannot run it on their laptops, they will not debug failures, and the suite will rot.
+*   **Seed reference data through the application's own APIs** where possible rather than writing directly to the database. It exercises more code and keeps seed data valid when the schema changes.
+*   **Reset mocks between test files**, not between tests. WireMock's `/__admin/reset` is cheap, but per-test resets make parallelism impossible; unique correlation IDs make it unnecessary.
+*   **Treat the emulator config as infrastructure.** Service Bus entities, Cosmos containers and partition keys should be generated from the same definitions as your real infrastructure.
+*   **Report trends, not just pass or fail.** Duration per test and retry counts over time spot degradation before it becomes flakiness.
+
+---
+
+## Conclusion
+
+*   **Emulated end-to-end tests** run your real integration code against local Azure emulators and contract-driven mocks, catching cross-component bugs that unit tests cannot
+*   **Azurite, the Service Bus emulator, the Cosmos DB emulator and Functions Core Tools** cover most of an Azure integration platform; **Prism** and **WireMock** cover the SaaS APIs
+*   **Docker Compose with health checks** gives every run a clean, isolated, reproducible environment
+*   **Test data builders, correlation IDs and polling** make asynchronous tests readable, parallel-safe and far less flaky than sleeps
+*   **Failure injection** through mocks is the biggest win — it lets you prove retries, dead-lettering and idempotency deterministically
+*   **GitHub Actions** can run the suite nightly at modest cost with schedules, change detection, `paths` filters, concurrency groups, timeouts and failure-only artefacts
+*   **Contract tests and end-to-end tests are complementary** — many fast contract tests on every pull request, a few broad end-to-end tests nightly, and a thin layer of production smoke tests on top
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

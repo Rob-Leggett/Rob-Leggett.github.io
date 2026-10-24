@@ -1,0 +1,374 @@
+---
+title: "It's Not Vibe Coding - AI-Assisted, Architecture-Led Delivery"
+date: "2026-10-15"
+slug: "its-not-vibe-coding-ai-assisted-architecture-led-delivery"
+status: "publish"
+feature_image: "/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/feature-image.png"
+tags: ["AI", "GitHub Copilot", "Software Architecture", "Delivery", "Requirements", "Engineering Leadership", "Robert Leggett"]
+
+meta:
+  title: "It's Not Vibe Coding - AI-Assisted, Architecture-Led Delivery | Robert Leggett"
+  description: "Why using GitHub Copilot to turn architecture, documentation and existing code into stories and implementation hypotheses is not vibe coding — and how architecture-led progressive elaboration keeps humans accountable."
+  keywords: ["vibe coding", "AI-assisted delivery", "GitHub Copilot", "progressive elaboration", "architecture-led delivery", "requirements elaboration", "AI governance", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery"
+  image: "https://robertleggett.com.au/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/feature-image.png"
+
+og:
+  type: "article"
+  title: "It's Not Vibe Coding - AI-Assisted, Architecture-Led Delivery"
+  description: "Why using GitHub Copilot to turn architecture, documentation and existing code into stories and implementation hypotheses is not vibe coding — and how architecture-led progressive elaboration keeps humans accountable."
+  image: "https://robertleggett.com.au/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/feature-image.png"
+  url: "https://robertleggett.com.au/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery"
+
+twitter:
+  card: "summary_large_image"
+  title: "It's Not Vibe Coding - AI-Assisted, Architecture-Led Delivery"
+  description: "Why using GitHub Copilot to turn architecture, documentation and existing code into stories and implementation hypotheses is not vibe coding — and how architecture-led progressive elaboration keeps humans accountable."
+  image: "https://robertleggett.com.au/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/feature-image.png"
+---
+
+I'll be upfront about something that has been quietly bothering me. Over the last year, more than a few people have described me as a "vibe coder". Sometimes it is said with a grin, sometimes as a compliment about how quickly things are moving, and occasionally as a gentle dig. Each time I heard it, it didn't sit right — and for a while I couldn't articulate why. I use **GitHub Copilot** heavily. I generate stories, branches and pull requests with it. On the surface, I can see how that looks like vibe coding.
+
+So I sat down and explained, step by step, how I actually work. Somewhere in the middle of that explanation I realised the approach isn't a faster version of vibe coding at all — it is materially different in where decisions are made and who is accountable for them. This post is my attempt to name it properly, show the mechanics, be honest about the risks, and give you something you can take to your own team (or your CIO) when the same label lands on you.
+
+---
+
+## Before you start
+
+About this post:
+
+*   11 – 15-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A clear distinction between vibe coding and AI-assisted, architecture-led delivery
+*   A practical six-step operating model that uses GitHub Copilot to accelerate the movement between artefacts
+*   A roles and accountabilities model that keeps humans responsible for requirements, architecture, quality and acceptance
+*   An honest look at premature implementation anchoring and how to mitigate it
+*   Quality gates, metrics and talking points for explaining the approach to leadership
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What people usually mean by "vibe coding"
+
+The term has drifted a bit since it entered the vocabulary, but in general **vibe coding** means generating software largely through natural-language prompting, relying heavily on the AI, and not deeply inspecting or reasoning through the implementation it produces. The loop is short and seductive:
+
+**Prompt → AI writes the app → it looks okay → ship it.**
+
+To be fair, there is a place for that. Throwaway prototypes, personal scripts, a weekend experiment — if nobody else depends on it and the blast radius is your own afternoon, vibe away. The problem is when the same loop is applied to enterprise systems with real users, regulatory obligations, integration contracts and a decade of operational life ahead of them. In that context, "it looks okay" is not a quality bar. It is the absence of one.
+
+What defines vibe coding isn't the use of AI. It is three things:
+
+| Characteristic | Vibe coding | What I do instead |
+|---|---|---|
+| **Source of intent** | Whatever is in the prompt at the time | Existing architecture, documented decisions, agreed templates and the current codebase |
+| **Validation** | "It runs and looks right" | Business analysts validate requirements, engineers review implementation, architects resolve gaps |
+| **Accountability** | Implicitly delegated to the model | Explicitly retained by named humans at each step |
+
+That third row is the one that matters most. If the AI is deciding what the system should do, you are vibe coding regardless of how many prompts you wrote. If people are deciding and the AI is accelerating the work between those decisions, you are doing something else.
+
+![Vibe coding vs architecture-led progressive elaboration](/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/inline-1.png)
+
+---
+
+## The operating model, step by step
+
+Here is what my process actually looks like. None of the individual steps are novel — business analysis, architecture review, code review and design workshops have existed for decades. What changes is the **speed of the transitions** between them, and the fact that each transition produces a concrete artefact people can react to.
+
+### 1. Existing knowledge → initial requirements
+
+Everything starts with what the organisation already knows. That is Confluence content, architecture views and decision records, existing repositories, integration specifications and project information. I use Copilot with that context to produce **draft Jira stories using an agreed template** — the same template the team has already agreed for hand-written stories.
+
+The template matters more than the prompt. It forces a consistent shape: a user-centred narrative, context and links to the relevant architecture, acceptance criteria written as testable statements, non-functional considerations, dependencies, and — critically — a section for **open questions and assumptions**. When the model can't find an answer in the source material, the template gives it somewhere honest to put that, rather than inventing something plausible.
+
+### 2. Human validation of requirements
+
+The draft stories go to the **business analysts**, who review, correct and identify gaps. This is the step people outside the process most often miss. The BAs are not proofreading. They are explicitly looking for places where the solution or business requirements **aren't sufficiently fleshed out** — and treating that as a finding rather than something to paper over.
+
+That reframing is important. In a vibe-coding mindset, AI-generated content is treated as authoritative because it reads fluently. In this model, AI-generated content is treated as a **first draft of what we think we know**, and the most valuable output of the BA review is often the list of things we discovered we don't know.
+
+### 3. Architecture + requirements → implementation hypothesis
+
+With validated (but not necessarily complete) stories, I use the architecture, the stories and the existing codebase to generate **branches and pull requests** with Copilot. I deliberately call these an **implementation hypothesis**. The PR is a concrete statement of "if we built this story against this architecture, in this codebase, following these conventions, it would probably look like this".
+
+A hypothesis is something you test, not something you accept.
+
+### 4. Human engineering review
+
+Developers then review the generated implementation. Not skim it, not approve it because the tests pass — review it the way they would review a colleague's work, and arguably harder. They check that it respects the architecture, uses the right patterns from the repository, handles errors and edge cases, is secure by default and is genuinely maintainable.
+
+### 5. Gap discovery
+
+This is where the approach earns its keep. The act of producing a concrete implementation **exposes unanswered questions, inconsistencies and missing requirements** that were invisible in prose. A story might say "the customer can update their preferences", and that reads perfectly well — until the PR has to decide what happens to an in-flight order when a preference changes, which system of record owns the preference, and whether an event is published. Code is unforgiving about ambiguity, which makes it an excellent ambiguity detector.
+
+### 6. Human decision-making
+
+Those questions go back to the architect and the team, into a **workshop where people resolve them**. Decisions are captured as architecture decision records (ADRs), story updates or new backlog items. Then the cycle refines: stories are updated, the implementation is regenerated or reworked, and we go again with a smaller set of unknowns.
+
+---
+
+## The pipeline as an artefact chain
+
+When I draw it end to end, it looks like this:
+
+**Confluence + architecture + repositories → draft requirements/stories → BA review → implementation hypothesis/PR → developer review → identified gaps and questions → architecture/team workshop → decisions → refinement.**
+
+The best way I have found to explain it is as an **artefact chain**. Every box is an artefact that a human owns. Every arrow is a transformation, and that is where the AI helps.
+
+![The artefact chain — AI accelerates the transformations](/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/inline-2.png)
+
+The AI isn't deciding what the system should do. It **accelerates the transformation between artefacts** — documentation into stories, stories into code, review comments into a structured question log. Each of those transformations used to take days of someone's time. Now it takes minutes, which means the humans spend their time on the part that actually requires judgement: reviewing, challenging and deciding.
+
+---
+
+## Giving it a name
+
+Names matter because they shape expectations. "Vibe coding" sets the expectation that nobody is really checking. Here are the names I have settled on, depending on the audience:
+
+| Name | When I use it |
+|---|---|
+| **AI-assisted architecture-led delivery** | Leadership and portfolio conversations — emphasises that architecture is in charge |
+| **AI-assisted requirements elaboration and implementation** | Conversations with BAs, product owners and delivery leads — emphasises the requirements loop |
+| **Architecture-led progressive elaboration using AI-assisted engineering** | Architecture and engineering forums — the most precise description |
+
+The underlying concept is **progressive elaboration**, which anyone with a project management background will recognise: you start with a high-level understanding and add detail iteratively as more information becomes available. That is exactly what is happening here. The AI just makes each iteration dramatically cheaper, so you can afford to do more of them, earlier.
+
+---
+
+## Roles and accountabilities
+
+If you take one thing from this post, make it this table. The fastest way to stop a conversation about vibe coding is to show who is accountable for each artefact, and that none of them is the model.
+
+| Role | Accountable for | AI assists with | Never delegated to AI |
+|---|---|---|---|
+| **Product owner** | Business outcomes, priority, final acceptance | Summarising feedback, drafting acceptance criteria for review | Deciding what is valuable; accepting the work |
+| **Business analyst** | Requirements correctness and completeness | Drafting stories from source material, cross-checking for inconsistencies | Declaring a requirement complete; resolving business ambiguity |
+| **Architect** | Target-state alignment, system-of-record ownership, non-functional requirements, decisions | Summarising options, drafting ADRs, mapping stories to components | Choosing between options; approving deviations |
+| **Engineer** | Implementation quality, security, maintainability | Generating implementation hypotheses, tests and refactors | Approving a PR; deciding something is production-ready |
+| **Tech lead** | Engineering standards and the question log | Clustering review comments into themes and a workshop agenda | Deciding which questions matter |
+| **Tester / QA** | Evidence that acceptance criteria are met | Generating test cases and data from acceptance criteria | Signing off quality |
+
+Notice the pattern in the last column: every **decision** and every **sign-off** stays with a person. The AI is a very fast, very well-read junior who never gets tired of drafting.
+
+---
+
+## Feeding the right context to Copilot
+
+The quality of every transformation in the chain depends on context. A model with no context will happily invent a plausible system. A model with the right context will mostly follow the system you actually have. In practice, I rely on a handful of generic, repeatable mechanisms.
+
+### Repository custom instructions
+
+GitHub Copilot supports a repository-level instructions file at `.github/copilot-instructions.md`. This is where the architecture principles and conventions live, so every generation in that repository starts from the same baseline. A trimmed, generic example:
+
+```markdown
+# Copilot instructions
+
+Use Australian spelling.
+
+## Architecture principles
+- API-first design; OpenAPI is the contract and must be updated with any API change
+- Event-driven integration preferred over point-to-point calls
+- Every entity has one system of record; never duplicate domain logic across services
+- Security by default: authentication, RBAC and encryption are not optional
+- TypeScript with strict typing; never use `any`
+
+## When generating code
+- Follow the existing folder structure and naming conventions in `/src`
+- Include unit tests alongside new modules
+- Update README, ADRs and runbooks when behaviour changes
+
+## When information is missing
+- Do not invent business rules. Add a TODO referencing an open question
+  and list it in the PR description under "Open questions"
+```
+
+That last section is doing a lot of quiet work. It tells the model that **not knowing is an acceptable answer**, which is exactly the behaviour you want from a tool whose output feeds a gap-discovery process.
+
+### Architecture documentation in the repository
+
+Architecture that lives only in a wiki is invisible at generation time. I keep a lightweight `docs/architecture` folder in each repository — context diagrams, component responsibilities, integration contracts and ADRs — and link to the canonical Confluence pages from there. When Copilot generates a PR, it can read the ADR that says "orders publish events; consumers never call back synchronously" and follow it.
+
+### The story template
+
+The agreed story template is itself context. I keep it as a markdown file the model is pointed at when drafting stories:
+
+```markdown
+## Story
+As a <role>, I want <capability>, so that <outcome>.
+
+## Context
+- Related architecture: <link to component / ADR>
+- System of record: <system>
+- Upstream / downstream integrations: <list>
+
+## Acceptance criteria
+- Given ..., when ..., then ...
+
+## Non-functional considerations
+- Security, performance, availability, observability, accessibility
+
+## Assumptions (to be validated)
+## Open questions (must be answered before build)
+## Out of scope
+```
+
+### Prompt files and reusable prompts
+
+For repeatable transformations — "draft stories from this page", "generate an implementation hypothesis for this story", "cluster these review comments into themes" — I keep reusable prompt files in the repository so the whole team uses the same instructions. If you want a deeper look at writing those, I cover the fundamentals in [Prompt Engineering — The Art and Science of Communicating with AI](/blog/prompt-engineering-art-and-science-of-communicating-with-ai).
+
+### Keeping context lean
+
+More context isn't always better. Dumping every wiki page into the window dilutes the signal and costs tokens. I point the model at the specific architecture view, the specific ADRs and the specific modules involved. I have also experimented with reducing upstream token usage in my own tooling — [ai-token-minimiser](https://github.com/Rob-Leggett/ai-token-minimiser) is a small open-source proxy I built while exploring that problem.
+
+---
+
+## Quality gates
+
+Gates are where the "humans retain accountability" principle becomes enforceable rather than aspirational. These are the five I use.
+
+![Quality gates — where humans hold the pen](/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery/inline-3.png)
+
+| Gate | Question it answers | Evidence |
+|---|---|---|
+| **1. Story readiness** | Do we understand what we are building well enough to start? | BA and PO sign-off, testable acceptance criteria, open questions listed explicitly |
+| **2. Architecture fit** | Does this align to the target state? | Architect review against principles, SoR ownership and NFRs |
+| **3. Engineering review** | Is this implementation sound? | Human code review, passing tests, static analysis and security scanning, conventions followed |
+| **4. Decision closure** | Have the questions raised been resolved? | Every probe question either answered, captured as an ADR or logged as a backlog item |
+| **5. Acceptance** | Does it do what the business needs? | PO acceptance against criteria — nothing ships on "looks okay" |
+
+Some of this is enforceable in tooling. Branch protection can require human reviewers and passing checks. CODEOWNERS can require an architect's approval on changes to `docs/architecture` or to API contracts. A simple CI check can fail a PR whose description still contains an unanswered "Open questions" section when it targets the main branch:
+
+```yaml
+name: pr-readiness
+on:
+  pull_request:
+    types: [opened, edited, synchronize, labeled]
+jobs:
+  open-questions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Block production PRs with unresolved questions
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'probe') }}
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if echo "$BODY" | grep -qE '^- \[ \] Q[0-9]+'; then
+            echo "Unresolved open questions found in PR description."
+            exit 1
+          fi
+```
+
+---
+
+## The honest challenge: premature implementation anchoring
+
+I would be doing you a disservice if I presented this as risk-free. The biggest risk I have found is what I call **premature implementation anchoring**.
+
+When you generate code before the requirements and solution details are resolved, people see working code — and once people see working code, they tend to **refine what exists rather than reconsider** whether it is the right thing. The first implementation becomes the anchor. Questions shift from "should the customer be able to do this at all?" to "should this button be on the left?". That is a well-documented cognitive bias, and a concrete artefact amplifies it.
+
+The mitigation is to be explicit and disciplined about what these early PRs are: **implementation probes, not production-ready code**. In practice that means:
+
+*   **Label them** — a `probe` label, a `probe/` branch prefix and a PR title that says so
+*   **Make them throwaway by default** — the expected outcome of a probe is a list of questions, not a merge
+*   **Timebox them** — a probe that takes more than a day or two is no longer a probe
+*   **Generate alternatives** — when the solution shape is genuinely uncertain, generate two probes with different approaches so nobody anchors on the first one
+*   **Rebuild after decisions** — once the workshop resolves the questions, regenerate or rewrite from the updated stories rather than patching the probe
+
+I go much deeper into the mechanics — branch naming, PR templates, turning review comments into a decision log, and when to promote versus discard — in the follow-on post, [Implementation Probes — Using AI-Generated PRs to Find Requirement Gaps](/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps).
+
+And this is the governance line I put at the top of every conversation about the approach:
+
+> **AI accelerates discovery and implementation; humans retain accountability for requirements, architecture, engineering quality and acceptance.**
+
+---
+
+## Metrics that show it works
+
+"It feels faster" won't survive a steering committee. These are the measures I track, and they are deliberately weighted towards quality and discovery rather than raw throughput.
+
+| Metric | What it tells you | Direction you want |
+|---|---|---|
+| **Time from idea to first reviewable artefact** | How quickly the team gets something concrete to react to | Down |
+| **Questions discovered before build vs after build** | Whether gaps are being found early, when they're cheap | More before, fewer after |
+| **Story churn after sprint start** | Whether stories were genuinely ready | Down |
+| **Probe-to-production ratio** | How often probes are discarded vs promoted | Healthy discard rate — 100% promotion suggests anchoring |
+| **PR review depth** | Comments per PR, changes requested | Stable or up — falling review depth is a warning sign |
+| **Escaped defects and rework** | Whether quality is holding | Down or stable |
+| **Lead time for changes / change failure rate** | Standard DORA delivery and stability measures | Lead time down, failure rate stable or down |
+
+The two I watch most closely are **questions found before build** and **review depth**. If AI assistance is working, the first goes up. If people are starting to rubber-stamp generated code, the second goes down — and that is your early warning that the process is sliding towards vibe coding.
+
+---
+
+## Explaining it to a CIO
+
+When I explain this to senior leadership, I keep it to four points and avoid tool names entirely.
+
+1.  **We are not letting AI decide what to build.** Our requirements, architecture and acceptance remain owned by named people. AI drafts; people decide.
+2.  **We are finding problems earlier.** By producing concrete artefacts sooner, we surface missing requirements and design conflicts in week one rather than in user acceptance testing — where they are an order of magnitude more expensive.
+3.  **We have controls.** Every artefact passes a human quality gate. Branch protection, mandatory reviews, security scanning and decision records are enforced in tooling, not just policy.
+4.  **We measure it.** We track discovery, quality and delivery metrics, and we would know quickly if quality or review rigour started to slip.
+
+If they want one sentence, it is the governance line above. If they want a picture, it is the artefact chain. In my experience, the conversation shifts from "is this safe?" to "how do we scale it?" fairly quickly once they see that the decision points haven't moved — they have just been reached sooner. I wrote more broadly about preparing organisations for this shift in [The AI-Ready Organisation — Preparing Teams for AI](/blog/the-ai-ready-organisation-preparing-teams-for-ai).
+
+---
+
+## Common objections
+
+**"Isn't this just vibe coding with extra meetings?"**
+No. The difference is where decisions are made. Vibe coding moves decisions into the prompt and the model. This approach keeps decisions in reviews and workshops with accountable people, and uses AI to get to those decisions faster with better evidence.
+
+**"Won't developers stop thinking if the code is generated?"**
+They will if you let review become a formality. That is why review depth is a tracked metric and why probes are throwaway by default. In practice, I have found engineers think *more* about design, because they're reviewing and challenging rather than typing boilerplate.
+
+**"The AI will hallucinate requirements."**
+It will try to, which is why the templates explicitly give it an "open questions" escape hatch and why BAs validate every story. A fabricated requirement that gets caught in BA review is a cheap discovery; one that slips into production is not.
+
+**"Generating code before requirements are final is wasteful."**
+Writing code by hand before requirements are final is wasteful. Generating a probe in minutes, to discover what the requirements are missing, is about the cheapest form of requirements validation available. The waste happens only if you anchor on the probe.
+
+**"What about security and IP?"**
+Use enterprise-licensed tooling with appropriate data-handling terms, keep secrets out of prompts and repositories, run the same security scanning on generated code as on hand-written code, and treat generated code with the same ownership and review obligations. I covered the broader security considerations in [Deep Dive — AI Cloud Security](/blog/deep-dive-ai-cloud-security).
+
+**"Does this scale beyond one enthusiastic architect?"**
+Only if it's codified. That means shared instructions files, shared templates, shared prompt files, branch conventions and quality gates — not one person's private prompting technique. If the process lives only in my head, it is a personal habit, not an operating model.
+
+---
+
+## Where it fits with other AI-assisted practices
+
+It is worth being clear on what this model is and isn't. It sits alongside, not instead of, the everyday uses of AI coding tools — inline completion, chat-assisted debugging, test generation — which I covered in [AI-Powered Developer Tools Transforming Software Development](/blog/ai-powered-developer-tools-transforming-software-development). Those make individual engineers faster. Architecture-led progressive elaboration is about making the **team's understanding** converge faster, which is a different and, I would argue, more valuable problem.
+
+It also leans on the same ethical foundations I discussed in [Responsible AI — Building Trust Through Ethical Systems](/blog/responsible-ai-building-trust-through-ethical-systems): transparency about where AI was used, clear human accountability and the ability to explain why a decision was made. ADRs and labelled probes give you that audit trail almost for free.
+
+---
+
+## Conclusion
+
+*   **Vibe coding** is prompt → AI writes → looks okay → ship. Its defining trait is that decisions are implicitly delegated to the model
+*   **AI-assisted, architecture-led delivery** uses existing architecture, documentation and code as the source of intent, and uses AI to accelerate the transformation between artefacts
+*   The six steps — **knowledge → stories → BA validation → implementation hypothesis → engineering review → gap discovery → human decisions** — are familiar disciplines made dramatically faster
+*   The underlying concept is **progressive elaboration**: each cheap iteration exposes the next set of unknowns earlier, when they cost least to resolve
+*   A clear **roles and accountabilities** model keeps every decision and sign-off with a named person
+*   **Context** — instructions files, in-repo architecture docs, story templates and shared prompt files — determines the quality of every transformation
+*   **Premature implementation anchoring** is the real risk; mitigate it by treating early PRs as labelled, timeboxed, throwaway **implementation probes**
+*   **AI accelerates discovery and implementation; humans retain accountability for requirements, architecture, engineering quality and acceptance**
+
+So, the next time someone calls me a vibe coder, I'll smile and send them this post.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

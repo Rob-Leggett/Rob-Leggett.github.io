@@ -1,0 +1,412 @@
+---
+title: "Implementation Probes - Using AI-Generated PRs to Find Requirement Gaps"
+date: "2026-10-22"
+slug: "implementation-probes-using-ai-generated-prs-to-find-requirement-gaps"
+status: "publish"
+feature_image: "/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps/feature-image.png"
+tags: ["AI", "GitHub Copilot", "Pull Requests", "Requirements", "Architecture Decision Records", "Engineering Practices", "Robert Leggett"]
+
+meta:
+  title: "Implementation Probes - Using AI-Generated PRs to Find Requirement Gaps | Robert Leggett"
+  description: "A practical guide to implementation probes: AI-generated pull requests designed to surface missing requirements, with branch conventions, PR templates, decision logs, anti-anchoring tactics and metrics."
+  keywords: ["implementation probes", "AI-generated pull requests", "GitHub Copilot", "requirements gaps", "architecture decision records", "premature implementation anchoring", "progressive elaboration", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps"
+  image: "https://robertleggett.com.au/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps/feature-image.png"
+
+og:
+  type: "article"
+  title: "Implementation Probes - Using AI-Generated PRs to Find Requirement Gaps"
+  description: "A practical guide to implementation probes: AI-generated pull requests designed to surface missing requirements, with branch conventions, PR templates, decision logs, anti-anchoring tactics and metrics."
+  image: "https://robertleggett.com.au/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps/feature-image.png"
+  url: "https://robertleggett.com.au/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps"
+
+twitter:
+  card: "summary_large_image"
+  title: "Implementation Probes - Using AI-Generated PRs to Find Requirement Gaps"
+  description: "A practical guide to implementation probes: AI-generated pull requests designed to surface missing requirements, with branch conventions, PR templates, decision logs, anti-anchoring tactics and metrics."
+  image: "https://robertleggett.com.au/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps/feature-image.png"
+---
+
+Last week I wrote about why the way I work with GitHub Copilot [isn't vibe coding](/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery), and the response surprised me. Very few people pushed back on the overall operating model. Almost everyone, though, asked the same follow-up question: "How do you stop people treating the generated PR as the answer?" It is a fair question, and it goes straight to the heart of the biggest risk I called out — **premature implementation anchoring**.
+
+My answer is a practice I call the **implementation probe**: an AI-generated pull request whose explicit purpose is to discover what we don't yet know, not to ship. The idea is simple. Making it work in a real team takes a bit more structure — naming conventions, a dedicated PR template, a disciplined way of turning review comments into decisions, and clear rules for when a probe is promoted or thrown away. This post is the practical playbook.
+
+---
+
+## Before you start
+
+About this post:
+
+*   10 – 14-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A precise definition of an implementation probe and how it differs from a spike or prototype
+*   Branch, label and PR template conventions you can adopt immediately
+*   A repeatable process for turning PR review comments into a workshop agenda and decision log
+*   Concrete tactics for avoiding anchoring, including timeboxes and alternative probes
+*   Clear criteria for promoting or discarding a probe, plus metrics to track
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## What is an implementation probe?
+
+An **implementation probe** is a pull request — usually AI-generated from a story, the relevant architecture and the existing codebase — that exists to **expose gaps in requirements and design**. Its primary output is a list of questions, assumptions and conflicts. Code is the medium, not the deliverable.
+
+It borrows from familiar ideas but is not quite any of them:
+
+| Practice | Purpose | Typical output | Lifespan |
+|---|---|---|---|
+| **Spike** | Answer a specific technical question ("can library X do Y?") | A finding, sometimes throwaway code | Days |
+| **Prototype** | Explore user experience or feasibility with stakeholders | A clickable or runnable demo | Days to weeks |
+| **Tracer bullet** | Build a thin, production-quality slice end to end | Code intended to be kept | Ongoing |
+| **Implementation probe** | Discover missing requirements by attempting a realistic implementation in the real codebase | Questions, assumptions, decisions — code is disposable | Hours to a couple of days |
+
+The distinctive feature of a probe is that it is written **in the real repository, against the real architecture, following real conventions**. That is what makes it such an effective ambiguity detector. A prototype in a sandbox can gloss over the fact that two services both think they own a customer's address. A probe in the real codebase has to pick one, and the moment it does, a reviewer will ask "is that right?".
+
+Generating that realistic implementation used to cost too much to throw away. With AI assistance it costs minutes, which changes the economics entirely. You can afford to write code whose main job is to be argued with.
+
+---
+
+## The probe lifecycle
+
+Here is the end-to-end flow I use. It slots directly into the progressive elaboration loop from the [previous post](/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery).
+
+![Probe lifecycle](/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps/inline-1.png)
+
+1.  **Start from a validated story** and the relevant architecture views and ADRs
+2.  **Generate the probe PR** with Copilot, within a timebox
+3.  **Engineers review it** and tag their comments by type
+4.  **Build a question log** from the comments — AI can help cluster and de-duplicate
+5.  **Run a short workshop** with the architect, BA, product owner and engineers
+6.  **Record decisions** as ADRs and story updates
+7.  **Decide: promote or discard** the probe
+8.  **Build the production PR** on a fresh branch, from the updated stories
+
+Steps 2 and 4 are AI-accelerated. Steps 3, 5, 6 and 7 are human decisions. That split is deliberate and it never changes.
+
+---
+
+## Conventions: make probes impossible to mistake
+
+Anchoring thrives on ambiguity about what something *is*. If a probe looks exactly like any other PR in the queue, someone will eventually approve and merge it. The fix is to make probes visually and mechanically distinct.
+
+### Branch naming
+
+I use a dedicated prefix so probes are obvious in every tool that shows branch names:
+
+```text
+probe/<story-key>-<short-description>
+probe/<story-key>-<short-description>-alt-a     # alternative approaches
+probe/<story-key>-<short-description>-alt-b
+
+feature/<story-key>-<short-description>          # production work, created later
+```
+
+For example, `probe/ORD-142-preference-update` and `probe/ORD-142-preference-update-alt-b`. The story key ties the probe back to the requirement it is testing.
+
+### Labels and draft status
+
+Every probe PR is:
+
+*   Opened as a **draft** PR, so it can't be merged without a deliberate state change
+*   Labelled `probe` — and I like to give that label a loud colour
+*   Titled with a `[PROBE]` prefix, for people who skim notifications by title
+
+### Enforce it in tooling
+
+Conventions decay unless something enforces them. A small workflow can apply the label automatically based on branch name and block merges into the main branch:
+
+```yaml
+name: probe-guard
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'probe/')
+    steps:
+      - name: Label as probe
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['probe'],
+            });
+      - name: Probes never merge
+        run: |
+          echo "Probe branches are for discovery. Create a feature/ branch to promote."
+          exit 1
+```
+
+Make the failing `guard` job a required status check on the main branch and probes become physically unmergeable. Nobody has to remember the rule. If you want to keep CI signal on the probe itself (tests, linting), run those in a separate workflow — the deliberate red cross on `guard` is the point.
+
+---
+
+## The probe PR template
+
+The PR description is where a probe does most of its work. A good probe description makes the AI's assumptions **explicit and reviewable**, rather than hiding them in code. GitHub supports multiple PR templates via `.github/PULL_REQUEST_TEMPLATE/`, so I keep a dedicated `probe.md`:
+
+```markdown
+## [PROBE] <story key> — <title>
+
+> This is an implementation probe. It is NOT intended to be merged.
+> Its purpose is to surface missing requirements, assumptions and design conflicts.
+
+### Story and context
+- Story: <link>
+- Architecture / ADRs consulted: <links>
+- Timebox: <e.g. 4 hours> — Started: <date>
+
+### Approach taken
+One paragraph describing the shape of the solution this probe assumes.
+
+### Assumptions made (please challenge)
+- [ ] A1: Preferences are owned by the Customer service (SoR)
+- [ ] A2: Changes apply to future orders only, not in-flight orders
+- [ ] A3: A `PreferenceUpdated` event is published for downstream consumers
+
+### Open questions (must be answered before production build)
+- [ ] Q1: What happens to in-flight orders when a preference changes?
+- [ ] Q2: Is an audit history of preference changes required?
+- [ ] Q3: Who can change preferences on behalf of a customer?
+
+### Conflicts found
+- C1: Story says "real-time"; ADR-0012 says notification consumers are eventually consistent
+
+### Deliberately NOT done
+- Production-grade error handling and retries
+- Full test coverage (only happy-path tests to prove shape)
+- Performance tuning, accessibility review, localisation
+- Migration of existing data
+
+### Alternatives considered
+- Alt B: <link to probe/...-alt-b> — preferences stored on the order instead
+```
+
+The **"Deliberately NOT done"** section is the one people underestimate. It stops reviewers wasting time on things the probe was never meant to address, and it is a constant reminder that what they are looking at is incomplete *by design*.
+
+The assumptions and questions sections are where the AI is genuinely useful. If your repository instructions tell Copilot not to invent business rules and to record unknowns instead, the model will populate these lists as it goes. In my experience, it surfaces a surprising number of the right questions — it just can't answer them, which is exactly as it should be.
+
+---
+
+## Reviewing a probe
+
+Reviewing a probe is different from reviewing production code. You are not primarily checking for bugs; you are checking **whether the probe made the right assumptions**. I ask reviewers to tag comments with a short prefix so they can be triaged mechanically later:
+
+| Tag | Meaning | Example |
+|---|---|---|
+| `[Q]` | A question the business or architecture must answer | "[Q] Can an agent update preferences on a customer's behalf?" |
+| `[A]` | An assumption the reviewer disagrees with or wants confirmed | "[A] A2 — I don't think future-orders-only is right for subscriptions" |
+| `[C]` | A conflict with architecture, an ADR or another story | "[C] This calls Billing synchronously; ADR-0007 says events only" |
+| `[R]` | A risk — security, privacy, performance, operability | "[R] Preference payload may contain contact details; logging it is a PII issue" |
+| `[N]` | A note about implementation that matters for the real build | "[N] Use the existing outbox helper rather than publishing directly" |
+
+The ratio of these tags is itself informative. A probe with lots of `[Q]` and `[C]` comments and very few `[N]` comments has done its job well: it found requirement and design gaps rather than code nitpicks.
+
+---
+
+## From review comments to a workshop agenda
+
+Twenty comments across three probes are hard to reason about in a meeting. Before the workshop, the tech lead pulls the tagged comments together into a **question log**. This is another transformation where AI helps: give Copilot the exported comments and ask it to cluster them by theme, merge duplicates and order them by impact.
+
+Pulling the comments is easy with the GitHub CLI:
+
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}/comments \
+  --jq '.[] | select(.body | test("^\\[(Q|A|C|R)\\]")) | {path, line, body, user: .user.login}' \
+  > probe-142-comments.json
+```
+
+A short reusable prompt then turns that into an agenda. Keeping it as a prompt file in the repository means every tech lead gets the same shape of output:
+
+```markdown
+You are preparing a 45-minute design workshop agenda.
+
+Input: tagged PR review comments from one or more implementation probes.
+
+1. Group comments into themes (e.g. data ownership, lifecycle, permissions).
+2. Merge duplicates; keep links to every original comment.
+3. For each theme, write the decision that needs to be made as a single question.
+4. Order themes by impact on solution shape, highest first.
+5. Do NOT propose answers. List options only if they appear in the comments.
+```
+
+That final instruction is the important one. The AI organises the questions; **people answer them**.
+
+### Running the workshop
+
+I keep these sessions short — 45 to 60 minutes — with the architect, BA, product owner, the reviewing engineers and anyone who owns an affected system. The format is simple:
+
+1.  **Two minutes** recapping what the probe assumed (read from the PR description)
+2.  **Work through the themed questions** in order of impact
+3.  For each, **make a decision, defer it with an owner, or declare it out of scope**
+4.  **Capture outcomes live** in the decision log
+
+If something can't be decided in the room because it needs someone who isn't there, it gets an owner and a date. Unresolved questions never silently disappear.
+
+---
+
+## The decision log and ADRs
+
+Not every decision deserves an ADR. I use a lightweight rule: if the decision **affects more than one story, more than one component, or would surprise a future engineer**, it becomes an ADR. Otherwise it goes straight into the story as a clarified acceptance criterion.
+
+A probe-originated ADR looks like any other, with one extra field that links it to its evidence:
+
+```markdown
+# ADR-0031: Preference changes apply to future orders only
+
+- Status: Accepted
+- Date: 2026-10-08
+- Deciders: Architect, Product Owner, BA, Engineering lead
+- Origin: probe/ORD-142-preference-update (PR #418), questions Q1, A2
+
+## Context
+The probe assumed preference changes apply to future orders only. Review
+raised that subscription orders are created in advance and may be affected.
+
+## Decision
+Preference changes apply to orders not yet confirmed for fulfilment,
+including scheduled subscription orders. Confirmed orders are unaffected.
+
+## Consequences
+- Order service consumes `PreferenceUpdated` and re-evaluates unconfirmed orders
+- New acceptance criteria added to ORD-142 and ORD-151
+- Probe PR #418 discarded; production work on feature/ORD-142-preference-update
+```
+
+The **Origin** field matters. Six months later, when someone asks why the system behaves this way, they can follow the link back to the probe, the comment and the conversation. That traceability is one of the quiet benefits of this approach — and it's the kind of transparency I argued for in [Responsible AI — Building Trust Through Ethical Systems](/blog/responsible-ai-building-trust-through-ethical-systems).
+
+Finally, the BA updates the stories: answered questions become acceptance criteria, deferred ones stay in the "Open questions" section with an owner, and anything declared out of scope is written down as such.
+
+---
+
+## Avoiding anchoring
+
+The whole point of the probe practice is to get the benefits of concrete code without the cost of anchoring on it. These are the tactics that have made the biggest difference for me.
+
+### Throwaway by default
+
+The default outcome of a probe is **discard**. Promotion is the exception and requires a positive decision. That flips the burden of proof: instead of "why wouldn't we keep this?", the question becomes "is there a good reason to keep this?". Most of the time, there isn't — and that is fine, because the probe cost minutes to generate.
+
+### Timeboxes
+
+I timebox probes tightly, typically **half a day to two days** including review. A probe that runs longer is accumulating investment, and investment is what creates anchoring. If you find yourself polishing a probe, stop: you have learned what you can, and further work belongs on a production branch after the decisions are made.
+
+### Alternative probes
+
+When the shape of the solution is genuinely uncertain, generate **two or three probes with deliberately different approaches** — for example, one where the data lives on the customer and one where it lives on the order, or one synchronous and one event-driven. Reviewing alternatives side by side breaks the "first one wins" effect and turns the workshop into a comparison rather than a critique of a single answer.
+
+Alternative probes are also an excellent way to make architectural trade-offs tangible for non-technical stakeholders. "Here are two ways it could work; here is what each implies for in-flight orders" is a far more productive conversation than an abstract options paper. If you are weighing integration styles specifically, my post on [choreography versus orchestration](/blog/when-should-you-choose-choreography-vs-orchestration-for-your-microservices-architecture) covers the kinds of trade-offs that probes tend to expose.
+
+### Show questions, not demos
+
+When presenting a probe to stakeholders, **lead with the question log, not the running software**. The moment you demo a working screen, the conversation drifts to cosmetics. Start with "this attempt raised these seven questions", and only show code or UI where it helps explain a specific question.
+
+### Rebuild, don't patch
+
+After decisions are made, build the production version on a fresh `feature/` branch from the **updated** stories. Regenerating from improved inputs is cheap and gives you code shaped by the decisions, rather than code shaped by the original assumptions with decisions bolted on.
+
+---
+
+## Promote or discard?
+
+Occasionally a probe is good enough to keep. When that happens, I want it to be a deliberate, evidence-based choice.
+
+![Promote or discard — a simple decision path](/blog/implementation-probes-using-ai-generated-prs-to-find-requirement-gaps/inline-2.png)
+
+| Signal | Leans towards discard | Leans towards promote |
+|---|---|---|
+| **Decisions changed the solution shape** | Yes — data ownership, flow or boundaries moved | No — decisions only added detail |
+| **Code quality** | Happy-path only, shortcuts taken | Already meets conventions, tests and NFRs |
+| **Size** | Large, sprawling change | Small, focused change |
+| **Alternatives** | Another probe was preferred | This was the chosen approach |
+| **Reviewer confidence** | Reviewers would rewrite large parts | Reviewers would request minor changes |
+
+Even when promoting, I don't merge the probe branch. I create a new `feature/` branch, bring across the code worth keeping, update it to reflect the decisions, add the missing tests and error handling from the "Deliberately NOT done" list, and open a normal PR that goes through the full engineering review gate. The probe PR is closed with a link to the production PR and the ADRs it produced.
+
+A healthy team will discard most of its probes. If every probe is being promoted, that is a strong signal that the team has started anchoring — or that probes are being used for work whose requirements were already clear, in which case you probably didn't need a probe.
+
+---
+
+## When not to probe
+
+Probes aren't free, and they aren't always the right tool:
+
+*   **Well-understood, repeatable work** — a new field on an existing form with clear rules doesn't need a probe
+*   **Pure technical uncertainty** — "will this library handle our load?" is a classic spike, not a probe
+*   **High-sensitivity code paths** — for security-critical or heavily regulated logic, I'd rather the design be agreed on paper first and the code written carefully once
+*   **When the team can't review it** — a probe nobody has time to review is just noise, and creates risk if it lingers
+
+The best candidates are stories that **cross boundaries**: multiple systems, unclear ownership, lifecycle and state transitions, permissions, or integration with something legacy. Those are where prose requirements hide the most ambiguity.
+
+---
+
+## Metrics
+
+To know whether probes are paying off, I track a small set of measures alongside the broader delivery metrics from the [first post](/blog/its-not-vibe-coding-ai-assisted-architecture-led-delivery):
+
+| Metric | How to measure | What good looks like |
+|---|---|---|
+| **Questions per probe** | Count of `[Q]`, `[A]`, `[C]` tagged comments | Steady, non-trivial numbers on boundary-crossing stories |
+| **Time to decision** | Probe opened → workshop decisions recorded | Days, not weeks |
+| **Probe discard rate** | Probes closed without promotion ÷ total | Majority discarded; 100% promotion is a warning sign |
+| **Post-start story churn** | Acceptance criteria changes after sprint start, for probed vs unprobed stories | Lower for probed stories |
+| **Late-discovered requirements** | Defects or change requests traced to missing requirements | Trending down |
+| **ADRs with probe origin** | ADRs whose Origin field links to a probe | Shows probes are driving real decisions |
+| **Probe age** | Days a probe PR stays open | Inside the timebox; stale probes get closed |
+
+The comparison between **probed and unprobed stories** is the most persuasive one for leadership. If stories that went through a probe have measurably less churn and fewer late-discovered requirements, the practice pays for itself.
+
+---
+
+## Pitfalls I've seen
+
+*   **Probes that never close** — they become zombie branches that someone eventually tries to rebase into production. Auto-close stale probes after the timebox.
+*   **Workshops without decision-makers** — if the product owner or architect isn't in the room, questions bounce around without resolution. Don't run the workshop without them.
+*   **Too many probes at once** — reviewers burn out and start skimming, which defeats the purpose. Limit work in progress.
+*   **Treating AI-listed assumptions as answers** — the assumptions section is a list of things to *challenge*, not a set of defaults. Tick each one off explicitly.
+*   **Skipping the story update** — if decisions live only in the ADR or the workshop notes, the next generation from the story will reproduce the old assumptions.
+*   **Reviewing probes like production code** — style nitpicks are noise here. Focus review on assumptions, boundaries and behaviour.
+
+---
+
+## Conclusion
+
+*   An **implementation probe** is an AI-generated PR whose job is to surface missing requirements and design conflicts; the code is disposable
+*   Probes work because they are written **in the real codebase against the real architecture**, where ambiguity can't hide
+*   Make probes unmistakable with a **`probe/` branch prefix, a `probe` label, draft status and a guard workflow** that prevents merging
+*   A dedicated **probe PR template** makes assumptions, open questions, conflicts and deliberately-skipped work explicit and reviewable
+*   **Tagged review comments** feed an AI-clustered question log, which becomes a short, decision-focused workshop
+*   Decisions land in **ADRs with an Origin link** back to the probe, and in updated stories
+*   Avoid anchoring with **throwaway-by-default, tight timeboxes, alternative probes and rebuilding from updated stories**
+*   **Promote rarely and deliberately**, always via a fresh `feature/` branch and full review
+*   Measure **questions found, time to decision, discard rate and churn** to show the practice is working
+
+AI accelerates discovery and implementation; humans retain accountability for requirements, architecture, engineering quality and acceptance. Probes are simply the most practical way I have found to put that principle to work every sprint.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

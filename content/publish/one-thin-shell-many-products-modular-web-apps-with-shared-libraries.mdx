@@ -1,0 +1,769 @@
+---
+title: "One Thin Shell, Many Products - Modular Web Apps for Multiple Personas"
+date: "2026-10-08"
+slug: "one-thin-shell-many-products-modular-web-apps-with-shared-libraries"
+status: "publish"
+feature_image: "/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/feature-image.png"
+tags: ["Frontend Architecture", "React", "TypeScript", "Micro-Frontends", "Monorepo", "Design Systems", "Module Federation", "Platform Engineering", "Robert Leggett"]
+
+meta:
+  title: "One Thin Shell, Many Products - Modular Web Apps for Multiple Personas | Robert Leggett"
+  description: "How to build a thin web application shell that hosts many products and personas through module manifests, entitlements, and versioned shared libraries — with trade-offs on monorepos, module federation, theming, testing, and governance."
+  keywords: ["thin shell architecture", "modular frontend", "micro-frontends", "module federation", "monorepo", "shared libraries", "design tokens", "persona-based navigation", "entitlements", "OpenAPI client generation", "changesets", "semantic release", "GitHub Packages", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries"
+  image: "https://robertleggett.com.au/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/feature-image.png"
+
+og:
+  type: "article"
+  title: "One Thin Shell, Many Products - Modular Web Apps for Multiple Personas"
+  description: "How to build a thin web application shell that hosts many products and personas through module manifests, entitlements, and versioned shared libraries — with trade-offs on monorepos, module federation, theming, testing, and governance."
+  image: "https://robertleggett.com.au/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/feature-image.png"
+  url: "https://robertleggett.com.au/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries"
+
+twitter:
+  card: "summary_large_image"
+  title: "One Thin Shell, Many Products - Modular Web Apps for Multiple Personas"
+  description: "How to build a thin web application shell that hosts many products and personas through module manifests, entitlements, and versioned shared libraries — with trade-offs on monorepos, module federation, theming, testing, and governance."
+  image: "https://robertleggett.com.au/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/feature-image.png"
+---
+
+I'll be honest with you — I have lost count of the number of times I have watched an organisation build the same web application three times. One portal for customers, another for internal staff, a third for partners or administrators. Each one has its own login flow, its own button component that is *almost* the same shade of blue, its own hand-rolled API client, and its own slightly different idea of what a "page header" looks like. Two years later, someone proposes a fourth portal, and everybody quietly sighs.
+
+The approach I keep coming back to in enterprise programmes is the opposite: **one thin shell, many products**. A deliberately boring host application owns the cross-cutting concerns — routing, authentication, layout, telemetry, feature flags — and everything that actually delivers business value lives in product modules that plug into it. Those modules, in turn, are built from a small set of versioned shared libraries: design tokens, a component library, generated API clients, an auth SDK, i18n and analytics. In this article I will walk through how I structure this, the contracts that hold it together, how personas and entitlements drive what each user sees, and — just as importantly — the traps that turn a tidy modular platform back into a monolith with extra steps.
+
+---
+
+## Before you start
+
+About this post:
+
+*   14 – 18-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A clear model of what belongs in a thin shell versus a product module
+*   A TypeScript/React module contract and registry you can adapt directly
+*   Patterns for persona-driven navigation and entitlement-aware routing
+*   A practical approach to shared libraries, versioning, and publishing
+*   Honest trade-offs between monorepo and polyrepo, and between build-time and runtime composition
+*   A testing and governance strategy that keeps the platform healthy as teams grow
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## The problem with "one portal per audience"
+
+Most platforms do not start out with multiple personas. They start with one — usually customers — and a single web app built for them. Then the operations team needs a back-office view, so a second app is spun up. Then partners need limited access, and an administrator console appears. Each was a reasonable decision at the time. Collectively, they create a set of problems that get more expensive every quarter:
+
+| Symptom | Root cause | Cost |
+|---|---|---|
+| Three login experiences, three session bugs | Auth implemented per app | Security review effort triples; inconsistent MFA and timeout behaviour |
+| "Why is this button different?" | Components copied, not shared | Design drift, accessibility regressions, brand inconsistency |
+| API changes break one portal silently | Hand-written API clients per app | Runtime failures discovered in production |
+| Features rebuilt for each audience | Domain UI tied to one app | An "Orders" screen built three times with subtle differences |
+| Analytics cannot answer cross-journey questions | Different event schemas | Product decisions made on partial data |
+
+The insight is that **personas are not products**. A customer and a support agent both work with orders — they just see different slices, with different permissions and different density of information. If you bind features to a portal, you duplicate them. If you bind features to a *product module* and let the shell decide who can see what, you build them once.
+
+---
+
+## What "thin" really means
+
+The word doing the heavy lifting here is *thin*. The shell is infrastructure for the user interface. It should be as unexciting as a load balancer. If a product team needs to change the shell to ship a feature, that is a signal the boundary is wrong.
+
+![Thin shell, product modules and shared libraries](/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/inline-1.png)
+
+### What the shell owns
+
+*   **Routing** — the top-level route table, built from module manifests, plus 404 and access-denied handling
+*   **Authentication and session** — sign-in, token refresh, session timeout, sign-out, and exposing a typed session to modules
+*   **Layout and navigation** — the app frame, header, side navigation, breadcrumbs, and responsive behaviour
+*   **Feature flags** — a single flag client initialised once, with flags available to every module
+*   **Telemetry** — error boundaries, performance marks, structured logging, and correlation IDs propagated on every request
+*   **Theming** — loading the right token set for the current brand or tenant
+*   **Module registry** — discovering modules, filtering them by persona and entitlement, and lazy loading them
+
+### What the shell must not own
+
+*   Any domain logic — no "if order status is X" anywhere in the shell
+*   Any domain API calls — the shell knows who you are, not what you have bought
+*   Product-specific screens, forms, or copy
+*   Persona-specific behaviour beyond "which modules and which nav items"
+
+A good litmus test I use: **could you delete every product module and still boot the shell to an empty, authenticated, branded frame?** If yes, your shell is thin. If the shell crashes because it imports something from the Orders module, it is not.
+
+### What a product module owns
+
+A product module is a vertical slice of user-facing capability — Orders, Bookings, Support Desk, Tenant Admin. It owns its routes, screens, local state, data fetching, and copy. It may serve multiple personas, rendering different views based on the session the shell hands it. It depends *downward* on shared libraries and *never sideways* on another module.
+
+---
+
+## The module contract
+
+Everything in this architecture hinges on one small, well-typed interface: the contract between the shell and a module. Keep it small. Every field you add is a field you will have to support forever.
+
+```typescript
+// packages/shell-contract/src/module.ts
+import type { ComponentType, LazyExoticComponent } from "react";
+
+export type Persona = "customer" | "agent" | "admin";
+
+export type Permission =
+  | "orders:read"
+  | "orders:write"
+  | "bookings:read"
+  | "bookings:write"
+  | "support:handle"
+  | "tenants:manage";
+
+export interface NavItem {
+  id: string;
+  labelKey: string; // i18n key, never a hard-coded string
+  path: string; // relative to the module's basePath
+  icon?: string;
+  personas: readonly Persona[];
+  requires?: readonly Permission[];
+  order?: number;
+}
+
+export interface ModuleContext {
+  session: Readonly<{
+    userId: string;
+    persona: Persona;
+    tenantId: string;
+    permissions: ReadonlySet<Permission>;
+  }>;
+  flags: Readonly<{ isEnabled: (flag: string) => boolean }>;
+  telemetry: Readonly<{
+    track: (event: string, props?: Record<string, string | number | boolean>) => void;
+  }>;
+}
+
+export interface ProductModule {
+  id: string; // stable, kebab-case, e.g. "orders"
+  version: string; // semver of the module package
+  basePath: string; // e.g. "/orders"
+  personas: readonly Persona[];
+  requires?: readonly Permission[];
+  featureFlag?: string; // whole-module kill switch
+  nav: readonly NavItem[];
+  Root: LazyExoticComponent<ComponentType<{ ctx: ModuleContext }>>;
+}
+```
+
+A few deliberate choices are worth calling out:
+
+*   **`Root` is lazy.** The shell never statically imports module code, which guarantees code splitting and keeps the initial bundle lean.
+*   **Navigation is data, not JSX.** The shell renders nav from `NavItem` records so it can filter, sort, and style consistently.
+*   **`ModuleContext` is the only door into the shell.** Modules do not reach into a global store or import shell internals. If they need something new, it gets added to the context deliberately — and versioned.
+*   **Labels are i18n keys.** This stops copy leaking into the contract and keeps translation in one pipeline.
+
+### A module manifest
+
+Each module exports a manifest that satisfies the contract:
+
+```typescript
+// modules/orders/src/manifest.ts
+import { lazy } from "react";
+import type { ProductModule } from "@acme/shell-contract";
+
+export const ordersModule: ProductModule = {
+  id: "orders",
+  version: "3.4.0",
+  basePath: "/orders",
+  personas: ["customer", "agent"],
+  requires: ["orders:read"],
+  nav: [
+    { id: "my-orders", labelKey: "orders.nav.mine", path: "/", personas: ["customer"], order: 10 },
+    { id: "all-orders", labelKey: "orders.nav.all", path: "/", personas: ["agent"], order: 20 },
+    {
+      id: "create-order",
+      labelKey: "orders.nav.create",
+      path: "/new",
+      personas: ["agent"],
+      requires: ["orders:write"],
+      order: 21,
+    },
+  ],
+  Root: lazy(() => import("./OrdersRoot")),
+};
+```
+
+### The registry
+
+The registry is the shell's single source of truth for which modules exist and which ones a given user can reach:
+
+```typescript
+// apps/shell/src/registry.ts
+import type { ModuleContext, NavItem, ProductModule } from "@acme/shell-contract";
+import { ordersModule } from "@acme/module-orders";
+import { bookingsModule } from "@acme/module-bookings";
+import { supportModule } from "@acme/module-support";
+import { tenantAdminModule } from "@acme/module-tenant-admin";
+
+const ALL_MODULES: readonly ProductModule[] = [
+  ordersModule,
+  bookingsModule,
+  supportModule,
+  tenantAdminModule,
+];
+
+const hasAll = (
+  granted: ReadonlySet<string>,
+  required: readonly string[] = [],
+): boolean => required.every((p) => granted.has(p));
+
+export function resolveModules(ctx: ModuleContext): ProductModule[] {
+  const { persona, permissions } = ctx.session;
+  return ALL_MODULES.filter(
+    (m) =>
+      m.personas.includes(persona) &&
+      hasAll(permissions, m.requires) &&
+      (!m.featureFlag || ctx.flags.isEnabled(m.featureFlag)),
+  );
+}
+
+export function resolveNav(modules: readonly ProductModule[], ctx: ModuleContext): NavItem[] {
+  const { persona, permissions } = ctx.session;
+  return modules
+    .flatMap((m) =>
+      m.nav
+        .filter((n) => n.personas.includes(persona) && hasAll(permissions, n.requires))
+        .map((n) => ({ ...n, path: `${m.basePath}${n.path === "/" ? "" : n.path}` })),
+    )
+    .sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
+}
+```
+
+And the shell wires those modules into the router, wrapping each in its own error boundary and suspense fallback so one misbehaving module cannot take down the frame:
+
+```tsx
+// apps/shell/src/AppRoutes.tsx
+import { Suspense } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { ModuleErrorBoundary, PageSkeleton } from "@acme/ui";
+import { resolveModules } from "./registry";
+import { useModuleContext } from "./context";
+
+export function AppRoutes() {
+  const ctx = useModuleContext();
+  const modules = resolveModules(ctx);
+
+  return (
+    <Routes>
+      {modules.map(({ id, basePath, Root }) => (
+        <Route
+          key={id}
+          path={`${basePath}/*`}
+          element={
+            <ModuleErrorBoundary moduleId={id}>
+              <Suspense fallback={<PageSkeleton />}>
+                <Root ctx={ctx} />
+              </Suspense>
+            </ModuleErrorBoundary>
+          }
+        />
+      ))}
+      <Route path="/" element={<Navigate to={modules[0]?.basePath ?? "/access-denied"} replace />} />
+      <Route path="*" element={<Navigate to="/not-found" replace />} />
+    </Routes>
+  );
+}
+```
+
+That is genuinely most of the shell. Everything else is plumbing: providers for the session, flags, theme, and telemetry.
+
+---
+
+## Personas, entitlements, and navigation
+
+Personas and permissions are related but not the same thing, and conflating them is one of the most common design mistakes I see.
+
+*   A **persona** describes *who you are* in relation to the platform — customer, agent, admin. It drives the overall experience: layout density, default landing page, which IdP you signed in through, tone of copy.
+*   An **entitlement** describes *what you are allowed to do* — which products your tenant has licensed, and which permissions your role grants within them.
+
+![From login to persona navigation](/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/inline-2.png)
+
+In practice the flow looks like this:
+
+1.  **Sign in.** Often there are separate identity providers per audience — a workforce directory for staff, a customer identity (CIAM) tenant for the public. The shell handles both behind one auth abstraction. If you want the protocol detail, my [deep dive into OAuth 2.0 and OpenID Connect](/blog/deep-dive-oauth2-and-openid-connect) covers it.
+2.  **Build the session.** The shell derives the persona from the issuer and claims, then fetches entitlements from an API — not from the token alone, because entitlements change more often than tokens expire.
+3.  **Filter the registry.** Modules and nav items are filtered by persona, permissions, and feature flags.
+4.  **Render.** The shell renders only what survives the filter.
+
+> **Critical rule:** hiding a menu item is a user experience decision, not a security control. Every API behind a module must enforce the same permissions server-side. The front end is a convenience layer; the API is the system of record for authorisation. My post on [identity in microservices](/blog/deep-dive-identity-in-microservices) goes deeper into propagating identity to back-end services.
+
+### Product × persona entitlement model
+
+I find it helpful to model entitlements as a matrix of **products** (what the tenant has licensed) crossed with **roles** (what the user can do within a product). The resulting permissions are what the shell consumes:
+
+```typescript
+// Shape returned by GET /me/entitlements — illustrative only
+interface EntitlementsResponse {
+  persona: "customer" | "agent" | "admin";
+  tenantId: string;
+  products: Array<{
+    productId: "orders" | "bookings" | "support" | "tenant-admin";
+    roles: string[];
+    permissions: string[];
+  }>;
+}
+```
+
+Flatten the permissions into a `Set` once, at session start, and every check thereafter is constant time. Refresh entitlements on a sensible cadence or on a server-sent "entitlements changed" event, rather than on every navigation.
+
+### Same module, different personas
+
+Because a module can serve multiple personas, it needs a clean way to branch. I prefer persona-specific *views* composed from shared *features*, rather than `if (persona === ...)` scattered through components:
+
+```tsx
+// modules/orders/src/OrdersRoot.tsx
+import { Routes, Route } from "react-router-dom";
+import type { ModuleContext } from "@acme/shell-contract";
+import { CustomerOrdersView } from "./views/CustomerOrdersView";
+import { AgentOrdersView } from "./views/AgentOrdersView";
+import { CreateOrderPage } from "./views/CreateOrderPage";
+
+const views = {
+  customer: CustomerOrdersView,
+  agent: AgentOrdersView,
+} as const;
+
+export default function OrdersRoot({ ctx }: { ctx: ModuleContext }) {
+  const persona = ctx.session.persona;
+  const View = persona === "admin" ? null : views[persona];
+  if (!View) return null;
+
+  return (
+    <Routes>
+      <Route index element={<View ctx={ctx} />} />
+      {ctx.session.permissions.has("orders:write") && (
+        <Route path="new" element={<CreateOrderPage ctx={ctx} />} />
+      )}
+    </Routes>
+  );
+}
+```
+
+Both views reuse the same order table, status badge, and data hooks — the customer view just scopes the query to "my orders" and hides operational columns, while the agent view adds bulk actions and search.
+
+---
+
+## Shared libraries: the foundation layer
+
+Shared libraries are where the leverage comes from — and also where most of the pain comes from if you get them wrong. I keep the list short and the responsibilities sharp:
+
+| Package | Responsibility | Depends on |
+|---|---|---|
+| `@acme/tokens` | Design tokens: colour, spacing, typography, radii, motion — as CSS variables and typed TS exports | Nothing |
+| `@acme/ui` | Accessible, unstyled-logic-plus-tokens component library | `tokens` |
+| `@acme/api-*` | API clients generated from OpenAPI specs, one per back-end domain | Nothing (fetch only) |
+| `@acme/auth` | Session hooks, token handling, route guards, permission helpers | Nothing domain-specific |
+| `@acme/i18n` | Translation loading, formatting (dates, currency, plurals) | Nothing |
+| `@acme/analytics` | Typed event catalogue and transport | Nothing |
+| `@acme/shell-contract` | The module interface above — types only | Nothing |
+
+Notice the dependency column. **Shared libraries should depend on almost nothing**, and never on each other in cycles. The component library can depend on tokens; nothing should depend on the shell.
+
+### Design tokens and the component library
+
+Tokens are the contract between design and engineering. I use a three-tier model:
+
+*   **Foundation tokens** — raw values: `violet-600`, `space-4`, `radius-md`
+*   **Semantic tokens** — intent: `color-action-primary`, `color-text-muted`, `space-page-gutter`
+*   **Component tokens** (optional) — `button-primary-bg` mapped to a semantic token
+
+Application code should consume semantic tokens only. That single rule is what makes theming possible later. I wrote about the fundamentals of building a reusable React library some years ago in [Unlocking the Power of Component Libraries](/blog/react-component-library), and the principles have aged well — the main change since is that tokens have become the primary interface, with components as consumers of tokens rather than owners of style.
+
+### API clients from OpenAPI
+
+Hand-written API clients are a liability. Generate them from the OpenAPI specs your back-end teams already publish:
+
+```yaml
+# packages/api-orders/openapi-ts.config.yaml (illustrative)
+input: ../../specs/orders.openapi.yaml
+output: src/generated
+plugins:
+  - "@hey-api/typescript"
+  - "@hey-api/sdk"
+  - name: "@tanstack/react-query"
+```
+
+Now a breaking change in the Orders API becomes a **compile error** in every module that calls it, rather than a production incident. Pair this with contract tests on the API side and you have type safety from database to button. It also reinforces API-first design: the spec is the source of truth, and the UI cannot invent fields the API does not have.
+
+### Analytics as a typed catalogue
+
+Analytics is a shared library people often forget to standardise. A typed event catalogue stops every module inventing its own naming:
+
+```typescript
+// packages/analytics/src/events.ts
+export interface EventCatalogue {
+  "module.viewed": { moduleId: string; persona: string };
+  "order.created": { channel: "self-service" | "assisted" };
+  "booking.cancelled": { reason: "customer" | "agent" | "system" };
+}
+
+export type EventName = keyof EventCatalogue;
+
+export function track<E extends EventName>(name: E, props: EventCatalogue[E]): void {
+  window.dispatchEvent(new CustomEvent("acme:analytics", { detail: { name, props } }));
+}
+```
+
+---
+
+## Versioning and publishing
+
+Whether you publish packages to a registry or consume them as workspace dependencies, you need a versioning story. I use **semantic versioning** without exception, and I automate it so humans never hand-edit a version number.
+
+![Shared library release pipeline](/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/inline-3.png)
+
+Two tools dominate here:
+
+*   **Changesets** — contributors add a small markdown file describing the change and its semver impact. A bot opens a "version packages" PR that aggregates changes, bumps versions, and writes changelogs. Excellent for monorepos with many packages.
+*   **semantic-release** — derives the version from Conventional Commit messages (`feat:`, `fix:`, `feat!:`). Fully automatic; ideal for single-package repos or when you trust your commit discipline.
+
+A minimal Changesets publishing workflow to **GitHub Packages** looks like this:
+
+```yaml
+# .github/workflows/release.yml
+name: release
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run lint test build --filter="./packages/*"
+      - uses: changesets/action@v1
+        with:
+          publish: pnpm changeset publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+On the consuming side, **Renovate** (or Dependabot) raises upgrade PRs. My rule of thumb: auto-merge patch and minor bumps when CI is green; require a human — and ideally a codemod — for majors. A major version of a shared library should always ship with migration notes, and the owning team should help the first few consumers upgrade.
+
+---
+
+## Monorepo or polyrepo?
+
+This debate generates more heat than light. Both work. The question is which set of problems you would rather have.
+
+| Concern | Monorepo (pnpm workspaces + Turborepo/Nx) | Polyrepo (packages published to a registry) |
+|---|---|---|
+| Atomic cross-cutting changes | One PR updates library and all consumers | Coordinated releases across repos |
+| Version drift | Effectively impossible with workspace protocol | Real risk; needs Renovate and discipline |
+| Team autonomy | Shared CI, shared conventions | Each team owns its pipeline |
+| CI performance | Needs affected-only builds and remote caching | Naturally small builds |
+| Access control | Coarser; CODEOWNERS helps | Fine-grained per repo |
+| Onboarding | One clone, one `pnpm install` | Many repos to discover |
+
+For a platform with one shell and a handful of product modules owned by teams in the same organisation, I default to a **monorepo**. You get atomic refactors, a single lockfile, and the confidence that everything was built and tested together. A typical layout:
+
+```
+apps/
+  shell/                 # the thin host
+modules/
+  orders/
+  bookings/
+  support/
+  tenant-admin/
+packages/
+  shell-contract/
+  tokens/
+  ui/
+  auth/
+  i18n/
+  analytics/
+  api-orders/            # generated
+  api-bookings/          # generated
+tooling/
+  eslint-config/
+  tsconfig/
+docs/
+  adr/
+```
+
+I move shared libraries out to their own repos (and publish them) only when they genuinely have consumers *outside* the platform — for example, a design system used by marketing sites and mobile web views as well.
+
+---
+
+## Build-time vs runtime composition
+
+This is where the micro-frontend conversation usually begins, so let me be direct: **for most organisations, build-time composition is enough.**
+
+![Build-time composition vs runtime composition](/blog/one-thin-shell-many-products-modular-web-apps-with-shared-libraries/inline-4.png)
+
+**Build-time composition** means modules are workspace packages imported by the shell and bundled together, with `React.lazy` producing separate chunks per module. You get one React instance, full type checking across the boundary, one deployable artefact, and dead-simple operations.
+
+**Runtime composition** — Module Federation, import maps, or iframe-based micro-frontends — means modules are built and deployed independently, and the shell fetches them at runtime from a remote manifest. You gain independent deploys per team. You also take on:
+
+*   Shared-dependency negotiation (two versions of React in one page is a bad day)
+*   Runtime contract failures that the compiler can no longer catch
+*   Distributed debugging and source-map wrangling
+*   Versioned CDN hosting, cache invalidation, and rollback per remote
+*   A much harder local development story
+
+When is runtime composition worth it? In my experience, when **several of these** are true:
+
+*   Many teams (think 8+) need to release on genuinely independent cadences
+*   Modules are owned by different organisations or vendors
+*   The shell must load modules whose existence is not known at build time (true plug-in ecosystems)
+*   Build times for the combined app are unmanageable even with caching
+
+If you are not there, start with build-time composition. The beauty of the module contract above is that it does not care: `Root` is a lazy component either way. If you later need federation, you can swap `lazy(() => import("./OrdersRoot"))` for a federated import behind the same interface, one module at a time. That is the real value of a strong contract — it keeps your options open.
+
+Independent *deployability* is often achievable without runtime composition, too. Fast, affected-only CI with trunk-based development and feature flags gets most teams to multiple deploys per day of the combined app, which is what they actually wanted.
+
+---
+
+## Theming and white-labelling
+
+Once application code consumes only semantic tokens, theming becomes a matter of swapping token values at the root. The shell decides which theme to load based on the product, tenant, or hostname:
+
+```typescript
+// apps/shell/src/theme.ts
+type ThemeId = "default" | "partner-north" | "partner-coast";
+
+const themeLoaders: Record<ThemeId, () => Promise<{ default: string }>> = {
+  default: () => import("@acme/tokens/themes/default.css?inline"),
+  "partner-north": () => import("@acme/tokens/themes/partner-north.css?inline"),
+  "partner-coast": () => import("@acme/tokens/themes/partner-coast.css?inline"),
+};
+
+export async function applyTheme(theme: ThemeId): Promise<void> {
+  const css = (await themeLoaders[theme]()).default;
+  const style = document.getElementById("theme") ?? document.head.appendChild(document.createElement("style"));
+  style.id = "theme";
+  style.textContent = css;
+  document.documentElement.dataset.theme = theme;
+}
+```
+
+A few practical tips:
+
+*   **Theme semantic tokens, not components.** If a partner needs a different button shape, change `radius-control`, not the `Button` component.
+*   **Validate contrast in CI.** Every theme should pass WCAG AA contrast checks for its semantic pairs. Automate it; partners will send you brand colours that fail.
+*   **Brand assets are data.** Logos, favicons, and product names come from tenant configuration, not from code branches.
+*   **Resist per-tenant feature forks.** Theming changes how it looks. Feature flags and entitlements change what it does. If a tenant needs different *behaviour*, model it as configuration, not as a fork.
+
+---
+
+## Lazy loading and performance budgets
+
+A shell hosting many products can quietly become very heavy. Guard against that from day one:
+
+*   **Every module is a lazy chunk.** The contract enforces this.
+*   **Prefetch on intent.** Prefetch a module's chunk when the user hovers or focuses its nav item, so navigation feels instant without paying up front.
+*   **Keep the shell tiny.** The shell's initial JS budget should be small — I aim for well under 150 KB gzipped including React, router, auth, and the UI primitives needed for the frame.
+*   **Set budgets per chunk and enforce them in CI.**
+
+```json
+// .size-limit.json
+[
+  { "name": "shell (initial)", "path": "apps/shell/dist/assets/index-*.js", "limit": "140 KB" },
+  { "name": "module: orders", "path": "apps/shell/dist/assets/OrdersRoot-*.js", "limit": "90 KB" },
+  { "name": "module: support", "path": "apps/shell/dist/assets/SupportRoot-*.js", "limit": "120 KB" }
+]
+```
+
+*   **Watch for shared-library bloat.** Make sure `@acme/ui` is tree-shakeable (`"sideEffects": false`, ESM output, per-component entry points) so a module that uses three components does not pay for sixty.
+*   **Measure real users.** Report Core Web Vitals from the shell's telemetry, tagged with module ID and persona. Agents on a slow corporate VPN and customers on mobile have very different performance profiles.
+
+---
+
+## Testing strategy
+
+A modular platform needs testing at the seams, not just inside the boxes.
+
+| Layer | What to test | Tooling |
+|---|---|---|
+| Module contract | Every manifest satisfies the contract and its invariants | Vitest / Jest |
+| Shared components | Behaviour, accessibility, visual regressions | Storybook, Testing Library, axe, Chromatic or Playwright snapshots |
+| Module internals | Views, hooks, data handling with mocked APIs | Vitest + MSW |
+| API clients | Generated types match the published spec | Contract tests (e.g. Pact or spec diffing) |
+| Shell integration | Registry filtering, routing, error isolation | Vitest + Testing Library |
+| End-to-end | Critical journeys per persona | Playwright projects |
+
+### Contract tests for the module interface
+
+TypeScript gives you the shape; a contract test enforces the invariants the type system cannot:
+
+```typescript
+// apps/shell/src/registry.contract.test.ts
+import { describe, expect, it } from "vitest";
+import { ALL_MODULES } from "./registry";
+
+describe("module contract", () => {
+  it("has unique ids and base paths", () => {
+    const ids = ALL_MODULES.map((m) => m.id);
+    const paths = ALL_MODULES.map((m) => m.basePath);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it.each(ALL_MODULES)("$id nav personas are a subset of module personas", (m) => {
+    for (const item of m.nav) {
+      for (const p of item.personas) expect(m.personas).toContain(p);
+    }
+  });
+
+  it.each(ALL_MODULES)("$id uses kebab-case id and a rooted basePath", (m) => {
+    expect(m.id).toMatch(/^[a-z][a-z0-9-]*$/);
+    expect(m.basePath).toMatch(/^\/[a-z0-9-]+$/);
+  });
+});
+```
+
+### Playwright per persona
+
+Playwright projects map neatly onto personas. Each project uses its own pre-authenticated storage state, so every critical journey is exercised from the perspective of every persona that can reach it — and, just as importantly, negative tests prove that personas *cannot* reach what they should not:
+
+```typescript
+// playwright.config.ts
+import { defineConfig } from "@playwright/test";
+
+export default defineConfig({
+  projects: [
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    { name: "customer", dependencies: ["setup"], use: { storageState: ".auth/customer.json" }, testDir: "e2e/customer" },
+    { name: "agent", dependencies: ["setup"], use: { storageState: ".auth/agent.json" }, testDir: "e2e/agent" },
+    { name: "admin", dependencies: ["setup"], use: { storageState: ".auth/admin.json" }, testDir: "e2e/admin" },
+  ],
+});
+```
+
+```typescript
+// e2e/customer/navigation.spec.ts
+import { test, expect } from "@playwright/test";
+
+test("customer cannot reach the support desk", async ({ page }) => {
+  await page.goto("/support");
+  await expect(page).toHaveURL(/not-found|access-denied/);
+  await expect(page.getByRole("navigation")).not.toContainText("Support Desk");
+});
+```
+
+---
+
+## Governance: ownership, CODEOWNERS, and ADRs
+
+Architecture that is not governed decays. Governance does not need to be heavy — it needs to be explicit.
+
+**Ownership.** Every directory has exactly one owning team. The shell and shared libraries are owned by a small platform team who treat them as a product, with a roadmap, documentation, and support channel. If that sounds familiar, it is the same mindset I describe in my [deep dive into platform engineering](/blog/deep-dive-platform-engineering) — the shell is an internal product, and product teams are its customers.
+
+**CODEOWNERS** turns ownership into enforcement:
+
+```
+# .github/CODEOWNERS
+/apps/shell/                 @acme/web-platform
+/packages/shell-contract/    @acme/web-platform @acme/architecture
+/packages/tokens/            @acme/design-system
+/packages/ui/                @acme/design-system
+/packages/auth/              @acme/web-platform @acme/security
+/modules/orders/             @acme/team-orders
+/modules/bookings/           @acme/team-bookings
+/modules/support/            @acme/team-support
+/modules/tenant-admin/       @acme/web-platform
+```
+
+**Architecture Decision Records** capture the *why*. I keep ADRs in the repo next to the code, short and numbered. Good early candidates include: "Build-time composition over Module Federation", "Separate identity providers for workforce and customers", "Entitlements fetched from API, not embedded in tokens", "Semantic tokens only in application code", and "Single portal with persona routing versus separate portals per audience". When someone asks "why don't we just use federation?" six months later, you point at the ADR — and if circumstances have changed, you supersede it with a new one.
+
+**Lint rules enforce the boundaries.** Use `eslint-plugin-boundaries`, Nx module boundary rules, or `dependency-cruiser` to make illegal imports a build failure:
+
+```javascript
+// eslint.config.js (excerpt)
+{
+  rules: {
+    "boundaries/element-types": ["error", {
+      default: "disallow",
+      rules: [
+        { from: "shell",   allow: ["contract", "shared", "module-manifest"] },
+        { from: "module",  allow: ["contract", "shared"] },
+        { from: "shared",  allow: ["shared"] },
+      ],
+    }],
+  },
+}
+```
+
+That one rule — **modules may not import other modules** — prevents more coupling than any amount of code review.
+
+---
+
+## Pitfalls I have learned the hard way
+
+### The shared library becomes a dumping ground
+
+It starts innocently: someone puts a date formatter in `@acme/utils`. Then an order status mapper. Then a hook that only the Bookings module uses. Within a year, the "shared" package contains domain logic, has twenty dependents, and nobody dares change it.
+
+*   **Ban `utils`, `common`, and `helpers` as package names.** Name packages after a capability (`i18n`, `analytics`), which forces a conversation about where things belong.
+*   **Apply the rule of three.** Code moves into a shared library when a third consumer needs it — not before. Duplication is cheaper than the wrong abstraction.
+*   **No domain logic in shared libraries.** If it knows what an "order" is, it belongs in the Orders module or the Orders API.
+
+### Coupling through the back door
+
+Even with lint rules, modules find ways to couple: a shared global store, custom DOM events with undocumented payloads, reading another module's query cache, or deep-linking into another module's internal routes. Treat cross-module communication like any integration — through the shell's context, through URLs with documented parameters, or through the back-end via events. If two modules need to talk constantly, they may be one module.
+
+### Version drift
+
+In polyrepo setups especially, consumers fall behind. Module A is on `ui@5`, module B on `ui@3`, and the shell is trying to render both. Mitigations: automated upgrade PRs, a published support policy ("we support the current and previous major"), deprecation warnings in development builds, and dashboards showing which consumers are on which versions. In a monorepo, the workspace protocol largely solves this for you — one of the strongest arguments for it.
+
+### The shell gets fat
+
+Every "quick" product-specific tweak in the shell is a step back towards the monolith. The platform team must be comfortable saying no — and offering an extension point in the contract instead.
+
+### Personas encoded in components
+
+`if (persona === "agent")` sprinkled through shared components means every new persona requires touching every component. Keep persona decisions at the view composition level, and keep shared components persona-agnostic.
+
+### Security by hiding
+
+Once more, because it matters: filtering the registry is not authorisation. Every API enforces its own permissions, every time.
+
+---
+
+## Finally, we made it — did this help?
+
+*   A **thin shell** owns routing, auth and session, layout, feature flags, telemetry, and theming — and nothing domain-specific
+*   **Product modules** are vertical slices registered through a small, typed **module contract**, filtered by persona, entitlement, and feature flag
+*   **Personas** shape the experience; **entitlements** decide access; the **API** remains the authoritative enforcer
+*   A short list of **shared libraries** — tokens, components, generated API clients, auth, i18n, analytics — provides leverage, versioned with **Changesets** or **semantic-release** and published to **GitHub Packages** where needed
+*   A **monorepo** is the sensible default for one platform; publish separately only when there are genuine external consumers
+*   **Build-time composition** with lazy loading is enough for most organisations; a strong contract keeps the door open to **Module Federation** later
+*   **Theming** works when application code uses semantic tokens only; **performance budgets** keep a multi-product shell fast
+*   Test the seams: **contract tests**, **Storybook**, and **Playwright projects per persona**, including negative access tests
+*   Govern with **CODEOWNERS**, **ADRs**, and **lint-enforced boundaries**, and watch for dumping-ground libraries, hidden coupling, version drift, and a fattening shell
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)

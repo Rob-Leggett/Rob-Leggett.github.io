@@ -1,0 +1,749 @@
+---
+title: "Observability as Code - Alerts, Dashboards and Workbooks in Terraform"
+date: "2026-08-13"
+slug: "observability-as-code-alerts-dashboards-and-workbooks-in-terraform"
+status: "publish"
+feature_image: "/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/feature-image.png"
+tags: ["Observability", "Azure Monitor", "Application Insights", "Log Analytics", "Terraform", "KQL", "SRE", "Platform Engineering", "Robert Leggett"]
+
+meta:
+  title: "Observability as Code - Alerts, Dashboards and Workbooks in Terraform | Robert Leggett"
+  description: "A practical guide to managing Azure Monitor, Application Insights and Log Analytics with Terraform — action groups, KQL scheduled query alerts, metric alerts, availability tests, dashboards and workbooks as code, SLO burn-rate alerting, routing and testing alerts."
+  keywords: ["observability as code", "Azure Monitor", "Application Insights", "Log Analytics", "Terraform", "KQL", "scheduled query rules", "metric alerts", "action groups", "availability tests", "Azure workbooks", "SLO", "burn rate", "alert fatigue", "Robert Leggett"]
+  author: "Robert Leggett"
+  canonical: "https://robertleggett.com.au/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform"
+  image: "https://robertleggett.com.au/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/feature-image.png"
+
+og:
+  type: "article"
+  title: "Observability as Code - Alerts, Dashboards and Workbooks in Terraform"
+  description: "A practical guide to managing Azure Monitor, Application Insights and Log Analytics with Terraform — action groups, KQL scheduled query alerts, metric alerts, availability tests, dashboards and workbooks as code, SLO burn-rate alerting, routing and testing alerts."
+  image: "https://robertleggett.com.au/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/feature-image.png"
+  url: "https://robertleggett.com.au/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform"
+
+twitter:
+  card: "summary_large_image"
+  title: "Observability as Code - Alerts, Dashboards and Workbooks in Terraform"
+  description: "A practical guide to managing Azure Monitor, Application Insights and Log Analytics with Terraform — action groups, KQL scheduled query alerts, metric alerts, availability tests, dashboards and workbooks as code, SLO burn-rate alerting, routing and testing alerts."
+  image: "https://robertleggett.com.au/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/feature-image.png"
+---
+
+I'll be upfront about this one: for a long time I treated monitoring as something you bolted on after the "real" infrastructure was done. The compute, networking and data stores lived in Terraform, went through pull requests and were promoted carefully between environments — and then someone would click together a handful of alerts in the portal the week before go-live. Six months later nobody could tell you why a particular alert existed, who it paged, or why the production threshold was different to the one in test. The alerts had drifted, the dashboards were personal favourites pinned by people who had since moved on, and the on-call rotation had quietly learned to ignore half of what came through.
+
+The fix is not a new tool. It is treating **observability as code** — alerts, action groups, availability tests, dashboards and workbooks defined in the same repository, reviewed in the same pull requests and deployed by the same pipelines as everything else. In this article I'll walk through how I approach this on Azure with **Terraform**, **Azure Monitor**, **Application Insights** and **Log Analytics**, and, just as importantly, how to design alerts that people actually trust: alerting on symptoms rather than causes, SLO burn rates, severity and routing, runbook links, per-environment tuning, and how to test that an alert fires before you need it to.
+
+---
+
+## Before you start
+
+About this post:
+
+*   12 – 16-min average reading time
+*   Suitable for intermediate through to advanced
+
+What you will gain reading this post:
+
+*   A Terraform module structure for Azure Monitor resources that scales across services and environments
+*   Working examples of action groups, KQL scheduled query alerts, metric alerts and availability tests
+*   A practical approach to SLO-based, multi-window burn-rate alerting in KQL
+*   Patterns for managing dashboards and workbooks as code without fighting the portal
+*   Techniques for routing, noise reduction and testing alerts before they matter
+
+What you can do to help support:
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+
+Now, let's get started.
+
+---
+
+## Why observability belongs in code
+
+If you have read my [deep dive on infrastructure as code at scale](/blog/deep-dive-infrastructure-as-code-at-scale), the arguments will feel familiar. Anything that is configured by hand drifts, cannot be reviewed, and cannot be reproduced. Monitoring configuration is no different — it is arguably worse, because the cost of drift is invisible until the night it matters.
+
+Here is what changes when observability lives alongside the service it watches:
+
+| Concern | Click-ops monitoring | Observability as code |
+|---|---|---|
+| **Review** | Nobody sees the change | Alerts reviewed in the same PR as the feature |
+| **Consistency** | Each team invents its own | Shared modules give everyone the same baseline |
+| **Environments** | Test and prod differ by accident | Differences are explicit in `tfvars` |
+| **History** | "Who changed this threshold?" | `git blame` tells you, with a reason |
+| **Recovery** | Rebuild from memory | `terraform apply` recreates everything |
+| **Onboarding** | Tribal knowledge | Read the module, read the runbook |
+
+The less obvious benefit is cultural. When an alert lives next to the code, the engineer adding a new dependency is also the person who adds the alert for it. Observability stops being "the ops team's thing" and becomes part of the definition of done — which is exactly what a good [platform engineering](/blog/deep-dive-platform-engineering) golden path should encourage.
+
+![Observability as code delivery flow](/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/inline-1.png)
+
+---
+
+## The Azure Monitor building blocks
+
+Before writing any Terraform, it helps to be clear about which Azure resource does what. The naming is not always intuitive.
+
+| Resource | Terraform type | Purpose |
+|---|---|---|
+| **Log Analytics workspace** | `azurerm_log_analytics_workspace` | Stores logs and workspace-based Application Insights telemetry; the thing your KQL runs against |
+| **Application Insights** | `azurerm_application_insights` | Application telemetry (requests, dependencies, exceptions, traces) |
+| **Action group** | `azurerm_monitor_action_group` | Who or what gets notified — email, SMS, webhook, Logic App, Function, ITSM |
+| **Scheduled query rule** | `azurerm_monitor_scheduled_query_rules_alert_v2` | Log search alerts driven by a KQL query on a schedule |
+| **Metric alert** | `azurerm_monitor_metric_alert` | Near-real-time alerts on platform or custom metrics |
+| **Standard web test** | `azurerm_application_insights_standard_web_test` | Synthetic availability probes from multiple regions |
+| **Alert processing rule** | `azurerm_monitor_alert_processing_rule_*` | Suppress or redirect alerts by scope, severity or schedule |
+| **Portal dashboard** | `azurerm_portal_dashboard` | Shared, pinned tiles in the Azure portal |
+| **Workbook** | `azurerm_application_insights_workbook` | Rich, parameterised, interactive reports |
+
+A rule of thumb that has served me well: **metric alerts** for fast, cheap, platform-level signals (CPU, queue depth, dead-letter count), and **scheduled query alerts** for anything that needs the expressiveness of KQL — error rates, SLOs, business events, correlations across tables.
+
+---
+
+## Structuring the Terraform
+
+I keep monitoring in its own module per service, owned by the same team as the service, with a thin shared module underneath for the things every service needs. The layout usually looks something like this:
+
+```
+infra/
+├── modules/
+│   ├── monitoring-baseline/      # shared: action groups, processing rules
+│   └── service-monitoring/       # reusable: SLO alerts, web test, workbook
+├── services/
+│   └── orders-api/
+│       ├── main.tf               # the service itself
+│       ├── monitoring.tf         # calls service-monitoring
+│       ├── queries/
+│       │   ├── slo-burn-rate.kql
+│       │   └── dead-letters.kql
+│       └── workbooks/
+│           └── orders-overview.json.tftpl
+└── env/
+    ├── dev.tfvars
+    ├── test.tfvars
+    └── prod.tfvars
+```
+
+Two decisions in there are worth calling out. First, **KQL lives in `.kql` files**, not inline heredocs. Your editor can syntax-highlight them, you can run them directly in Log Analytics while developing, and diffs are readable. Second, **workbook and dashboard JSON lives in templates** with variables substituted by Terraform, which I'll come back to shortly.
+
+The per-environment knobs go into a single, typed variable so that every difference between environments is visible in one place:
+
+```hcl
+variable "alerting" {
+  description = "Per-environment alert tuning"
+  type = object({
+    enabled                 = bool
+    slo_target              = number
+    page_severity_threshold = number
+    availability_locations  = list(string)
+    notify_emails           = list(string)
+    chat_webhook_url        = optional(string)
+    oncall_webhook_url      = optional(string)
+  })
+}
+```
+
+```hcl
+# env/prod.tfvars
+alerting = {
+  enabled                 = true
+  slo_target              = 0.999
+  page_severity_threshold = 1
+  availability_locations  = ["emea-au-syd-edge", "apac-sg-jur-edge", "us-va-ash-azr"]
+  notify_emails           = ["orders-team@example.com"]
+  chat_webhook_url        = null # injected from Key Vault in the pipeline
+  oncall_webhook_url      = null # injected from Key Vault in the pipeline
+}
+```
+
+```hcl
+# env/dev.tfvars
+alerting = {
+  enabled                 = true
+  slo_target              = 0.99
+  page_severity_threshold = -1 # never page from dev
+  availability_locations  = ["emea-au-syd-edge"]
+  notify_emails           = ["orders-team@example.com"]
+}
+```
+
+Webhook URLs for paging and chat tools are effectively secrets — anyone holding them can post to your channels or trigger pages. Keep them in Key Vault and pass them in as sensitive variables rather than committing them to `tfvars`.
+
+---
+
+## Action groups — decide who hears about it
+
+Action groups are the routing table of Azure Monitor. I create a small, deliberate set per service (or per team) and resist the temptation to create one per alert.
+
+```hcl
+resource "azurerm_monitor_action_group" "page" {
+  name                = "ag-${var.service}-${var.env}-page"
+  resource_group_name = var.resource_group_name
+  short_name          = substr("${var.service}pg", 0, 12)
+  enabled             = var.alerting.enabled
+
+  dynamic "webhook_receiver" {
+    for_each = var.alerting.oncall_webhook_url == null ? [] : [1]
+    content {
+      name                    = "oncall"
+      service_uri             = var.alerting.oncall_webhook_url
+      use_common_alert_schema = true
+    }
+  }
+}
+
+resource "azurerm_monitor_action_group" "notify" {
+  name                = "ag-${var.service}-${var.env}-notify"
+  resource_group_name = var.resource_group_name
+  short_name          = substr("${var.service}nt", 0, 12)
+
+  dynamic "email_receiver" {
+    for_each = toset(var.alerting.notify_emails)
+    content {
+      name                    = "email-${replace(email_receiver.value, "/[^a-zA-Z0-9]/", "-")}"
+      email_address           = email_receiver.value
+      use_common_alert_schema = true
+    }
+  }
+
+  dynamic "webhook_receiver" {
+    for_each = var.alerting.chat_webhook_url == null ? [] : [1]
+    content {
+      name                    = "chat"
+      service_uri             = var.alerting.chat_webhook_url
+      use_common_alert_schema = true
+    }
+  }
+}
+```
+
+Three things I always do here:
+
+*   **Use the common alert schema.** Every receiver gets the same payload shape regardless of whether the alert came from a metric, a log query or an availability test. Downstream automation becomes dramatically simpler.
+*   **Separate "page" from "notify".** Paging a human out of bed is a fundamentally different action from posting in a channel. Making it a different action group makes it impossible to accidentally page on a low-severity alert.
+*   **Mind the `short_name`.** It is limited to 12 characters and shows up in SMS and email. A `substr` guard avoids an apply-time failure when someone adds a long service name.
+
+---
+
+## Scheduled query alerts — the workhorse
+
+Most of the alerts that matter end up being KQL. The `azurerm_monitor_scheduled_query_rules_alert_v2` resource is the modern API and the one you should be using; the older `azurerm_monitor_scheduled_query_rules_alert` is legacy.
+
+Here is a straightforward example: alert when messages land in a dead-letter log, a symptom that something downstream is rejecting work. The query lives in its own file:
+
+```kql
+// queries/dead-letters.kql
+AppTraces
+| where AppRoleName == "${role_name}"
+| where Message has "dead-lettered"
+| extend Queue = tostring(Properties["queueName"])
+| summarize DeadLettered = count() by Queue, bin(TimeGenerated, 5m)
+```
+
+And the Terraform renders the template and wires up the rule:
+
+```hcl
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "dead_letters" {
+  name                = "sqr-${var.service}-${var.env}-dead-letters"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  display_name        = "${var.service} (${var.env}) — messages dead-lettered"
+  description         = <<-EOT
+    Messages are being dead-lettered, meaning a consumer rejected them after retries.
+    Runbook: ${var.runbook_base_url}/dead-letters
+    Dashboard: ${var.workbook_url}
+  EOT
+
+  scopes               = [var.log_analytics_workspace_id]
+  severity             = 2
+  enabled              = var.alerting.enabled
+  evaluation_frequency = "PT5M"
+  window_duration      = "PT15M"
+  auto_mitigation_enabled = true
+
+  criteria {
+    query = templatefile("${path.module}/queries/dead-letters.kql", {
+      role_name = var.role_name
+    })
+    time_aggregation_method = "Total"
+    metric_measure_column   = "DeadLettered"
+    operator                = "GreaterThan"
+    threshold               = 0
+
+    dimension {
+      name     = "Queue"
+      operator = "Include"
+      values   = ["*"]
+    }
+
+    failing_periods {
+      minimum_failing_periods_to_trigger_alert = 1
+      number_of_evaluation_periods             = 1
+    }
+  }
+
+  action {
+    action_groups = [azurerm_monitor_action_group.notify.id]
+    custom_properties = {
+      service = var.service
+      env     = var.env
+      runbook = "${var.runbook_base_url}/dead-letters"
+    }
+  }
+}
+```
+
+A few details that are easy to get wrong:
+
+*   **Dimensions split alerts.** With `Queue` as a dimension, each queue fires and resolves independently. Without it, one noisy queue masks a second one starting to fail.
+*   **`auto_mitigation_enabled`** resolves the alert when the condition clears. For symptoms that self-heal this is what you want; for "something happened once and a human must look" you may prefer manual resolution.
+*   **`failing_periods`** is your first line of defence against flapping. Requiring two of three periods to breach is often the difference between a useful alert and one that gets muted.
+*   **Templates use `${}` substitution.** If your KQL legitimately contains a literal `${`, escape it as `$${` in the template.
+
+---
+
+## Alert design — symptoms, not causes
+
+The Terraform is the easy part. The hard part is deciding what deserves an alert at all. My guiding principle, borrowed from the SRE world: **page on symptoms your users feel, not on causes you think might lead to them.**
+
+| Cause-based alert (avoid paging) | Symptom-based alert (page on these) |
+|---|---|
+| CPU above 80% | Request latency p95 above objective |
+| Pod restarted | Error rate burning error budget |
+| Queue length above 1,000 | Oldest message age above processing SLO |
+| Database DTU above 90% | Checkout failures above baseline |
+| A single dependency call failed | Availability test failing from multiple regions |
+
+Cause-based signals are still valuable — they belong on dashboards and in low-severity, non-paging notifications that help diagnosis. But high CPU on its own is not an incident. Users not being able to place orders is.
+
+### Severity is a contract
+
+Azure Monitor gives you five severities, Sev 0 to Sev 4. They only help if the whole organisation agrees what they mean. Here is the contract I tend to propose:
+
+| Severity | Meaning | Response | Route |
+|---|---|---|---|
+| **Sev 0** | Critical, customer-facing outage | Page immediately, all hands | On-call page + incident channel |
+| **Sev 1** | Fast error-budget burn, significant degradation | Page on-call | On-call page |
+| **Sev 2** | Slower burn, degraded but functioning | Respond within business hours | Team chat |
+| **Sev 3** | Early warning, trend, capacity | Triage in stand-up | Ticket |
+| **Sev 4** | Informational | No action required | Digest only |
+
+The important part is the last column. **Severity determines routing**, and routing is defined once in action groups and processing rules — not re-decided on every alert.
+
+![Alert signal and routing flow](/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/inline-2.png)
+
+---
+
+## SLOs and burn-rate alerting
+
+A simple threshold like "error rate above 5% for five minutes" has two problems. It is too sensitive during low-traffic periods, where one failure out of ten requests is 10%, and not sensitive enough to a slow leak that never crosses 5% but quietly consumes your entire month's reliability budget.
+
+**Burn-rate alerting** fixes both. You define a Service Level Objective — say 99.9% of requests succeed over 30 days — which gives you an **error budget** of 0.1%. The burn rate is how fast you are consuming that budget relative to plan. A burn rate of 1 uses exactly the whole budget over 30 days; a burn rate of 14.4 exhausts 2% of the monthly budget in a single hour.
+
+The multi-window approach pairs a long window (to confirm the burn is significant) with a short window (to confirm it is still happening, so the alert resolves quickly after recovery):
+
+| Alert | Long window | Short window | Burn rate | Budget consumed | Severity |
+|---|---|---|---|---|---|
+| Fast burn | 1 hour | 5 minutes | 14.4 | 2% in 1h | Sev 1 (page) |
+| Medium burn | 6 hours | 30 minutes | 6 | 5% in 6h | Sev 2 (page or chat) |
+| Slow burn | 24 hours | 2 hours | 3 | 10% in 24h | Sev 3 (ticket) |
+
+The classic SRE guidance uses a three-day window for the slowest tier. Log search alerts in Azure Monitor have a maximum look-back of a couple of days, so I use 24 hours for the slow tier — it still catches the slow leaks that matter.
+
+![Multi-window, multi-burn-rate alerting](/blog/observability-as-code-alerts-dashboards-and-workbooks-in-terraform/inline-3.png)
+
+The KQL computes both windows in a single pass and emits a single number — 1 if both windows breach, 0 otherwise — which keeps the alert criteria trivial:
+
+```kql
+// queries/slo-burn-rate.kql
+let slo = ${slo_target};
+let errorBudget = 1.0 - slo;
+let longWindow = ${long_window};
+let shortWindow = ${short_window};
+let threshold = ${burn_rate};
+AppRequests
+| where TimeGenerated > ago(longWindow)
+| where AppRoleName == "${role_name}"
+| where Name !in ("GET /health", "GET /ready")
+| summarize
+    LongTotal   = sum(ItemCount),
+    LongFailed  = sumif(ItemCount, Success == false),
+    ShortTotal  = sumif(ItemCount, TimeGenerated > ago(shortWindow)),
+    ShortFailed = sumif(ItemCount, Success == false and TimeGenerated > ago(shortWindow))
+| extend LongBurn  = iff(LongTotal  == 0, 0.0, todouble(LongFailed)  / LongTotal  / errorBudget)
+| extend ShortBurn = iff(ShortTotal == 0, 0.0, todouble(ShortFailed) / ShortTotal / errorBudget)
+| extend Breaching = iff(LongBurn > threshold and ShortBurn > threshold, 1, 0)
+| project Breaching, LongBurn, ShortBurn
+```
+
+Note the use of `ItemCount` rather than `count()`. Application Insights may sample telemetry, and each sampled row represents `ItemCount` original requests. Counting rows instead gives you a wrong error rate the day someone turns sampling on. Excluding health-check endpoints matters too — otherwise your probes inflate the denominator and mask real failures.
+
+Now the tiers become data, and a `for_each` stamps out one rule per tier:
+
+```hcl
+locals {
+  burn_tiers = {
+    fast   = { long = "1h",  short = "5m",  rate = 14.4, window = "PT1H",  freq = "PT5M",  sev = 1 }
+    medium = { long = "6h",  short = "30m", rate = 6,    window = "PT6H",  freq = "PT15M", sev = 2 }
+    slow   = { long = "24h", short = "2h",  rate = 3,    window = "P1D",   freq = "PT1H",  sev = 3 }
+  }
+}
+
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "slo_burn" {
+  for_each = local.burn_tiers
+
+  name                 = "sqr-${var.service}-${var.env}-slo-${each.key}"
+  resource_group_name  = var.resource_group_name
+  location             = var.location
+  display_name         = "${var.service} (${var.env}) — ${each.key} SLO burn"
+  description          = "Error budget burning at more than ${each.value.rate}x. Runbook: ${var.runbook_base_url}/slo-burn"
+  scopes               = [var.log_analytics_workspace_id]
+  severity             = each.value.sev
+  enabled              = var.alerting.enabled
+  evaluation_frequency = each.value.freq
+  window_duration      = each.value.window
+  auto_mitigation_enabled = true
+
+  criteria {
+    query = templatefile("${path.module}/queries/slo-burn-rate.kql", {
+      slo_target   = var.alerting.slo_target
+      long_window  = each.value.long
+      short_window = each.value.short
+      burn_rate    = each.value.rate
+      role_name    = var.role_name
+    })
+    time_aggregation_method = "Maximum"
+    metric_measure_column   = "Breaching"
+    operator                = "GreaterThan"
+    threshold               = 0
+
+    failing_periods {
+      minimum_failing_periods_to_trigger_alert = 1
+      number_of_evaluation_periods             = 1
+    }
+  }
+
+  action {
+    action_groups = (
+      each.value.sev <= var.alerting.page_severity_threshold
+      ? [azurerm_monitor_action_group.page.id, azurerm_monitor_action_group.notify.id]
+      : [azurerm_monitor_action_group.notify.id]
+    )
+  }
+}
+```
+
+Look at the `action_groups` expression. In production, `page_severity_threshold` is 1, so the fast-burn tier pages. In dev it is -1, so nothing ever pages — but the alert still exists, still evaluates and still notifies the team channel, which means you exercise exactly the same configuration in every environment.
+
+---
+
+## Metric alerts — fast and cheap
+
+Metric alerts evaluate every minute against pre-aggregated platform metrics, cost less than log alerts and fire faster. They are ideal for queue-based systems, where the symptom is often "work is piling up":
+
+```hcl
+resource "azurerm_monitor_metric_alert" "dlq_depth" {
+  name                = "ma-${var.service}-${var.env}-dlq"
+  resource_group_name = var.resource_group_name
+  scopes              = [var.servicebus_namespace_id]
+  description         = "Dead-letter messages present. Runbook: ${var.runbook_base_url}/dead-letters"
+  severity            = 2
+  frequency           = "PT1M"
+  window_size         = "PT5M"
+  enabled             = var.alerting.enabled
+
+  criteria {
+    metric_namespace = "Microsoft.ServiceBus/namespaces"
+    metric_name      = "DeadletteredMessages"
+    aggregation      = "Maximum"
+    operator         = "GreaterThan"
+    threshold        = 0
+
+    dimension {
+      name     = "EntityName"
+      operator = "Include"
+      values   = ["*"]
+    }
+  }
+
+  action {
+    action_group_id = azurerm_monitor_action_group.notify.id
+  }
+}
+```
+
+For metrics with seasonal patterns — request volume on a retail site, for example — **dynamic thresholds** (the `dynamic_criteria` block) learn the normal shape and alert on deviations. I use them sparingly: they are excellent for "traffic suddenly dropped to zero" and poor for anything with an objective you care about, because you cannot explain to a stakeholder what the threshold actually was.
+
+---
+
+## Availability tests — the outside-in view
+
+Everything above relies on telemetry from inside your application. If the application is down, or DNS is broken, or a certificate expired, there may be no telemetry at all. **Standard web tests** probe your endpoints from Azure's edge locations and catch exactly those failures.
+
+```hcl
+resource "azurerm_application_insights_standard_web_test" "health" {
+  name                    = "wt-${var.service}-${var.env}-health"
+  resource_group_name     = var.resource_group_name
+  location                = var.location
+  application_insights_id = var.application_insights_id
+  geo_locations           = var.alerting.availability_locations
+  frequency               = 300
+  timeout                 = 30
+  enabled                 = var.alerting.enabled
+
+  request {
+    url = "https://${var.public_hostname}/health"
+  }
+
+  validation_rules {
+    expected_status_code        = 200
+    ssl_check_enabled           = true
+    ssl_cert_remaining_lifetime = 14
+  }
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
+}
+
+resource "azurerm_monitor_metric_alert" "availability" {
+  name                = "ma-${var.service}-${var.env}-availability"
+  resource_group_name = var.resource_group_name
+  scopes              = [azurerm_application_insights_standard_web_test.health.id, var.application_insights_id]
+  description         = "Health endpoint failing from multiple regions. Runbook: ${var.runbook_base_url}/availability"
+  severity            = 1
+
+  application_insights_web_test_location_availability_criteria {
+    web_test_id           = azurerm_application_insights_standard_web_test.health.id
+    component_id          = var.application_insights_id
+    failed_location_count = max(1, length(var.alerting.availability_locations) - 1)
+  }
+
+  action {
+    action_group_id = azurerm_monitor_action_group.page.id
+  }
+}
+```
+
+Two practical notes. The **`ssl_cert_remaining_lifetime`** check is one of the cheapest insurance policies you can buy — it fails the test when the certificate has fewer than 14 days left, long before users see a browser warning. And requiring failures from **multiple locations** filters out a single edge region having a bad day. Azure also adds a hidden-link tag to web tests behind the scenes, so ignoring tag changes avoids perpetual plan diffs.
+
+---
+
+## Dashboards and workbooks as code
+
+Dashboards are where good intentions usually die. Someone builds a beautiful workbook in the portal, it becomes the thing everyone looks at during incidents, and nobody can reproduce it in another environment.
+
+### Workbooks
+
+**Azure Workbooks** are my default for operational views: they support parameters, multiple data sources, drill-downs and KQL everywhere. The trick to managing them in Terraform is a simple workflow:
+
+1.  Build or edit the workbook in the portal in a dev environment.
+2.  Open **Advanced Editor → Gallery Template** and copy the JSON.
+3.  Save it as a `.json.tftpl` file and replace hard-coded resource IDs and names with template variables.
+4.  Deploy it with Terraform to every environment.
+
+```hcl
+resource "azurerm_application_insights_workbook" "overview" {
+  name                = uuidv5("url", "${var.service}-${var.env}-overview")
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  display_name        = "${var.service} — Service Overview (${var.env})"
+  source_id           = lower(var.application_insights_id)
+  category            = "workbook"
+
+  data_json = templatefile("${path.module}/workbooks/overview.json.tftpl", {
+    workspace_id = var.log_analytics_workspace_id
+    role_name    = var.role_name
+    slo_target   = var.alerting.slo_target
+  })
+}
+```
+
+The workbook `name` must be a UUID. Using `uuidv5` with a stable seed gives you a deterministic ID, so the workbook is updated in place rather than recreated on every apply. The `source_id` must be lower-case, otherwise Azure normalises it and you get a perpetual diff.
+
+A trimmed workbook template shows the shape:
+
+```json
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": { "json": "## Service health\nSLO target: ${slo_target}" }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppRequests | where AppRoleName == '${role_name}' | summarize Requests = sum(ItemCount), Failed = sumif(ItemCount, Success == false) by bin(TimeGenerated, 5m) | extend SuccessRate = 1.0 - todouble(Failed) / Requests | project TimeGenerated, SuccessRate",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": ["${workspace_id}"],
+        "visualization": "timechart"
+      }
+    }
+  ],
+  "isLocked": false
+}
+```
+
+### Portal dashboards
+
+`azurerm_portal_dashboard` follows the same pattern — export the JSON from the portal, template it, deploy it. I use portal dashboards for wall-screen, at-a-glance views and workbooks for anything investigative. Whichever you choose, the rule is the same: **if it is used during an incident, it is in source control.**
+
+### Linking it all together
+
+The single most useful habit I have adopted is putting **runbook and workbook links in every alert description**. At 3am, the on-call engineer should be one click from "what is this?" to "what do I do?" to "what does the data say?". Because the alert, the workbook and the runbook are all deployed from the same module, those links are generated rather than typed — and they never point at the wrong environment.
+
+A good runbook for each alert answers four questions: what this alert means, what the likely impact on users is, how to confirm it, and the first safe mitigation steps. Keep it short. A runbook nobody reads during an incident is worse than useless.
+
+---
+
+## Noise reduction and routing
+
+Alert fatigue is the silent killer of on-call. Once people learn that most pages are noise, they start ignoring all of them. Some techniques I lean on:
+
+*   **Alert on symptoms, diagnose with causes.** Covered above, but it is the single biggest lever.
+*   **Use dimensions instead of duplicates.** One rule split by queue or endpoint beats twenty copy-pasted rules.
+*   **Require sustained breaches.** `failing_periods` and multi-window burn rates eliminate most flapping.
+*   **Auto-resolve where possible.** Stale, unresolved alerts train people to ignore the alert list.
+*   **Suppress during planned maintenance** with alert processing rules rather than disabling alerts and forgetting to re-enable them.
+*   **Review alerts monthly.** Any alert that fired and led to no action is a candidate for deletion or demotion.
+
+Alert processing rules are also Terraform:
+
+```hcl
+resource "azurerm_monitor_alert_processing_rule_suppression" "maintenance" {
+  name                = "apr-${var.service}-${var.env}-maintenance"
+  resource_group_name = var.resource_group_name
+  scopes              = [var.resource_group_id]
+  description         = "Suppress non-critical notifications during the weekly maintenance window"
+
+  condition {
+    severity {
+      operator = "Equals"
+      values   = ["Sev2", "Sev3", "Sev4"]
+    }
+  }
+
+  schedule {
+    time_zone = "AUS Eastern Standard Time"
+    recurrence {
+      weekly {
+        days_of_week = ["Sunday"]
+        start_time   = "02:00:00"
+        end_time     = "04:00:00"
+      }
+    }
+  }
+}
+```
+
+Notice that the rule suppresses notifications but not the alerts themselves — they still fire and are recorded, so you retain the history. And Sev 0 and Sev 1 are deliberately excluded. If production is genuinely down during a maintenance window, you still want to know.
+
+---
+
+## Testing your alerts
+
+An alert that has never fired is an alert you cannot trust. I test alerts at four levels.
+
+### 1. Static checks in CI
+
+`terraform fmt -check`, `terraform validate` and a linter such as `tflint` with the Azure ruleset catch the basics. I also add a cheap custom check that every alert has a runbook link:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+terraform show -json tfplan > plan.json
+missing=$(jq -r '
+  .planned_values.root_module
+  | .. | objects
+  | select(.type? == "azurerm_monitor_scheduled_query_rules_alert_v2" or .type? == "azurerm_monitor_metric_alert")
+  | select((.values.description // "") | test("Runbook: ") | not)
+  | .address' plan.json)
+if [ -n "$missing" ]; then
+  echo "Alerts missing a runbook link:"; echo "$missing"; exit 1
+fi
+```
+
+### 2. Terraform tests
+
+Terraform's native test framework lets you assert on the plan without deploying anything. This is where I verify the environment-specific logic — for example, that dev never pages:
+
+```hcl
+# tests/routing.tftest.hcl
+variables {
+  env = "dev"
+  alerting = {
+    enabled                 = true
+    slo_target              = 0.99
+    page_severity_threshold = -1
+    availability_locations  = ["emea-au-syd-edge"]
+    notify_emails           = ["team@example.com"]
+  }
+}
+
+run "dev_never_pages" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for k, r in azurerm_monitor_scheduled_query_rules_alert_v2.slo_burn :
+      !contains(r.action[0].action_groups, azurerm_monitor_action_group.page.id)
+    ])
+    error_message = "SLO alerts in dev must not route to the paging action group."
+  }
+}
+```
+
+### 3. Query validation
+
+KQL errors are only discovered when Azure evaluates the rule. To catch them earlier, render each query and run it against the dev workspace in CI with a short time range. A syntax error or a renamed column fails the pipeline instead of silently breaking the alert:
+
+```bash
+az monitor log-analytics query \
+  --workspace "$WORKSPACE_GUID" \
+  --analytics-query "$(cat rendered/slo-burn-rate.kql)" \
+  --timespan PT1H > /dev/null
+```
+
+### 4. Fire drills
+
+Finally, deliberately make the symptom happen in a non-production environment. A feature flag that forces a percentage of requests to return a 500, or a poison message pushed onto a queue, should trigger the corresponding alert, route it correctly and auto-resolve when removed. Run these drills on a schedule and after any significant change to the alerting module. It is the only way to be certain that the whole chain — telemetry, query, rule, processing rule, action group, receiver — actually works end to end.
+
+---
+
+## Common pitfalls
+
+A short list of things that have bitten me or teams I have worked with:
+
+*   **Counting rows instead of `ItemCount`** — error rates silently change when sampling is enabled.
+*   **Health checks in the SLO denominator** — synthetic traffic hides real failures.
+*   **Alerting on a workspace in the wrong region or subscription** — the rule deploys happily and never matches anything.
+*   **Copy-pasted thresholds across environments** — dev pages people at 2am, or prod never fires because the threshold was tuned for dev traffic.
+*   **Hard-coded resource IDs in workbook JSON** — the dev workbook shows dev data in production.
+*   **Disabling alerts to stop noise** — fix the alert or delete it; a disabled alert is a lie in your codebase.
+*   **Ignoring cost** — high-frequency log alerts over large tables add up. Prefer metric alerts for simple thresholds and keep queries tightly scoped by time and table.
+
+---
+
+## Conclusion
+
+*   **Observability as code** puts alerts, action groups, availability tests, dashboards and workbooks through the same review and promotion process as the rest of your infrastructure
+*   **Action groups** should be few and deliberate — separate paging from notification, and use the common alert schema everywhere
+*   **Scheduled query alerts** in KQL are the workhorse; keep queries in `.kql` files, use dimensions, and require sustained breaches to avoid flapping
+*   **Alert on symptoms, not causes** — and make severity a contract that determines routing
+*   **SLO burn-rate alerting** with multiple windows catches both sudden outages and slow leaks while staying quiet during low traffic
+*   **Availability tests** give you the outside-in view and cheap certificate-expiry protection
+*   **Workbooks and dashboards** belong in source control, templated per environment, with runbook and workbook links generated into every alert
+*   **Test your alerts** with static checks, Terraform tests, query validation and regular fire drills — an alert that has never fired cannot be trusted
+
+If you are building a platform for multiple teams, consider wrapping all of this into a single service-monitoring module as part of your golden path. Teams get sensible SLO alerts, routing and a service overview workbook for free, and spend their effort on the handful of alerts that are genuinely specific to their domain.
+
+---
+
+## Did this help?
+
+*   **Like, comment and share this article**
+*   **Follow this blog** to receive notifications of new postings
+*   **View** [previous postings](https://robertleggett.com.au/)
