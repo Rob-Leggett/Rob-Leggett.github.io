@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.3.0...v1.4.0) (2026-10-24)
+
+
+### Features
+
+* **analytics:** skip GA for automated browsers and bots; add ?analytics=off owner opt-out ([8df2f10](https://github.com/Rob-Leggett/Rob-Leggett.github.io/commit/8df2f10386798a36e78a2fd8cdba8f76ebe6c343))
+
 # [1.3.0](https://github.com/Rob-Leggett/Rob-Leggett.github.io/compare/v1.2.1...v1.3.0) (2026-10-24)
 
 
