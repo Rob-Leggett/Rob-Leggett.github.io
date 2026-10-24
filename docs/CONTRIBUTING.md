@@ -6,7 +6,7 @@ This guide covers how to work with the codebase — adding blog posts, modifying
 
 ## Prerequisites
 
-- **Node.js** 22+
+- **Node.js** 24 LTS (`nvm use 24`)
 - **npm** 10+
 - **Git** with conventional commit knowledge
 
@@ -16,8 +16,8 @@ This guide covers how to work with the codebase — adding blog posts, modifying
 
 ```bash
 # Clone the repository
-git clone git@github.com:Rob-Leggett/Rob-Leggett.git
-cd Rob-Leggett
+git clone git@github.com:Rob-Leggett/Rob-Leggett.github.io.git
+cd Rob-Leggett.github.io
 
 # Install dependencies
 npm ci

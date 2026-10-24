@@ -260,8 +260,8 @@ Theme variables are defined in `lib/themes.ts` and applied via `app/globals.css`
 ### Deploy Pipeline (`.github/workflows/pages.yml`)
 
 ```
-Trigger: push to main | manual dispatch
-→ Checkout (fetch-depth: 0)
+Trigger: push to main (ignores **/*.md, docs/**, wiki/**) | manual dispatch
+→ Checkout
 → Setup Node 24 + npm cache
 → npm ci
 → npm run build (pre-build scripts + next build)
@@ -272,13 +272,15 @@ Trigger: push to main | manual dispatch
 ### Release Pipeline (`.github/workflows/release.yml`)
 
 ```
-Trigger: push to main
+Trigger: push to main (ignores **/*.md, docs/**, wiki/**; serialised via concurrency group)
 → Checkout (fetch-depth: 0)
 → Setup Node 24
 → npm ci
 → npx semantic-release
 → Creates version tag, CHANGELOG entry, GitHub release
 ```
+
+Dependabot (`.github/dependabot.yml`) checks npm and GitHub Actions weekly (Monday 06:00 Australia/Sydney), grouping minor/patch updates into a single PR (max 3 open PRs).
 
 ### Conventional Commits
 

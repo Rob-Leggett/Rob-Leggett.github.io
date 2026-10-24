@@ -5,7 +5,7 @@
     <link>https://robertleggett.com.au/blog</link>
     <description><![CDATA[Technology strategy, engineering, and AI platform insights.]]></description>
     <language>en</language>
-    <lastBuildDate>Mon, 16 Mar 2026 08:31:59 GMT</lastBuildDate>
+    <lastBuildDate>Sat, 24 Oct 2026 08:15:21 GMT</lastBuildDate>
     
     <item>
       <title><![CDATA[Demystifying Large Language Models - Understanding the Intelligence Behind Modern AI]]></title>
@@ -136,12 +136,44 @@
       <enclosure url="https://robertleggett.com.au/blog/deep-dive-real-time-computer-vision/feature-image.png" type="image/png" />
     </item>
     <item>
+      <title><![CDATA[Deep Dive - Cloud IAM at Scale]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-cloud-iam-at-scale/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-cloud-iam-at-scale/</guid>
+      <pubDate>Sun, 20 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Identity and Access Management across the major cloud providers — unravelling how principals are authenticated, how policies govern authorisation decisions, how cross-account trust is ]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-cloud-iam-at-scale/feature-image.png" type="image/png" />
+    </item>
+    <item>
       <title><![CDATA[Deep Dive - Data Mesh Architecture]]></title>
       <link>https://robertleggett.com.au/blog/deep-dive-data-mesh/</link>
       <guid>https://robertleggett.com.au/blog/deep-dive-data-mesh/</guid>
       <pubDate>Sat, 19 Jul 2025 00:00:00 GMT</pubDate>
       <description><![CDATA[Welcome to the "Data Mesh Deep Dive" series! In this comprehensive exploration, we will immerse ourselves in one of the most significant paradigm shifts in how organisations think about data architecture. Data mesh challenges the deeply entrenched assumption that data must be owned, managed, and ser]]></description>
       <enclosure url="https://robertleggett.com.au/blog/deep-dive-data-mesh/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Identity in Microservices]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-identity-in-microservices/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-identity-in-microservices/</guid>
+      <pubDate>Sat, 19 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of identity in microservices — unravelling how we authenticate, authorise, and propagate trust across dozens or even hundreds of independently deployed services. Whether you are a backend]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-identity-in-microservices/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - API Authentication and Authorisation]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-api-authentication/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-api-authentication/</guid>
+      <pubDate>Fri, 18 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of API Authentication and Authorisation, unravelling the mechanisms that keep our APIs secure in a world where machine-to-machine and user-to-API communication is the backbone of modern s]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-api-authentication/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Passwordless Authentication]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-passwordless-authentication/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-passwordless-authentication/</guid>
+      <pubDate>Thu, 17 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of passwordless authentication — unravelling why passwords have become the weakest link in our security chains, how passkeys and WebAuthn are redefining identity verification, how magic l]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-passwordless-authentication/feature-image.png" type="image/png" />
     </item>
     <item>
       <title><![CDATA[Deep Dive - Serverless at Scale]]></title>
@@ -152,6 +184,14 @@
       <enclosure url="https://robertleggett.com.au/blog/deep-dive-serverless-at-scale/feature-image.png" type="image/png" />
     </item>
     <item>
+      <title><![CDATA[Deep Dive - Identity Governance and Administration]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-identity-governance/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-identity-governance/</guid>
+      <pubDate>Wed, 16 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the world of Identity Governance and Administration (IGA) — the discipline of managing who has access to what, why they have it, and ensuring that access remains appropriate over time. Whether you are a ]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-identity-governance/feature-image.png" type="image/png" />
+    </item>
+    <item>
       <title><![CDATA[Deep Dive - AI-Powered Cloud Security]]></title>
       <link>https://robertleggett.com.au/blog/deep-dive-ai-cloud-security/</link>
       <guid>https://robertleggett.com.au/blog/deep-dive-ai-cloud-security/</guid>
@@ -160,12 +200,52 @@
       <enclosure url="https://robertleggett.com.au/blog/deep-dive-ai-cloud-security/feature-image.png" type="image/png" />
     </item>
     <item>
+      <title><![CDATA[Deep Dive - Zero Trust Identity]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-zero-trust-identity/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-zero-trust-identity/</guid>
+      <pubDate>Tue, 15 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Zero Trust Identity — the practice of treating identity as the primary security perimeter, replacing implicit trust with continuous verification of every user, device, and session. Whe]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-zero-trust-identity/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - Multi-Factor Authentication]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-multi-factor-authentication/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-multi-factor-authentication/</guid>
+      <pubDate>Mon, 14 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of Multi-Factor Authentication (MFA), unravelling its foundational principles, authentication factors, technical implementation patterns, and real-world deployment architectures across mo]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-multi-factor-authentication/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - JSON Web Tokens (JWT)]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-json-web-tokens/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-json-web-tokens/</guid>
+      <pubDate>Sun, 13 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of JSON Web Tokens (JWT), unravelling their structure, signing mechanisms, validation flows, and the security considerations that every engineer must understand when building modern authe]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-json-web-tokens/feature-image.png" type="image/png" />
+    </item>
+    <item>
       <title><![CDATA[Deep Dive - Platform Engineering]]></title>
       <link>https://robertleggett.com.au/blog/deep-dive-platform-engineering/</link>
       <guid>https://robertleggett.com.au/blog/deep-dive-platform-engineering/</guid>
       <pubDate>Sun, 13 Jul 2025 00:00:00 GMT</pubDate>
       <description><![CDATA[Welcome to the "Deep Dive" series! In this comprehensive exploration, we will immerse ourselves in the world of Platform Engineering — a discipline that has rapidly emerged as the next evolution beyond DevOps. As organisations scale their engineering teams and adopt cloud-native technologies, the co]]></description>
       <enclosure url="https://robertleggett.com.au/blog/deep-dive-platform-engineering/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - SAML and Enterprise Federation]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-saml-and-enterprise-federation/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-saml-and-enterprise-federation/</guid>
+      <pubDate>Sat, 12 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of SAML (Security Assertion Markup Language) and enterprise federation — unravelling how organisations establish trust across security boundaries, how identity providers and service provi]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-saml-and-enterprise-federation/feature-image.png" type="image/png" />
+    </item>
+    <item>
+      <title><![CDATA[Deep Dive - OAuth 2.0 and OpenID Connect]]></title>
+      <link>https://robertleggett.com.au/blog/deep-dive-oauth2-and-openid-connect/</link>
+      <guid>https://robertleggett.com.au/blog/deep-dive-oauth2-and-openid-connect/</guid>
+      <pubDate>Fri, 11 Jul 2025 00:00:00 GMT</pubDate>
+      <description><![CDATA[Welcome to the deep dive series! In this comprehensive exploration, we will immerse ourselves in the intricacies of OAuth 2.0 and OpenID Connect (OIDC), unravelling how modern applications handle authorisation and identity without ever touching a user's password. Whether you are a backend engineer i]]></description>
+      <enclosure url="https://robertleggett.com.au/blog/deep-dive-oauth2-and-openid-connect/feature-image.png" type="image/png" />
     </item>
     <item>
       <title><![CDATA[Deep Dive - Vector Databases and Embeddings]]></title>

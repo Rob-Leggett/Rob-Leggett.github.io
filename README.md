@@ -162,7 +162,8 @@ The site is statically exported (`output: "export"`) and deployed to GitHub Page
 
 - **Build output**: `out/` directory
 - **Custom domain**: `robertleggett.com.au` (configured via `CNAME`)
-- **Node version**: 22
+- **Node version**: 24 LTS
+- **Triggers**: push to `main` (Markdown/`docs/**`-only changes are skipped) or manual dispatch
 
 ### GitHub Pages Configuration
 
@@ -172,7 +173,7 @@ GitHub Pages must use **GitHub Actions** as the build source. If the site shows 
 2. Set **Source** to **GitHub Actions**
 
 ```bash
-gh api repos/Rob-Leggett/Rob-Leggett/pages -X PUT -f build_type=workflow
+gh api repos/Rob-Leggett/Rob-Leggett.github.io/pages -X PUT -f build_type=workflow
 ```
 
 ---
